@@ -26,16 +26,25 @@ problem.
 | 2 | `phase-1b-client-shell.md` | parallel | `sonnet` | `client/**`, `tests/client/**` |
 | 2 | `phase-1c-deploy.md` | parallel | `haiku` | `Dockerfile`, `fly.toml`, `.dockerignore`, `scripts/smoke-ws.mjs` |
 | — | **merge + Day 1 acceptance gate** | | | |
-| 3 | `phase-2-contracts.md` | **solo** | `opus` | `src/protocol/**` |
-| 4 | `phase-2a-driver-control.md` | parallel | `opus` | `src/server/driver.ts`, `tests/server/driver.test.ts` |
-| 4 | `phase-2b-presence-attribution.md` | parallel | `sonnet` | `src/server/presence.ts`, `client/src/components/Roster.tsx`, tests |
-| 4 | `phase-2c-permission-core.md` | parallel | `opus` | `src/server/permissions.ts`, `tests/server/permissions.test.ts` |
-| 4 | `phase-2d-approval-ui.md` | parallel | `sonnet` | `client/src/components/Approval*.tsx`, `client/src/approvals.ts`, tests |
+| 3 | `phase-2a-driver-control.md` | parallel | `opus` | `src/server/driver.ts`, message/close handlers in `src/server/index.ts` |
+| 3 | `phase-2b-presence-attribution.md` | parallel | `sonnet` | `src/server/presence.ts`, `client/src/components/Roster.tsx`, tests |
+| 3 | `phase-2c-permission-core.md` | parallel | `opus` | `src/server/permissions.ts`, `canUseTool` wiring in `src/server/agent.ts` |
+| 3 | `phase-2d-approval-ui.md` | parallel | `sonnet` | `client/src/approvals.ts`, `client/src/components/ApprovalPrompt.tsx`, tests |
 | — | **merge + Day 2/3 acceptance gate** | | | |
-| 5 | `phase-3a-durability.md` | **solo** | `sonnet` | `src/log/replay.ts`, `src/server/recovery.ts`, `src/server/ws.ts`, tests |
-| 6 | `phase-3b-interrupt.md` | parallel | `haiku` | `src/server/interrupt.ts`, `client/src/components/StopButton.tsx`, tests |
-| 6 | `phase-3c-room-creation-ux.md` | parallel | `sonnet` | `src/server/create.ts`, `client/src/pages/**`, tests |
-| 6 | `phase-3d-readme-errors.md` | parallel | `haiku` | `README.md`, `src/server/errors.ts`, `client/src/components/ErrorBanner.tsx` |
+| 4 | `phase-3a-durability.md` | **solo** | `sonnet` | `src/log/replay.ts`, `src/server/recovery.ts`, `since=` in `src/server/index.ts` |
+| 5 | `phase-3b-interrupt.md` | parallel | `haiku` | `client/src/components/StopButton.tsx`, `interrupt` branch in `src/server/index.ts` |
+| 5 | `phase-3c-room-creation-ux.md` | parallel | `sonnet` | `src/server/create.ts`, `client/src/pages/**`, tests |
+| 5 | `phase-3d-readme-errors.md` | parallel | `haiku` | `README.md`, `src/server/errors.ts`, `client/src/components/ErrorBanner.tsx` |
+
+There is no separate contracts step before Phase 2. `phase-0-spine` Task 2
+deliberately freezes the **whole** event union up front — including the driver,
+permission, and interrupt members — precisely so no later feature branch has to
+widen `src/protocol/events.ts` and collide with its siblings.
+
+`src/server/index.ts` is touched by five plans. Each one names the exact
+handler or branch it owns and is told to report BLOCKED rather than edit
+anything else in that file. It is the highest-conflict file in the project —
+merge those branches one at a time and read the diff.
 
 `phase-3a` is solo because L1 (state reconstruction), L2 (resume-from-seq) and
 L3 (restart recovery) all rewrite the same replay path. Splitting them across
@@ -74,6 +83,12 @@ find it before continuing rather than resolving the conflict by hand.
 After merging a group, run that phase's acceptance test from `BUILD_SPEC.md`
 §6 before dispatching the next group. `BUILD_SPEC.md` is explicit: "later days
 build directly on earlier ones and a cracked foundation compounds."
+
+## Before the first dispatch
+
+- The default branch here is **`master`**, not `main`. The final whole-branch review in `subagent-driven-development` computes `git merge-base main HEAD` — substitute `master`, or rename the branch first.
+- `.worktrees/` is gitignored by `phase-0-spine` Task 1. Do not dispatch any worktree-isolated agent before that task lands, or the worktree directory gets committed into the repo.
+- Worktrees require a non-empty history. The repo has an initial commit; keep it that way.
 
 ## Invariants every plan restates
 
