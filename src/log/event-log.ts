@@ -25,8 +25,9 @@ export class JsonlEventLog {
 
   /** Append only. There is deliberately no update, delete, or compact (I3). */
   append(event: NexusEvent): void {
-    appendFileSync(this.path, `${JSON.stringify(redactEvent(event))}\n`, 'utf8');
-    if (this.#cache !== null) this.#cache.push(event);
+    const redacted = redactEvent(event);
+    appendFileSync(this.path, `${JSON.stringify(redacted)}\n`, 'utf8');
+    if (this.#cache !== null) this.#cache.push(redacted);
   }
 
   read(): NexusEvent[] {

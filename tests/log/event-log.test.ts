@@ -53,6 +53,20 @@ describe('JsonlEventLog', () => {
     expect(readFileSync(logPathFor('room_a', dir), 'utf8')).not.toContain('sk-ant');
   });
 
+  it('caches redacted events, not raw events (I4 live instance)', () => {
+    const log = openLog('room_a', dir);
+    log.append(
+      event(1, {
+        type: 'tool_start',
+        toolUseId: 't1',
+        toolName: 'Bash',
+        input: { command: `echo ${KEY}` },
+      }),
+    );
+    const cached = log.read();
+    expect(JSON.stringify(cached)).not.toContain('sk-ant');
+  });
+
   it('discards a truncated trailing line instead of throwing', () => {
     const log = openLog('room_a', dir);
     log.append(event(1));
