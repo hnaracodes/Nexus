@@ -256,8 +256,13 @@ export type DecisionPolicy = (existing: Decision[], incoming: Decision) => Decis
 export const firstResponseWins: DecisionPolicy = (_existing, incoming) => incoming;
 
 export interface PermissionGate {
-  /** Suspends until the room decides, auto-approves, or the timeout denies. */
-  request(toolName: string, input: unknown): Promise<Decision>;
+  /**
+   * Suspends until the room decides, auto-approves, the timeout denies, or
+   * `signal` aborts. The SDK passes its own `AbortSignal` — if the agent is
+   * interrupted or torn down while a request is outstanding, an unaborted
+   * gate leaks a pending promise and a live timer per abandoned request.
+   */
+  request(toolName: string, input: unknown, signal?: AbortSignal): Promise<Decision>;
   /** Returns false if the id is unknown or already settled. */
   resolve(requestId: string, decision: Decision): boolean;
   pendingIds(): string[];
@@ -297,7 +302,7 @@ export function createPermissionGate(
   }
 
   return {
-    request(toolName: string, input: unknown): Promise<Decision> {
+    request(toolName: string, input: unknown, signal?: AbortSignal): Promise<Decision> {
       const requestId = `req_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
 
       if (autoApprove.has(toolName)) {
@@ -328,7 +333,7 @@ export function createPermissionGate(
           resolveOuter(decision);
         }, timeoutMs);
 
-        pending.set(requestId, {
+        const entry: Pending = {
           toolName,
           votes: [],
           settle(decision: Decision): void {
@@ -337,7 +342,25 @@ export function createPermissionGate(
             publish(requestId, toolName, decision);
             resolveOuter(decision);
           },
-        });
+        };
+        pending.set(requestId, entry);
+
+        // The SDK aborts when the agent is interrupted or shut down. Settle as
+        // a deny so the promise never dangles and the timer is cleared.
+        signal?.addEventListener(
+          'abort',
+          () => {
+            if (!pending.has(requestId)) return; // already decided
+            entry.settle({
+              decision: 'deny',
+              participantId: null,
+              displayName: null,
+              via: 'aborted',
+              reason: 'The agent was interrupted before the room decided.',
+            });
+          },
+          { once: true },
+        );
 
         // Every participant sees this, not just the driver. Governance is
         // deliberately decoupled from the driver token.
@@ -399,7 +422,13 @@ import { startAgent } from '../../src/server/agent.js';
 import { __resetRooms, createRoom } from '../../src/server/rooms.js';
 import type { UnsequencedEvent } from '../../src/protocol/events.js';
 
-type CanUseTool = (tool: string, input: Record<string, unknown>) => Promise<unknown>;
+// Matches installed SDK 0.1.77 — three parameters. A two-parameter stub here
+// would let a callback the SDK cannot accept pass its own tests.
+type CanUseTool = (
+  tool: string,
+  input: Record<string, unknown>,
+  options: { signal: AbortSignal },
+) => Promise<unknown>;
 
 beforeEach(() => __resetRooms());
 
@@ -432,7 +461,9 @@ describe('canUseTool wiring', () => {
     const h = harness();
     expect(h.canUseTool()).not.toBeNull();
 
-    const pending = h.canUseTool()('Bash', { command: 'rm -rf /' });
+    const pending = h.canUseTool()('Bash', { command: 'rm -rf /' }, {
+      signal: new AbortController().signal,
+    });
     await Promise.resolve();
 
     const requestId = h.handle.gate.pendingIds()[0] as string;
@@ -454,9 +485,26 @@ describe('canUseTool wiring', () => {
 
   it('auto-approves a Read without emitting a request', async () => {
     const h = harness();
-    const result = (await h.canUseTool()('Read', { file_path: '/tmp/a' })) as { behavior: string };
+    const result = (await h.canUseTool()('Read', { file_path: '/tmp/a' }, {
+      signal: new AbortController().signal,
+    })) as { behavior: string };
     expect(result.behavior).toBe('allow');
     expect(h.events.filter((e) => e.type === 'permission_requested')).toHaveLength(0);
+  });
+
+  it('settles as a deny when the SDK aborts, leaving nothing pending', async () => {
+    const h = harness();
+    const controller = new AbortController();
+    const pending = h.canUseTool()('Bash', { command: 'sleep 999' }, {
+      signal: controller.signal,
+    });
+    await Promise.resolve();
+    expect(h.handle.gate.pendingIds()).toHaveLength(1);
+
+    controller.abort();
+    const result = (await pending) as { behavior: string };
+    expect(result.behavior).toBe('deny');
+    expect(h.handle.gate.pendingIds()).toHaveLength(0);
   });
 });
 ```
@@ -492,24 +540,39 @@ Inside `startAgent`, before the `runQuery` call:
   const gate = createPermissionGate(room, emit);
 ```
 
-Add `canUseTool` to the `options` object passed to `runQuery`. Check the
-installed SDK's declared return type and match it exactly; the shape below
-reflects the documented allow/deny union. If the installed types differ,
-follow them and record the difference in your report.
+Add `canUseTool` to the `options` object passed to `runQuery`. The signature
+below was read from the **installed** SDK 0.1.77
+(`node_modules/@anthropic-ai/claude-agent-sdk/entrypoints/sdk/runtimeTypes.d.ts`)
+and verified — it takes **three** parameters, not two, and the `allow` branch
+requires `updatedInput`. Import the types rather than restating them:
 
 ```typescript
-      canUseTool: async (toolName: string, input: Record<string, unknown>) => {
-        const decision = await gate.request(toolName, input);
+import type { CanUseTool, PermissionResult } from '@anthropic-ai/claude-agent-sdk';
+```
+
+```typescript
+      canUseTool: (async (toolName, input, options): Promise<PermissionResult> => {
+        // options: { signal: AbortSignal; suggestions?: PermissionUpdate[];
+        //            blockedPath?: string; decisionReason?: string; toolUseID?: string }
+        const decision = await gate.request(toolName, input, options.signal);
         return decision.decision === 'allow'
-          ? { behavior: 'allow' as const, updatedInput: input }
+          ? { behavior: 'allow', updatedInput: input }
           : {
-              behavior: 'deny' as const,
+              behavior: 'deny',
               message:
                 decision.reason ??
                 `The room denied ${toolName}. Explain what you were trying to do and propose an alternative.`,
+              // Unset on purpose: a denial with guidance should let the model
+              // adapt and continue. `interrupt: true` would halt the session.
             };
-      },
+      }) satisfies CanUseTool,
 ```
+
+Deliberately **not** forwarded: `options.suggestions`. Those drive the SDK's
+"always allow this tool for the session" flow, which would let one participant
+permanently disable the gate for everyone — the opposite of what this feature
+exists to do. Returning `updatedPermissions` is a Phase-4 decision, not an MVP
+one. Note in your report that you dropped it and why.
 
 Add `gate` to the returned handle object.
 
@@ -559,6 +622,7 @@ git commit -m "feat(permissions): suspend the agent on canUseTool pending a room
 
 ## Report notes
 
-- The installed SDK's exact `canUseTool` signature and return type, verbatim.
+- The installed SDK's exact `canUseTool` signature and return type, verbatim, and whether it still matches the three-parameter form this plan was corrected to on 2026-07-28. If the SDK version has moved, follow the installed types and say so loudly.
+- That you dropped `options.suggestions` rather than forwarding it as `updatedPermissions`, and confirmation that no code path can permanently auto-allow a tool for the session.
 - Every line you changed in `src/server/index.ts` and `src/server/agent.ts` — both are contended by sibling plans.
 - Paste the `permission_decided` log line from the manual acceptance run, confirming a name is attached.
