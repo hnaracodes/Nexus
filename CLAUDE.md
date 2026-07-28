@@ -10,13 +10,16 @@ Strategic frame, from `BUILD_SPEC.md` §9: *collaboration is the mechanism, gove
 
 ## Current repo state — read this first
 
-**Docs-only. Nothing is scaffolded.** There is no `package.json`, no source tree, no test runner. The first coding task is Day 1 of `BUILD_SPEC.md` §6.
+**Phase 0 (the server spine) is built and committed.** Node 22+/TypeScript ESM toolchain, the frozen event protocol, the room registry, the async prompt queue feeding one `query()` per room, and the WebSocket broadcast layer all exist with 27 passing tests. There is no client yet, no durable log (rooms use an in-memory sink), no driver enforcement, and no permission gating.
+
+Next up is the Phase 1 fan-out — `phase-1a` (durable JSONL log), `phase-1b` (React client), `phase-1c` (Docker + Fly deploy) — dispatched **concurrently**. See `docs/plans/README.md` for the dispatch manifest, per-plan model tiers, and the file-ownership rules that keep parallel agents from colliding.
 
 | File | Read it when |
 |---|---|
 | `BUILD_SPEC.md` | **Default entry point.** The buildable 5-day MVP subset — invariants, feature list, stack, day-by-day plan with acceptance tests, known traps. |
 | `project_goal.md` | You need the long-horizon architecture (§4), the 6-phase plan (§7), or the reasoning behind a constraint. Appendix A separates verified research from unvalidated opinion — check it before treating a claim as fact. |
 | `market_research.md` | You need competitive or demand context. Background; rarely needed while coding. |
+| `docs/plans/` | You are implementing anything. One plan per dispatch unit, in the format `superpowers:subagent-driven-development` consumes. `README.md` there is the manifest. |
 
 `BUILD_SPEC.md` line 9 suggests copying itself to `CLAUDE.md`. We deliberately did not — this file is the concise orientation layer and the specs remain the single source of truth. Keep it that way: add pointers here, add depth there.
 
@@ -66,15 +69,18 @@ From `BUILD_SPEC.md` §5.2. Rows marked *load-bearing* need an explicit flag if 
 
 ## Commands
 
-> **Nothing is scaffolded yet — no `package.json` exists, so none of these run today.**
-> They are the intended shape implied by `BUILD_SPEC.md` §5.2. Once scaffolding lands, read the real
-> `package.json` and rewrite this section from it rather than trusting what's written here.
+Transcribed from the real root `package.json`. Re-read it rather than trusting this if they disagree.
 
 ```
-npm run dev      # server + Vite client (planned)
-npm test         # runner TBD — vitest is the likely pick, not yet chosen
-fly deploy       # deploy to Fly.io
+npm run dev        # server via tsx watch, port 8080 (PORT overrides)
+npm test           # vitest run — 27 tests today
+npm run typecheck  # tsc over src + tests, noEmit
+npm run build      # tsc -p tsconfig.build.json → dist/, src only
+npm start          # node dist/server/index.js
+fly deploy         # not wired yet — plan phase-1c
 ```
+
+**Two tsconfigs, on purpose.** `tsconfig.json` is `noEmit` and covers `src` + `tests`; `tsconfig.build.json` emits `src` alone with `rootDir: "src"`, so the build lands at `dist/server/index.js` and the test suite never reaches the production image. Adding tests to the build config breaks both.
 
 `fly deploy` is a **Day 1** requirement, not a Day 5 one. §6 is explicit: WebSocket problems behind a proxy are a twenty-minute fix on day 1 and a half-day surprise on day 5. Deploy and smoke-test before building features.
 
