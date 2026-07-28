@@ -55,6 +55,14 @@ describe('JsonlEventLog', () => {
 
   it('caches redacted events, not raw events (I4 live instance)', () => {
     const log = openLog('room_a', dir);
+
+    // Priming the cache is what makes this bug reachable. `append` only
+    // write-throughs when the cache is already populated, and `attachRoom`
+    // populates it by replaying history to the first client that joins.
+    // Append before any read and the event goes to disk (redacted) only,
+    // so the leak stays invisible.
+    expect(log.read()).toEqual([]);
+
     log.append(
       event(1, {
         type: 'tool_start',
@@ -63,8 +71,10 @@ describe('JsonlEventLog', () => {
         input: { command: `echo ${KEY}` },
       }),
     );
-    const cached = log.read();
-    expect(JSON.stringify(cached)).not.toContain('sk-ant');
+
+    // This is what the *second* client to join would be sent.
+    expect(JSON.stringify(log.read())).not.toContain('sk-ant');
+    expect(JSON.stringify(log.read())).toContain('[REDACTED]');
   });
 
   it('discards a truncated trailing line instead of throwing', () => {
