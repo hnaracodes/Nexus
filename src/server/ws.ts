@@ -2,17 +2,23 @@ import { randomUUID } from 'node:crypto';
 import type { WebSocket } from 'ws';
 import type { NexusEvent, UnsequencedEvent } from '../protocol/events.js';
 import type { ServerFrame } from '../protocol/wire.js';
+import { createSink } from '../log/index.js';
 import type { AgentDeps, AgentHandle } from './agent.js';
 import { startAgent } from './agent.js';
 import type { Room } from './rooms.js';
 
-/** Plan phase-1a implements a durable version of this. */
+/** Implemented durably by `src/log/` (plan phase-1a). */
 export interface EventSink {
   append(event: NexusEvent): void;
   read(): NexusEvent[];
 }
 
-class MemorySink implements EventSink {
+/**
+ * Non-durable sink, kept for tests that must not touch the filesystem. Never
+ * the default: state that exists only in memory is lost on restart, which I3
+ * forbids.
+ */
+export class MemorySink implements EventSink {
   #events: NexusEvent[] = [];
   append(event: NexusEvent): void {
     this.#events.push(event);
@@ -38,7 +44,7 @@ const runtimes = new Map<string, RoomRuntime>();
 
 export function attachRoom(
   room: Room,
-  sink: EventSink = new MemorySink(),
+  sink: EventSink = createSink(room.id),
   deps: AgentDeps = {},
 ): RoomRuntime {
   const existing = runtimes.get(room.id);
