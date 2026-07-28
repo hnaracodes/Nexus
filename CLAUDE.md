@@ -80,15 +80,7 @@ fly deploy       # deploy to Fly.io
 
 ## Git — read before any commit
 
-**This folder is not its own repository.** Verified:
-
-- `git rev-parse --show-toplevel` → `C:/Users/splas` — the **home directory** is the repo.
-- `git ls-files .` → empty. Zero files here are tracked.
-- No `.gitignore` exists at that root.
-
-> **DANGER:** Never run `git add .`, `git add -A`, or `git commit -a` from this folder. They operate on the home-directory repo and would stage `.ssh/`, `.claude.json`, `.gitconfig`, browser caches, and every other dotfile in the user's profile.
-
-**Fix:** run `git init` in this folder before any commit work. It's needed regardless — `BUILD_SPEC.md` §6 Day 5 calls for tagging `v0.1.0`, which is impossible without a real repo here. Until that happens, treat every git write command as requiring explicit confirmation.
+Immediately upon completing a specific feature, bug fix, or task, stage the relevant files and execute a `git commit` with a descriptive message that summarizes the work. Do **not** push to the remote repository — commits remain local until explicitly approved for push.
 
 ## Security model — state it plainly, don't soften it
 
