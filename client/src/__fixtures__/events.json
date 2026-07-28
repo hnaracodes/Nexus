@@ -1,0 +1,11 @@
+[
+  { "seq": 1, "ts": "2026-07-28T00:00:00.000Z", "roomId": "room_fixture", "type": "room_created", "cwd": "/work", "repoUrl": null },
+  { "seq": 2, "ts": "2026-07-28T00:00:01.000Z", "roomId": "room_fixture", "type": "participant_joined", "participantId": "p_ada", "displayName": "Ada" },
+  { "seq": 3, "ts": "2026-07-28T00:00:02.000Z", "roomId": "room_fixture", "type": "participant_joined", "participantId": "p_grace", "displayName": "Grace" },
+  { "seq": 4, "ts": "2026-07-28T00:00:03.000Z", "roomId": "room_fixture", "type": "user_prompt", "participantId": "p_ada", "displayName": "Ada", "text": "list the files" },
+  { "seq": 5, "ts": "2026-07-28T00:00:04.000Z", "roomId": "room_fixture", "type": "tool_start", "toolUseId": "t_1", "toolName": "Glob", "input": { "pattern": "**/*.ts" } },
+  { "seq": 6, "ts": "2026-07-28T00:00:05.000Z", "roomId": "room_fixture", "type": "tool_result", "toolUseId": "t_1", "toolName": "Glob", "isError": false, "output": "src/index.ts" },
+  { "seq": 7, "ts": "2026-07-28T00:00:06.000Z", "roomId": "room_fixture", "type": "assistant_message", "messageId": "msg_1", "text": "There is one TypeScript file." },
+  { "seq": 8, "ts": "2026-07-28T00:00:07.000Z", "roomId": "room_fixture", "type": "participant_left", "participantId": "p_grace", "displayName": "Grace" },
+  { "seq": 9, "ts": "2026-07-28T00:00:08.000Z", "roomId": "room_fixture", "type": "agent_idle" }
+]
