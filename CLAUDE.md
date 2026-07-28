@@ -90,7 +90,7 @@ Immediately upon completing a specific feature, bug fix, or task, stage the rele
 
 ## Session ledger — write one before you finish
 
-Every session gets a folder: `sessions/<YYYY-MM-DD>-<short-hash>-<slug>/`, where the hash is the session's **last commit** and the slug is 2–4 words on what happened (e.g. `sessions/2026-07-28-a262f56-phase-0-spine/`). Read the most recent one at session start — it is the handoff, and it survives context compaction when the conversation does not.
+Every session gets a folder: `sessions/<YYYY-MM-DD>-<short-hash>-<slug>/`, where the hash is the session's **last commit before the ledger commit** (a folder cannot be named after the commit that contains it) and the slug is 2–4 words on what happened — e.g. `sessions/2026-07-28-a262f56-phase-0-spine/`. Read the most recent one at session start: it is the handoff, and it survives context compaction when the conversation does not.
 
 Four files, always these names:
 
