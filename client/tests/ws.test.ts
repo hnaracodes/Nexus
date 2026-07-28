@@ -110,6 +110,26 @@ describe('connect', () => {
     vi.useRealTimers();
   });
 
+  it('does not reconnect if closed explicitly during a pending backoff window', async () => {
+    vi.useFakeTimers();
+    const h = harness();
+    h.sockets[0]?.onopen?.();
+    // Unexpected close: schedules a reconnect after a backoff delay.
+    h.sockets[0]?.onclose?.();
+    expect(h.statuses.at(-1)).toBe('reconnecting');
+
+    // Explicit close arrives before the pending reconnect timer fires. A
+    // real WebSocket that is already closed does not re-fire onclose, so
+    // this must not rely on the onclose handler to reach 'closed' or to
+    // cancel the pending timer.
+    h.connection.close();
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(h.sockets).toHaveLength(1);
+    expect(h.statuses.at(-1)).toBe('closed');
+    vi.useRealTimers();
+  });
+
   it('serializes outgoing frames as JSON', () => {
     const h = harness();
     h.sockets[0]?.onopen?.();

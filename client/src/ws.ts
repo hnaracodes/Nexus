@@ -56,6 +56,7 @@ export function connect(options: ConnectOptions): Connection {
   let socket: WebSocketLike | null = null;
   let attempt = 0;
   let deliberatelyClosed = false;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   function open(): void {
     options.onStatus(attempt === 0 ? 'connecting' : 'reconnecting');
@@ -86,14 +87,22 @@ export function connect(options: ConnectOptions): Connection {
     };
 
     next.onclose = () => {
+      socket = null;
       if (deliberatelyClosed) {
-        options.onStatus('closed');
+        // close() already drives the terminal status and clears any
+        // pending reconnect timer — nothing more to do here. Guarding
+        // here (rather than relying solely on close() cancelling the
+        // timer) keeps this handler a no-op no matter how the underlying
+        // socket implementation behaves on an already-closed connection.
         return;
       }
       options.onStatus('reconnecting');
       const delay = BACKOFF_MS[Math.min(attempt, BACKOFF_MS.length - 1)] ?? 8_000;
       attempt += 1;
-      setTimeout(open, delay);
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        open();
+      }, delay);
     };
   }
 
@@ -105,7 +114,13 @@ export function connect(options: ConnectOptions): Connection {
     },
     close(): void {
       deliberatelyClosed = true;
+      if (reconnectTimer !== null) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
       socket?.close();
+      socket = null;
+      options.onStatus('closed');
     },
   };
 }
