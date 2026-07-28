@@ -88,6 +88,21 @@ fly deploy         # not wired yet — plan phase-1c
 
 Immediately upon completing a specific feature, bug fix, or task, stage the relevant files and execute a `git commit` with a descriptive message that summarizes the work. Do **not** push to the remote repository — commits remain local until explicitly approved for push.
 
+## Session ledger — write one before you finish
+
+Every session gets a folder: `sessions/<YYYY-MM-DD>-<short-hash>-<slug>/`, where the hash is the session's **last commit** and the slug is 2–4 words on what happened (e.g. `sessions/2026-07-28-a262f56-phase-0-spine/`). Read the most recent one at session start — it is the handoff, and it survives context compaction when the conversation does not.
+
+Four files, always these names:
+
+| File | Contents |
+|---|---|
+| `features.md` | Features **implemented** and, separately, those **tested and verified** — name the evidence (test counts, commands run). Then the concrete next steps for features not yet done. Never mark something verified because it compiles. |
+| `issues.md` | Every problem that surfaced, each with root cause and the fix. Keep **unresolved** issues in their own section — they carry forward and the next session must read them. |
+| `commits.md` | Commits made (hash + subject) and any PRs opened. Note that commits stay local unless push was explicitly approved. |
+| `progress.md` | Project status and **percent complete toward the MVP**, with the reasoning behind the number and a per-area breakdown. An unjustified percentage is noise. |
+
+Be honest in these. Unverified work recorded as done is worse than not recording it, because the next session builds on the claim.
+
 ## Security model — state it plainly, don't soften it
 
 From `BUILD_SPEC.md` §8. Both belong in the README *and* in the room-creation UI:
