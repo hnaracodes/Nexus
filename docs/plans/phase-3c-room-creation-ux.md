@@ -13,10 +13,15 @@ is attached. The room link carries the room id and token — never the key.
 **Mode:** PARALLEL — dispatch alongside `phase-3b` and `phase-3d`.
 
 **Files owned:** `src/server/create.ts`, `tests/server/create.test.ts`,
-`client/src/pages/CreateRoom.tsx`, `client/tests/create-room.test.tsx`, and the
-route switch in `client/src/App.tsx`.
+`client/src/pages/CreateRoom.tsx`, `client/tests/create-room.test.tsx`,
+`client/tests/smoke.test.tsx`, the `POST /api/rooms` handler and the marked
+`phase-3c` re-entry region of `src/server/index.ts`, and the marked `phase-3c`
+region of `client/src/App.tsx`.
 
 ## Global Constraints
+
+- **Verification is not just `npm test`.** Vitest strips types with esbuild and never type-checks. Before every commit, `npm run typecheck` **and** `npm --prefix client run build` (which runs `tsc -b`) must both exit 0.
+- **You share `client/src/App.tsx` and `src/server/index.ts` with two other agents running right now.** Both already contain paired marker comments. Edit **only** inside your own `--- BEGIN phase-3c ... ---` / `--- END phase-3c ... ---` regions, plus the `POST /api/rooms` handler body. Leave every other marked region byte-for-byte untouched. In the App.tsx import block (unmarked), add `import { CreateRoom } from './pages/CreateRoom.js';` immediately after the last existing import line — do not re-sort the block.
 
 - **I4, and it is also a legal constraint.** The key must be an Anthropic **Console** API key (`sk-ant-…`). Anthropic's terms state verbatim: *"Anthropic does not permit third-party developers to offer Claude.ai login or to route requests through Free, Pro, or Max plan credentials on behalf of their users."* Never build a subscription-login path.
 - The key travels in a POST body over HTTPS, once. Never in a URL, never in `localStorage`, never in an error message, never echoed back in a response.
@@ -51,8 +56,9 @@ import { describe, expect, it } from 'vitest';
 import { prepareWorkspace, validateApiKeyShape, validateRepoUrl } from '../../src/server/create.js';
 
 describe('validateApiKeyShape', () => {
-  it('accepts a console key', () => {
-    expect(validateApiKeyShape('sk-ant-api03-TESTONLY-not-a-real-key')).toEqual({ ok: true });
+  it('accepts a console key and carries it forward', () => {
+    const key = 'sk-ant-api03-TESTONLY-not-a-real-key';
+    expect(validateApiKeyShape(key)).toEqual({ ok: true, apiKey: key });
   });
 
   it('rejects anything else without echoing what was sent', () => {
@@ -118,7 +124,13 @@ const SAFE_ROOM_ID = /^[A-Za-z0-9_-]+$/;
 // Deliberately narrow: https only, no shell metacharacters, no credentials.
 const SAFE_REPO_URL = /^https:\/\/[A-Za-z0-9._~:/?#[\]@!$&'()*+,;=%-]+$/;
 
-export function validateApiKeyShape(value: unknown): { ok: true } | { ok: false; message: string } {
+// Carries the validated key forward, the way validateRepoUrl carries `.url`.
+// Returning a bare { ok: true } forces the caller to reach back for the raw
+// body value, which is typed `string | undefined` and will not compile against
+// CreateRoomOptions.apiKey.
+export function validateApiKeyShape(
+  value: unknown,
+): { ok: true; apiKey: string } | { ok: false; message: string } {
   if (typeof value !== 'string' || !value.startsWith('sk-ant-')) {
     // Never echo the received value — it may be a real credential.
     return {
@@ -127,7 +139,7 @@ export function validateApiKeyShape(value: unknown): { ok: true } | { ok: false;
         'Nexus needs an Anthropic Console API key beginning with "sk-ant-". Subscription logins (Free, Pro, Max) cannot be used by third-party tools.',
     };
   }
-  return { ok: true };
+  return { ok: true, apiKey: value };
 }
 
 export function validateRepoUrl(
@@ -163,21 +175,32 @@ export async function prepareWorkspace(
 
 - [ ] **Step 4: Use it in `POST /api/rooms`**
 
-Replace the inline key check with:
+The ordering here is the whole point, and it is the reverse of what you might
+expect. `Room.cwd` is **readonly**, and `attachRoom` hands it straight to
+`startAgent`, so the workspace must exist *before* the room is constructed —
+you cannot clone after `createRoom` and hope the room notices. `mintRoomId()`
+exists on master precisely so the directory can be named before the room is.
+
+Replace the whole handler body with:
 
 ```typescript
+  app.post('/api/rooms', async (c) => {
+    const body = (await c.req.json().catch(() => null)) as
+      | { apiKey?: string; repoUrl?: string | null }
+      | null;
+
     const keyCheck = validateApiKeyShape(body?.apiKey);
     if (!keyCheck.ok) return c.json({ error: keyCheck.message }, 400);
 
     const repoCheck = validateRepoUrl(body?.repoUrl);
     if (!repoCheck.ok) return c.json({ error: repoCheck.message }, 400);
-```
 
-Then, after `createRoom(...)` returns a room, prepare its workspace:
-
-```typescript
+    // Name the workspace before the room exists, because cwd is readonly and
+    // the agent reads it the moment the room attaches.
+    const roomId = mintRoomId();
+    let cwd: string;
     try {
-      await prepareWorkspace(room.id, repoCheck.url);
+      cwd = await prepareWorkspace(roomId, repoCheck.url);
     } catch {
       // Never surface the raw git error — it can echo the URL and credentials.
       return c.json(
@@ -185,11 +208,24 @@ Then, after `createRoom(...)` returns a room, prepare its workspace:
         400,
       );
     }
+
+    const room = createRoom({ id: roomId, apiKey: keyCheck.apiKey, cwd, repoUrl: repoCheck.url });
+    // If phase-3a's writeRoomMeta(...) call is already here, KEEP it, directly
+    // after createRoom — it now reads the correct final cwd.
+    attachRoom(room);
+    return c.json({ roomId: room.id, token: room.token });
+  });
 ```
 
-`Room.cwd` is readonly and `src/server/rooms.ts` is owned by `phase-0-spine`.
-If threading the prepared path into the room requires changing that file's
-signature, report BLOCKED with the exact one-line diff instead of editing it.
+Add `import { mintRoomId } from './rooms.js';` and
+`import { prepareWorkspace, validateApiKeyShape, validateRepoUrl } from './create.js';`.
+
+Note the request body's `cwd` field is now ignored entirely — `cwd` is always
+server-derived. That closes a raw-passthrough surface, and it is deliberate.
+
+`rooms.ts` needs no change: `mintRoomId` and the optional `CreateRoomOptions.id`
+are already on master. **Do not report BLOCKED for this** — the previous
+version of this plan told you to, and that instruction is now obsolete.
 
 - [ ] **Step 5: Run tests and commit**
 
@@ -417,8 +453,51 @@ git commit -m "feat(client): room creation page with BYOK entry and stated secur
 
 ---
 
+---
+
+### Task 3: Re-entry for a recovered room
+
+A room rebuilt after a restart (`phase-3a`) comes back with its full history
+but **no API key** — I4 forbids persisting one — so the WS upgrade refuses it
+with close code `4409`. Without a way to hand the key back, a recovered room is
+permanently unreachable and `phase-3a`'s durability work is unusable.
+
+**Files:** the marked `phase-3c` re-entry region of `src/server/index.ts`, plus
+tests in `tests/server/create.test.ts`.
+
+Inside the `--- BEGIN phase-3c re-entry slot ---` markers:
+
+```typescript
+  app.post('/api/rooms/:id/key', async (c) => {
+    const room = getRoom(c.req.param('id'));
+    if (room === undefined) return c.json({ error: 'No such room.' }, 404);
+
+    const body = (await c.req.json().catch(() => null)) as { apiKey?: string } | null;
+    const keyCheck = validateApiKeyShape(body?.apiKey);
+    if (!keyCheck.ok) return c.json({ error: keyCheck.message }, 400);
+
+    attachApiKey(room, keyCheck.apiKey);
+    attachRoom(room); // idempotent — returns the existing runtime if any (I1)
+    return c.json({ ok: true });
+  });
+```
+
+Import `attachApiKey` from `./rooms.js` (already on master).
+
+Tests: unknown id → 404; malformed key → 400 **and the response body must not
+echo what was sent**; a valid key on a room built with `restoreRoom` → 200, and
+the room then accepts a WebSocket connection instead of closing with 4409.
+
+Note this endpoint is guarded only by knowing the room id. That matches the
+MVP's stated model — the link is the credential — but say so in your report so
+it is a decision on the record rather than an oversight.
+
+---
+
 ## Report notes
 
-- Confirm the key appears only in the POST body: not in any URL, not in `localStorage`/`sessionStorage`, not in any error string.
-- Whether threading the prepared workspace path into `Room.cwd` needed a change to `src/server/rooms.ts`, and the exact diff if so.
-- Any `phase-1b` test assertion you had to update, and why.
+- Confirm the key appears only in the POST body: not in any URL, not in `localStorage`/`sessionStorage`, not in any error string, not in the event log.
+- Confirm the agent's `cwd` is the prepared per-room directory and never the server's own checkout — paste the `room_created` event showing it.
+- Confirm you preserved `phase-3a`'s `writeRoomMeta` call if it was present when you branched.
+- Any `phase-1b` test assertion you had to update (`client/tests/smoke.test.tsx` asserts the text `Nexus`), and why.
+- Confirm `npm run typecheck` and `npm --prefix client run build` both exit 0.

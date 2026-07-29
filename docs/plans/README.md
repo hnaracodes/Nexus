@@ -36,15 +36,28 @@ conserve credits, including the rows that say `opus`.
 | 3 | `phase-2c-permission-core.md` | parallel | `opus` | `src/server/permissions.ts`, `canUseTool` wiring in `src/server/agent.ts` |
 | 3 | `phase-2d-approval-ui.md` | parallel | `sonnet` | `client/src/approvals.ts`, `client/src/components/ApprovalPrompt.tsx`, tests |
 | — | **merge + Day 2/3 acceptance gate** | | | |
-| 4 | `phase-3a-durability.md` | **solo** | `sonnet` | `src/log/replay.ts`, `src/server/recovery.ts`, `since=` in `src/server/index.ts` |
-| 5 | `phase-3b-interrupt.md` | parallel | `haiku` | `client/src/components/StopButton.tsx`, `interrupt` branch in `src/server/index.ts` |
-| 5 | `phase-3c-room-creation-ux.md` | parallel | `sonnet` | `src/server/create.ts`, `client/src/pages/**`, tests |
-| 5 | `phase-3d-readme-errors.md` | parallel | `haiku` | `README.md`, `src/server/errors.ts`, `client/src/components/ErrorBanner.tsx` |
+| 4 | `phase-3a-durability.md` | **solo** | `sonnet` | `src/log/replay.ts`, `src/server/recovery.ts`, `since=` + `writeRoomMeta` + `recoverRooms()` in `src/server/index.ts` |
+| 5 | `phase-3b-interrupt.md` | parallel | `sonnet` | `client/src/components/{StopButton,InterruptNotice}.tsx`, `interrupt` branch in `src/server/index.ts`, `phase-3b` regions of `client/src/App.tsx` |
+| 5 | `phase-3c-room-creation-ux.md` | parallel | `sonnet` | `src/server/create.ts`, `client/src/pages/**`, `POST /api/rooms` + re-entry slot in `src/server/index.ts`, `phase-3c` region of `client/src/App.tsx`, `client/tests/smoke.test.tsx` |
+| 5 | `phase-3d-readme-errors.md` | parallel | `sonnet` | `README.md`, `src/server/errors.ts`, `client/src/components/ErrorBanner.tsx`, one line of `src/server/agent.ts`, `phase-3d` region of `client/src/App.tsx` |
+
+**Order 4 pre-work landed on `master` first** (commits `369f495`..`1fbd316`):
+stable participant identity with resume tokens, `restoreRoom`/`attachApiKey`/
+`hasApiKey`/`mintRoomId`, the `4409` guard for a keyless recovered room,
+`store.ts` surfacing transient `error` frames, and the marker regions the
+order-5 group depends on. Every order-5 plan assumes these exist.
 
 There is no separate contracts step before Phase 2. `phase-0-spine` Task 2
 deliberately freezes the **whole** event union up front — including the driver,
 permission, and interrupt members — precisely so no later feature branch has to
 widen `src/protocol/events.ts` and collide with its siblings.
+
+**Verification must include a type check.** Vitest transforms with esbuild and
+never type-checks, so a task can show a fully green suite while the code does
+not compile — this was found live during the Phase 3 pre-work, where 38/38
+client tests passed against a `tsc -b` failure. Every plan now requires
+`npm run typecheck`, and any plan touching `client/` also requires
+`npm --prefix client run build`.
 
 `src/server/index.ts` is touched by five plans. Each one names the exact
 handler or branch it owns and is told to report BLOCKED rather than edit

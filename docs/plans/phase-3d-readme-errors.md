@@ -18,6 +18,8 @@ and the banner slot in `client/src/App.tsx`.
 
 ## Global Constraints
 
+- **Verification is not just `npm test`.** Vitest strips types with esbuild and never type-checks. Before every commit, `npm run typecheck` **and** `npm --prefix client run build` (which runs `tsc -b`) must both exit 0.
+- **You share `client/src/App.tsx` with two other agents running right now.** It already contains paired marker comments. Edit **only** inside `--- BEGIN phase-3d error banner slot ---` / `--- END ---`, and leave every other marked region byte-for-byte untouched. In the import block (unmarked), add `import { ErrorBanner } from './components/ErrorBanner.js';` immediately after the existing `import { ConnectionStatus } from './components/ConnectionStatus.js';` line — do not re-sort the block.
 - **Do not soften the security model.** Both facts go in the README: a shared room is a shared security boundary, and the MVP has no isolation between rooms. Do not market this as multi-tenant.
 - **I4 applies to error text.** `toUserMessage` scrubs `sk-ant-…` from every string it returns, including the fallback path. A stack trace is a logging path like any other.
 - Every user-facing error is a sentence with a next step. "ECONNREFUSED" is not an error message.
@@ -141,14 +143,24 @@ export function toUserMessage(error: unknown): string {
 
 - [ ] **Step 4: Use it in `src/server/agent.ts`'s error path**
 
-Replace the `agent_error` emission in `startAgent`'s catch block with:
+The catch block currently reads:
 
 ```typescript
-      emit({ type: 'agent_error', message: toUserMessage(error) });
+      emit({ type: 'agent_error', message: scrub(String(error), room.getApiKey()) });
+```
+
+**Compose, do not replace.** `scrub` splits on the room's *literal* key;
+`toUserMessage` only regex-matches `sk-ant-…`. Dropping `scrub` would quietly
+weaken I4 on a path that writes to the durable log. Use:
+
+```typescript
+      emit({ type: 'agent_error', message: scrub(toUserMessage(error), room.getApiKey()) });
 ```
 
 `src/server/agent.ts` is contended — change only that one line, add the import,
-and list both in your report.
+and list both in your report. Note `room.getApiKey()` throws on a recovered
+keyless room; if that turns out to be reachable from this path, report it
+rather than removing the scrub.
 
 - [ ] **Step 5: Run tests and commit**
 
@@ -229,16 +241,28 @@ export function ErrorBanner({
 
 - [ ] **Step 4: Wire it into `client/src/App.tsx`**
 
-Track the latest server `error` frame in state and render the banner under the
-header:
+`RoomView` already carries the error for you — `store.ts` was fixed on master
+and now exposes `lastError: string | null` plus `errorCount: number`. **You do
+not need to touch `client/src/ws.ts` or `client/src/store.ts`, and the earlier
+instruction to report BLOCKED about them is obsolete.**
+
+Dismiss by remembering *which* error was dismissed, not whether one was:
 
 ```tsx
-      <ErrorBanner message={lastError} onDismiss={() => setLastError(null)} />
+  const [dismissedCount, setDismissedCount] = useState(0);
+  const bannerMessage = view.errorCount > dismissedCount ? view.lastError : null;
 ```
 
-If capturing `error` frames requires a change inside `client/src/ws.ts` (owned
-by `phase-1b`), report BLOCKED with the exact one-line diff rather than editing
-that file.
+```tsx
+      {/* --- BEGIN phase-3d error banner slot --- */}
+      <ErrorBanner message={bannerMessage} onDismiss={() => setDismissedCount(view.errorCount)} />
+      {/* --- END phase-3d error banner slot --- */}
+```
+
+The counter is load-bearing. `"You are not driving"` is the most common error
+in the product and a non-driver hits it repeatedly; comparing message text
+alone would swallow every repeat after the first dismissal. Add a test for
+exactly that: dismiss, receive the same message again, banner returns.
 
 - [ ] **Step 5: Run tests and commit**
 
@@ -263,8 +287,16 @@ git commit -m "feat(client): dismissible error banner for server error frames"
 
 - [ ] **Step 1: Write `README.md`**
 
-Fill the URL from `phase-1c`'s report. Everything else is final copy — do not
-soften the two limitation sections.
+Everything below is final copy — do not soften the two limitation sections.
+
+**Nothing has ever been deployed.** There is no `fly` CLI and no credentials on
+this machine, and `fly.toml` has never been applied. Do **not** print a live
+URL as though it works. Replace the `**Live:**` line with a plain statement
+that the project runs locally and has not been deployed yet, or drop it.
+
+Also: the quick-start block says `:8080`, but port 8080 is occupied on the
+primary dev machine by an unrelated server. Use `PORT=8099 npm run dev` and say
+why in one clause, or a first-time reader gets someone else's 404.
 
 ````markdown
 # Nexus
@@ -327,11 +359,11 @@ on a user's behalf.
 ## Known limitations
 
 - **No isolation between rooms** (above).
-- **Recovery restores history, not memory.** After a restart the room and its full transcript come back. The agent's context window does not — it starts fresh and does not remember the earlier conversation.
+- **Recovery restores history, not memory.** After a restart the room and its full transcript come back, but the key was never persisted — so the room refuses connections until its creator re-supplies one, and only then does the history replay. The agent's context window does not come back either way: it starts fresh and does not remember the earlier conversation.
 - **Two people can contradict each other.** Prompts are attributed by name so the agent can reason about competing instructions, but nothing arbitrates them. This is a real limitation, not a bug.
 - **Streaming text is not replayed.** Only completed assistant messages are logged. A late joiner sees an in-flight message once it finishes, not as it types.
 - **No accounts.** The link is the credential. Anyone with the link is in the room.
-- **Participant identity is per-connection.** Reconnecting gives you a new participant id, so a reconnecting driver does not automatically get the token back.
+- **Identity survives a reconnect, but only in the same browser.** A refresh or a dropped connection keeps your roster row and the driver token, because the browser stores an identity for the room. A different browser, a private window, or cleared storage is a new person.
 
 ## Architecture
 

@@ -11,10 +11,14 @@ log records who pulled the cord.
 **Mode:** PARALLEL — dispatch alongside `phase-3c` and `phase-3d`.
 
 **Files owned:** `client/src/components/StopButton.tsx`,
-`client/tests/stop-button.test.tsx`, `tests/server/interrupt.test.ts`, and the
-`interrupt` frame branch in `src/server/index.ts`.
+`client/src/components/InterruptNotice.tsx`, `client/tests/stop-button.test.tsx`,
+`tests/server/interrupt.test.ts`, the `interrupt` frame branch in
+`src/server/index.ts`, and the marked `phase-3b` regions of `client/src/App.tsx`.
 
 ## Global Constraints
+
+- **Verification is not just `npm test`.** Vitest strips types with esbuild and never type-checks. Before every commit, `npm run typecheck` must exit 0, and because this plan touches the client, `npm --prefix client run build` (which runs `tsc -b`) must also succeed. A green suite does not mean it compiles.
+- **You share `client/src/App.tsx` and `src/server/index.ts` with two other agents running right now.** Both files already contain paired marker comments. Edit **only** between your own `--- BEGIN phase-3b ... ---` and `--- END phase-3b ... ---` markers, and leave every other marked region byte-for-byte untouched. For the App.tsx import block, which has no markers, insert `import { StopButton } from './components/StopButton.js';` immediately after the existing `import { Roster } from './components/Roster.js';` line, and `InterruptNotice` immediately after that — do not re-sort the block.
 
 - **This is a safety valve. Do not gate it on the driver token.** A runaway agent must not require finding whoever holds control. That is the entire point of the feature.
 - An interrupt on an idle agent is a harmless no-op — never an error.
@@ -41,6 +45,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 import { createServer } from '../../src/server/index.js';
 import { createRoom } from '../../src/server/rooms.js';
+import { attachRoom } from '../../src/server/ws.js';
 import type { ServerFrame } from '../../src/protocol/wire.js';
 
 let port = 0;
@@ -69,13 +74,33 @@ function connect(qs: string): Promise<{ socket: WebSocket; frames: ServerFrame[]
   });
 }
 
+/**
+ * Pre-attach with a stubbed runQuery so the upgrade handler finds this runtime
+ * instead of starting a real one. Without the stub each test spawns an actual
+ * Agent SDK subprocess against a fake key — slow, noisy and flaky. Copy the
+ * pattern from `stubbedRoom()` in tests/server/ws.test.ts. Note the stub must
+ * expose `interrupt`, since that is what this plan exercises.
+ */
+function stubbedRoom() {
+  const created = createRoom({
+    apiKey: 'sk-ant-api03-TESTONLY-not-a-real-key',
+    cwd: process.cwd(),
+    repoUrl: null,
+  });
+  attachRoom(created, undefined, {
+    runQuery: (() => ({
+      async *[Symbol.asyncIterator]() {
+        /* the stub agent never emits */
+      },
+      interrupt: async () => undefined,
+    })) as never,
+  });
+  return created;
+}
+
 describe('global interrupt', () => {
   it('accepts an interrupt from a non-driver and logs who sent it', async () => {
-    const r = createRoom({
-      apiKey: 'sk-ant-api03-TESTONLY-not-a-real-key',
-      cwd: process.cwd(),
-      repoUrl: null,
-    });
+    const r = stubbedRoom();
     const qs = `room=${r.id}&token=${r.token}`;
     const ada = await connect(`${qs}&name=Ada`);
     await settle();
@@ -116,8 +141,14 @@ Alongside the other frame branches in `ws.on('message')`:
         // Deliberately NOT gated on the driver token — this is the safety
         // valve. A runaway agent must not require finding the token holder.
         runtime.commit({ type: 'interrupted', participantId, displayName });
-        void runtime.agent.interrupt().catch((error: unknown) => {
-          runtime.commit({ type: 'agent_error', message: `Interrupt failed: ${String(error)}` });
+        void runtime.agent.interrupt().catch(() => {
+          // Never interpolate the raw error: it can carry the API key, and
+          // this text is committed to the durable log (I4). The SDK rejecting
+          // here almost always just means the session already ended.
+          runtime.commit({
+            type: 'agent_error',
+            message: 'Could not stop the agent — the session may have already ended.',
+          });
         });
         return;
       }
@@ -223,7 +254,33 @@ git commit -m "feat(client): stop button available to every participant"
 
 ---
 
+---
+
+### Task 3: Show that someone stopped the agent
+
+`client/src/store.ts:186` carries the comment *"Permission and interrupt events
+render in phase-2d / phase-3b"* — a promise this plan owes. But `store.ts` is
+**not yours** (it belongs to `phase-1b`), and `phase-2d` faced exactly this and
+solved it by deriving from the raw event log instead of widening the reducer.
+Follow that precedent.
+
+**Files:**
+- Create: `client/src/components/InterruptNotice.tsx`
+- Modify: `client/src/App.tsx`, inside the `phase-3b` markers only.
+
+`RoomView` already exposes `events: NexusEvent[]`. Scan it for
+`type === 'interrupted'` and render, for the most recent one, a line like
+`Grace stopped the agent.` Do not add a second store, and do not edit
+`store.ts` — if you believe you must, report BLOCKED with the exact diff.
+
+Add at least one test asserting an `interrupted` event surfaces in the
+rendered UI, not merely that the component renders in isolation.
+
+---
+
 ## Report notes
 
 - Confirm the interrupt path is not gated on `driverId` on either side.
-- List the lines you changed in `src/server/index.ts` (contended file).
+- List the lines you changed in `src/server/index.ts` (contended file), and confirm you stayed inside your marker regions in both `index.ts` and `App.tsx`.
+- Confirm no raw error string reaches a committed `agent_error` (I4).
+- Confirm `npm run typecheck` and `npm --prefix client run build` both exit 0.
