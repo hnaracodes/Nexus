@@ -87,6 +87,24 @@ describe('App — the live room view', () => {
     expect(screen.getByText('You are not driving.')).toBeInTheDocument();
   });
 
+  it('dismisses a BURST of errors with one click, not one click each', () => {
+    // Dismissing one-at-a-time cannot tell `dismissed = errorCount` apart from
+    // `dismissed + 1` — both land on the same number every step. Only a burst
+    // separates them, and a burst is realistic: a non-driver mashing send
+    // produces several errors before anyone reaches for the dismiss button.
+    render(<App />);
+    act(() => FakeSocket.last?.onopen?.());
+    identify();
+
+    deliver({ kind: 'error', message: 'You are not driving.' });
+    deliver({ kind: 'error', message: 'You are not driving.' });
+    deliver({ kind: 'error', message: 'You are not driving.' });
+    expect(screen.getByText('You are not driving.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /dismiss/i }));
+    expect(screen.queryByText('You are not driving.')).not.toBeInTheDocument();
+  });
+
   it('sends an interrupt frame when anyone presses stop', () => {
     render(<App />);
     act(() => FakeSocket.last?.onopen?.());
