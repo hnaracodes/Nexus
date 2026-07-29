@@ -127,6 +127,34 @@ describe('stable participant identity', () => {
     await closeAndSettle(driver);
   });
 
+  it('refuses a reclaim that arrives under a different display name', async () => {
+    // Two tabs in one browser share localStorage, so a second person opening
+    // the same room link on the same machine offers back the first person's
+    // stored identity — with a valid token. Honouring it collapses two people
+    // into one roster row whose name flips between them. The token proves
+    // "same browser storage", not "same person".
+    const room = stubbedRoom();
+    const qs = `room=${room.id}&token=${room.token}`;
+
+    const ada = await connect(`${qs}&name=Ada`);
+    await settle();
+    const stored = identityOf(ada);
+
+    const grace = await connect(
+      `${qs}&name=Grace&participant=${stored.participantId}&resume=${stored.resumeToken}`,
+    );
+    await settle();
+
+    expect(identityOf(grace).participantId).not.toBe(stored.participantId);
+
+    const { participants } = projectPresence(loggedEvents(room));
+    expect(participants).toHaveLength(2);
+    expect(participants.map((p) => p.displayName).sort()).toEqual(['Ada', 'Grace']);
+
+    await closeAndSettle(grace);
+    await closeAndSettle(ada);
+  });
+
   it('mints a fresh id when the resume token is wrong or the id is malformed', async () => {
     const room = stubbedRoom();
     const qs = `room=${room.id}&token=${room.token}`;

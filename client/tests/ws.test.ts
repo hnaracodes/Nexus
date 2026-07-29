@@ -26,14 +26,14 @@ class FakeSocket implements WebSocketLike {
   }
 }
 
-function harness() {
+function harness(displayName = 'Ada') {
   FakeSocket.instances = [];
   const views: RoomView[] = [];
   const statuses: string[] = [];
   const connection = connect({
     roomId: 'room_a',
     token: 'tok',
-    displayName: 'Ada',
+    displayName,
     baseUrl: 'ws://test',
     onView: (v) => views.push(v),
     onStatus: (s) => statuses.push(s),
@@ -230,8 +230,24 @@ describe('identity across reconnects', () => {
     const h = harness();
     h.sockets[0]?.onopen?.();
     h.sockets[0]?.onmessage?.({ data: replayComplete('p_ada', 'r_secret') });
-    // Scoped per room, so two rooms open in one browser cannot collide.
-    expect(localStorage.getItem('nexus:identity:room_a')).toContain('r_secret');
-    expect(localStorage.getItem('nexus:identity:room_b')).toBeNull();
+    // Scoped per room AND per name, so neither two rooms nor two people in
+    // one browser can collide.
+    expect(localStorage.getItem('nexus:identity:room_a:Ada')).toContain('r_secret');
+    expect(localStorage.getItem('nexus:identity:room_b:Ada')).toBeNull();
+  });
+
+  it('does not hand one person’s identity to another in the same browser', () => {
+    // Found by opening two tabs against one room: tabs share localStorage, so
+    // the second person offered back the first person's identity with a valid
+    // token and the server honoured it — two people collapsed into one roster
+    // row whose name flipped between them.
+    const ada = harness('Ada');
+    ada.sockets[0]?.onopen?.();
+    ada.sockets[0]?.onmessage?.({ data: replayComplete('p_ada', 'r_ada') });
+
+    const grace = harness('Grace');
+    expect(grace.sockets[0]?.url).not.toContain('participant=p_ada');
+    expect(grace.sockets[0]?.url).not.toContain('resume=r_ada');
+    expect(grace.sockets[0]?.url).not.toContain('participant=');
   });
 });

@@ -139,6 +139,7 @@ export function createServer(): { app: Hono; server: Server } {
         room,
         url.searchParams.get('participant'),
         url.searchParams.get('resume'),
+        displayName,
       );
       const participantId = identity.participantId;
 

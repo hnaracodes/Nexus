@@ -38,9 +38,15 @@ const BACKOFF_MS = [500, 1_000, 2_000, 4_000, 8_000] as const;
  */
 const TERMINAL_CLOSE_CODES = new Set([4401, 4409]);
 
-/** Per-room, so two rooms open in one browser do not share an identity. */
-function identityKey(roomId: string): string {
-  return `nexus:identity:${roomId}`;
+/**
+ * Scoped per room AND per display name. Two rooms open in one browser must not
+ * share an identity — and neither must two people on one machine, who share
+ * localStorage and would otherwise hand each other a valid resume token for
+ * the same participant. The server rejects a mismatched name anyway; this
+ * keeps the client from making a pointless reclaim attempt in the first place.
+ */
+function identityKey(roomId: string, displayName: string): string {
+  return `nexus:identity:${roomId}:${displayName}`;
 }
 
 interface StoredIdentity {
@@ -48,9 +54,9 @@ interface StoredIdentity {
   resumeToken: string;
 }
 
-function readIdentity(roomId: string): StoredIdentity | null {
+function readIdentity(roomId: string, displayName: string): StoredIdentity | null {
   try {
-    const raw = globalThis.localStorage?.getItem(identityKey(roomId));
+    const raw = globalThis.localStorage?.getItem(identityKey(roomId, displayName));
     if (raw === null || raw === undefined) return null;
     const parsed = JSON.parse(raw) as Partial<StoredIdentity>;
     return typeof parsed.participantId === 'string' && typeof parsed.resumeToken === 'string'
@@ -63,9 +69,9 @@ function readIdentity(roomId: string): StoredIdentity | null {
   }
 }
 
-function writeIdentity(roomId: string, identity: StoredIdentity): void {
+function writeIdentity(roomId: string, displayName: string, identity: StoredIdentity): void {
   try {
-    globalThis.localStorage?.setItem(identityKey(roomId), JSON.stringify(identity));
+    globalThis.localStorage?.setItem(identityKey(roomId, displayName), JSON.stringify(identity));
   } catch {
     // Storage unavailable: the session still works, it just will not survive
     // a reload. Never surface this to the user.
@@ -113,7 +119,7 @@ export function connect(options: ConnectOptions): Connection {
   let attempt = 0;
   let deliberatelyClosed = false;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  let identity: StoredIdentity | null = readIdentity(options.roomId);
+  let identity: StoredIdentity | null = readIdentity(options.roomId, options.displayName);
 
   function open(): void {
     options.onStatus(attempt === 0 ? 'connecting' : 'reconnecting');
@@ -147,7 +153,7 @@ export function connect(options: ConnectOptions): Connection {
       // and deliberately never enters RoomView.
       if (frame.kind === 'replay_complete') {
         identity = { participantId: frame.participantId, resumeToken: frame.resumeToken };
-        writeIdentity(options.roomId, identity);
+        writeIdentity(options.roomId, options.displayName, identity);
       }
       view = reduce(view, frame);
       options.onView(view);

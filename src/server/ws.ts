@@ -145,20 +145,30 @@ function safeEqual(a: string, b: string): boolean {
  * Decide who an incoming socket is.
  *
  * A reconnecting client may offer back the id it was given plus the resume
- * token that came with it. Both must match, and the id must still be on the
- * roster. Anything else — absent, malformed, unknown, or a bad token — mints a
- * fresh identity, which is exactly the old behaviour.
+ * token that came with it. All three must line up — the id must still be on
+ * the roster, the token must match, and the display name must be the same one
+ * that id already belongs to. Anything else — absent, malformed, unknown, bad
+ * token, different name — mints a fresh identity, which is exactly the old
+ * behaviour.
  *
  * The token matters: participant ids are broadcast to the whole room inside
  * `participant_joined`, so honouring a bare id would let any member reconnect
  * as the current driver and inherit the token. That is an I2 bypass at the
  * server, which is the one place I2 is supposed to hold. Identity is therefore
  * a capability you hold, not a name you can read off the log.
+ *
+ * The name matters for a subtler reason, found by opening two tabs in one
+ * browser: tabs share localStorage, so the second person to open a room link
+ * on a shared machine offers back the first person's stored identity holding a
+ * perfectly valid token. The token proves "same browser storage", not "same
+ * person" — without this check the two collapse into one roster row whose name
+ * flips between them, and the second inherits the first's driver token.
  */
 export function resolveParticipantId(
   room: Room,
   requestedId: string | null,
   resumeToken: string | null,
+  displayName: string,
 ): { participantId: string; resumeToken: string } {
   const tokens = tokensFor(room);
 
@@ -166,7 +176,7 @@ export function resolveParticipantId(
     requestedId !== null &&
     resumeToken !== null &&
     PARTICIPANT_ID_PATTERN.test(requestedId) &&
-    room.participants.has(requestedId)
+    room.participants.get(requestedId)?.displayName === displayName
   ) {
     const expected = tokens.get(requestedId);
     if (expected !== undefined && safeEqual(expected, resumeToken)) {
