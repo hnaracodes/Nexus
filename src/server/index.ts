@@ -5,6 +5,7 @@ import { Hono } from 'hono';
 import { WebSocketServer } from 'ws';
 import { PROTOCOL_VERSION } from '../protocol/events.js';
 import { parseClientFrame } from '../protocol/wire.js';
+import { presenceFrame } from './presence.js';
 import { authorize, createRoom, getRoom } from './rooms.js';
 import { attachRoom, getRuntime, newParticipantId } from './ws.js';
 
@@ -99,6 +100,7 @@ export function createServer(): { app: Hono; server: Server } {
       runtime.addSocket(ws, participantId);
       room.participants.set(participantId, { id: participantId, displayName, connected: true });
       runtime.commit({ type: 'participant_joined', participantId, displayName });
+      runtime.broadcast(presenceFrame(room));
 
       ws.on('message', (data) => {
         const frame = parseClientFrame(String(data));
@@ -118,6 +120,7 @@ export function createServer(): { app: Hono; server: Server } {
         const participant = room.participants.get(participantId);
         if (participant !== undefined) participant.connected = false;
         runtime.commit({ type: 'participant_left', participantId, displayName });
+        runtime.broadcast(presenceFrame(room));
       });
     });
   });
