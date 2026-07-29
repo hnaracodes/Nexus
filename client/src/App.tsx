@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { deriveApprovals } from './approvals.js';
 import { ApprovalPrompt } from './components/ApprovalPrompt.js';
 import { ConnectionStatus } from './components/ConnectionStatus.js';
+import { ErrorBanner } from './components/ErrorBanner.js';
 import { MessageList } from './components/MessageList.js';
 import { PromptInput } from './components/PromptInput.js';
 import { Roster } from './components/Roster.js';
@@ -28,6 +29,11 @@ export default function App(): JSX.Element {
   const [status, setStatus] = useState<Status>('connecting');
   const [connection, setConnection] = useState<Connection | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  // phase-3d: dismiss by count, not message text — "You are not driving" is
+  // the most common error and a non-driver hits it repeatedly, so comparing
+  // text alone would swallow every repeat after the first dismissal.
+  const [dismissedCount, setDismissedCount] = useState(0);
+  const bannerMessage = view.errorCount > dismissedCount ? view.lastError : null;
 
   useEffect(() => {
     if (params.roomId === '' || params.token === '') return undefined;
@@ -69,6 +75,7 @@ export default function App(): JSX.Element {
       </header>
 
       {/* --- BEGIN phase-3d error banner slot: render <ErrorBanner/> here. --- */}
+      <ErrorBanner message={bannerMessage} onDismiss={() => setDismissedCount(view.errorCount)} />
       {/* --- END phase-3d error banner slot --- */}
 
       {/* --- BEGIN phase-2d approval slot --- */}

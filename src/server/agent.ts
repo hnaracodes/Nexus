@@ -5,6 +5,7 @@ import type { Room } from './rooms.js';
 import { AsyncQueue } from './queue.js';
 import { createPermissionGate } from './permissions.js';
 import type { PermissionGate } from './permissions.js';
+import { toUserMessage } from './errors.js';
 
 export type EmitFn = (event: UnsequencedEvent) => void;
 
@@ -104,7 +105,7 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
       }
     } catch (error) {
       clearWatchdog();
-      emit({ type: 'agent_error', message: scrub(String(error), room.getApiKey()) });
+      emit({ type: 'agent_error', message: scrub(toUserMessage(error), room.getApiKey()) });
     }
   })();
 
