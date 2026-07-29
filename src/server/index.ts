@@ -111,6 +111,20 @@ export function createServer(): { app: Hono; server: Server } {
           runtime.commit({ type: 'user_prompt', participantId, displayName, text: frame.text });
           runtime.agent.submit(`[${displayName}]: ${frame.text}`);
         }
+        if (frame.kind === 'permission_decision') {
+          // Any participant may decide — not only the driver.
+          const accepted = runtime.agent.gate.resolve(frame.requestId, {
+            decision: frame.decision,
+            participantId,
+            displayName,
+            via: 'first_response',
+            reason: frame.reason ?? null,
+          });
+          if (!accepted) {
+            ws.send(JSON.stringify({ kind: 'error', message: 'That approval was already decided.' }));
+          }
+          return;
+        }
       });
 
       ws.on('close', () => {
