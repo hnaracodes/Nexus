@@ -7,7 +7,8 @@ import { PROTOCOL_VERSION } from '../protocol/events.js';
 import { parseClientFrame } from '../protocol/wire.js';
 import { presenceFrame } from './presence.js';
 import { recoverRooms, writeRoomMeta } from './recovery.js';
-import { authorize, createRoom, getRoom, hasApiKey } from './rooms.js';
+import { prepareWorkspace, validateApiKeyShape, validateRepoUrl } from './create.js';
+import { attachApiKey, authorize, createRoom, getRoom, hasApiKey, mintRoomId } from './rooms.js';
 import { attachRoom, getRuntime, resolveParticipantId } from './ws.js';
 import {
   cancelAutoRelease,
@@ -26,18 +27,30 @@ export function createServer(): { app: Hono; server: Server } {
 
   app.post('/api/rooms', async (c) => {
     const body = (await c.req.json().catch(() => null)) as
-      | { apiKey?: string; repoUrl?: string | null; cwd?: string }
+      | { apiKey?: string; repoUrl?: string | null }
       | null;
-    const apiKey = body?.apiKey;
-    if (typeof apiKey !== 'string' || !apiKey.startsWith('sk-ant-')) {
-      // Do not echo what was received — it may be a real key.
-      return c.json({ error: 'An Anthropic Console API key (sk-ant-...) is required.' }, 400);
+
+    const keyCheck = validateApiKeyShape(body?.apiKey);
+    if (!keyCheck.ok) return c.json({ error: keyCheck.message }, 400);
+
+    const repoCheck = validateRepoUrl(body?.repoUrl);
+    if (!repoCheck.ok) return c.json({ error: repoCheck.message }, 400);
+
+    // Name the workspace before the room exists, because cwd is readonly and
+    // the agent reads it the moment the room attaches.
+    const roomId = mintRoomId();
+    let cwd: string;
+    try {
+      cwd = await prepareWorkspace(roomId, repoCheck.url);
+    } catch {
+      // Never surface the raw git error — it can echo the URL and credentials.
+      return c.json(
+        { error: 'Could not clone that repository. Check the URL and try again.' },
+        400,
+      );
     }
-    const room = createRoom({
-      apiKey,
-      cwd: body?.cwd ?? process.cwd(),
-      repoUrl: body?.repoUrl ?? null,
-    });
+
+    const room = createRoom({ id: roomId, apiKey: keyCheck.apiKey, cwd, repoUrl: repoCheck.url });
     writeRoomMeta({
       roomId: room.id,
       token: room.token,
@@ -61,6 +74,18 @@ export function createServer(): { app: Hono; server: Server } {
 
   // --- BEGIN phase-3c re-entry slot: add POST /api/rooms/:id/key here, so a
   // room recovered without its key (I4) can be re-opened by its creator. ---
+  app.post('/api/rooms/:id/key', async (c) => {
+    const room = getRoom(c.req.param('id'));
+    if (room === undefined) return c.json({ error: 'No such room.' }, 404);
+
+    const body = (await c.req.json().catch(() => null)) as { apiKey?: string } | null;
+    const keyCheck = validateApiKeyShape(body?.apiKey);
+    if (!keyCheck.ok) return c.json({ error: keyCheck.message }, 400);
+
+    attachApiKey(room, keyCheck.apiKey);
+    attachRoom(room); // idempotent — returns the existing runtime if any (I1)
+    return c.json({ ok: true });
+  });
   // --- END phase-3c re-entry slot ---
 
   // The Docker image copies the Vite bundle to client/dist, but no Phase 1
