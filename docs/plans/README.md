@@ -19,8 +19,10 @@ problem.
 
 ## Fan-out groups and models
 
-**Status: orders 1–3 are done, merged, and acceptance-tested.** Phases 0, 1 and
-2 are on `master`. `phase-3a` is next and is **solo**. The `Model` column below
+**Status: every order here is done, merged, and acceptance-tested.** Phases 0
+through 3 are on `master`; there is no order 6. Remaining work is a deploy, a
+hardening pass on `POST /api/rooms`, two named test gaps, and the Day 5 demo —
+see the newest `sessions/` folder, not this manifest. The `Model` column below
 is superseded by `CLAUDE.md`'s policy — **dispatch everything on `sonnet`** to
 conserve credits, including the rows that say `opus`.
 

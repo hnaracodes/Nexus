@@ -10,25 +10,21 @@ Strategic frame, from `BUILD_SPEC.md` §9: *collaboration is the mechanism, gove
 
 ## Current repo state — read this first
 
-**Phases 0, 1 and 2 are built, merged, and committed.** 84 root tests + 38 client tests.
+**Phases 0 through 3 are built, merged, and committed.** 145 root tests + 69 client tests. Phase 3 was the last planned phase; what remains is a deploy, one hardening pass, and a demo — not another phase.
 
 - **Phase 0** — frozen event protocol, room registry, async prompt queue feeding one `query()` per room, WebSocket broadcast with replay-then-live ordering.
 - **Phase 1a** — durable append-only JSONL log at `data/rooms/<roomId>.jsonl`, redaction at the write boundary. `attachRoom`'s default sink is now `createSink(room.id)`; `MemorySink` is exported but no longer the default.
 - **Phase 1b** — React client in `client/` (its own npm project): idempotent event reducer, WebSocket adapter with backoff reconnect and resume-from-seq, room UI shell.
 - **Phase 1c** — multi-stage `Dockerfile`, `fly.toml`, `scripts/smoke-ws.mjs`. **Image builds and runs; nothing is deployed** — the `fly` CLI is not installed here and no deploy has ever run.
 
-- **Phase 2a** — driver token state machine in `src/server/driver.ts`, 30s disconnect grace, and the I2 guard in the `prompt` branch of `src/server/index.ts`.
-- **Phase 2b** — `src/server/presence.ts` (log-derived roster projection + transient `presence` snapshot) and `client/src/components/Roster.tsx`.
-- **Phase 2c** — `src/server/permissions.ts`: the `canUseTool` gate, first-response-wins, 120s timeout-denies, auto-approve for read-only tools.
-- **Phase 2d** — `client/src/approvals.ts` and `ApprovalPrompt.tsx`, derived from the raw event log rather than a second store.
+- **Phase 2a–2d** — driver token state machine (`src/server/driver.ts`) with 30s disconnect grace and the I2 guard in `src/server/index.ts`; log-derived presence (`src/server/presence.ts`); the `canUseTool` gate (`src/server/permissions.ts`) with first-response-wins and 120s timeout-denies; approval UI derived from the raw event log.
+- **Phase 3** — stable participant identity with resume tokens (`resolveParticipantId` in `src/server/ws.ts`); deterministic reconstruction (`src/log/replay.ts`); `?since=` resume; restart recovery via a key-free sidecar (`src/server/recovery.ts`, `restoreRoom` in `rooms.ts`); global interrupt; room-creation page with per-room repo cloning (`src/server/create.ts`); key re-entry; error translation (`src/server/errors.ts`) and a dismissible banner.
 
-**Both the core loop and the permission gate are verified against a real Anthropic key.** Day 1: two clients, one room, identical reply in ~5.5s. **Day 3: `canUseTool` suspended a live `query()` on a `Bash` call, both participants saw the actual command, a non-driver denied it with a reason, and the agent adapted and continued rather than crashing — the decision landed in the log with a name attached and no key material.** That retires the project's largest technical unknown, which had been carried as unresolved across two sessions.
+**Everything below is verified running, not merely asserted.** 24/24 live acceptance against a real Anthropic key (core loop, I2 raw-frame bypass, identity reclaim, `since=` resume, and `canUseTool` suspending a live `query()` while a *non-driver* denies a `Bash` call and the agent adapts). 10/10 restart recovery against a genuinely killed process: the room comes back under its original link, refuses with `4409` until re-keyed, replays its full history, and **continues its sequence numbering** rather than restarting.
 
-**Day 2 acceptance also passed live**, including the real I2 check: a raw WebSocket frame sent the way a browser console would send it is rejected at the server, produces no `user_prompt` on *any* socket, and control passes cleanly in both directions.
+**The client has now been opened in a real browser** — carried unresolved for three sessions. Two Chrome tabs, one room: both saw the same live reply from one agent, the roster showed both people, and a non-driver's prompt produced the error banner while her text reached the log nowhere. It found a real bug in thirty seconds (see the newest `sessions/` `issues.md` §4).
 
-Still missing: restart recovery and `since=` resume, **stable participant identity across reconnects** (three Phase 2 features quietly degrade without it — read the newest `sessions/` `issues.md` §A first), global interrupt, room-creation UX, and **an actual deploy**.
-
-Next up is `phase-3a` (durability) — **solo**, and start it with stable participant identity. Then the `phase-3b`/`3c`/`3d` fan-out. See `docs/plans/README.md`.
+Still missing: **an actual deploy**, hardening of `POST /api/rooms` (see `issues.md` §B — it is currently an unauthenticated outbound-request primitive), two named test gaps (§C, §D), and the Day 5 demo. Read the newest `sessions/` folder before starting.
 
 **Model policy: use Sonnet 5 for all subagent dispatches, not Opus or Fable, to conserve API credits.** Applies to `Agent` calls and any `model:` field on dispatched work.
 
@@ -93,8 +89,8 @@ Transcribed from the real root `package.json`. Re-read it rather than trusting t
 
 ```
 npm run dev          # server via tsx watch, port 8080 (PORT overrides — use 8099 locally)
-npm test             # vitest run — 84 tests today
-npm run test:client  # npm --prefix client test — 38 tests
+npm test             # vitest run — 145 tests today
+npm run test:client  # npm --prefix client test — 69 tests
 npm run test:all     # both suites
 npm run typecheck    # tsc over src + tests, noEmit
 npm run build        # tsc -p tsconfig.build.json → dist/, src only
@@ -115,6 +111,8 @@ an unmatched `/api/*` path must still 404 rather than silently return
 `index.html` with a 200. If the bundle is missing you get a 503 that names the
 fix rather than a bare 404.
 
+**A green suite does not mean it compiles.** Vitest transforms with esbuild, which strips types without checking them, and the root `tsconfig` excludes `client` entirely. This project has already shipped a `tsc -b` failure behind 38/38 passing client tests. Always run `npm run typecheck`, and `npm --prefix client run build` for anything touching `client/` — that build is the *only* command that type-checks TSX.
+
 **Two tsconfigs, on purpose.** `tsconfig.json` is `noEmit` and covers `src` + `tests`; `tsconfig.build.json` emits `src` alone with `rootDir: "src"`, so the build lands at `dist/server/index.js` and the test suite never reaches the production image. Adding tests to the build config breaks both.
 
 `fly deploy` is a **Day 1** requirement, not a Day 5 one. §6 is explicit: WebSocket problems behind a proxy are a twenty-minute fix on day 1 and a half-day surprise on day 5. Deploy and smoke-test before building features.
@@ -129,12 +127,24 @@ Prefer explicit pathspecs over `git add -A` when the working tree holds changes 
 
 **Commit before you mutation-test, and revert mutants with a precise edit — never `git checkout --`.** Reverting an uncommitted file restores it from HEAD, which silently discards the real change along with the mutation. This cost a change in the Phase 2 session before it was caught.
 
-## Dispatching a fan-out — two techniques that earned their keep
+## Dispatching a fan-out — techniques that earned their keep
 
-Both come from the Phase 2 fan-out; `docs/plans/README.md` has the full dispatch protocol.
+From the Phase 2 and Phase 3 fan-outs; `docs/plans/README.md` has the full dispatch protocol.
 
-- **Audit the seams before dispatching, and grep the plans for `BLOCKED`.** File-ownership rules fail at the boundaries *between* partitions, not inside them. A plan that pre-emptively tells an agent to report BLOCKED is a plan whose author already spotted a seam — resolve it on `master` first. In Phase 2 this caught two defects, one of which would have made the phase fail its own acceptance test while every unit test passed.
-- **When two plans share one file by region, put paired marker comments in it before dispatch** (`{/* --- BEGIN phase-2d approval slot --- */}` … `END`) and tell each agent to edit only inside its own. `client/src/App.tsx` was edited by two concurrent agents and auto-merged with zero conflicts.
+- **Audit the seams before dispatching, and grep the plans for `BLOCKED`.** File-ownership rules fail at the boundaries *between* partitions, not inside them. A plan that pre-emptively tells an agent to report BLOCKED is a plan whose author already spotted a seam — resolve it on `master` first. Two-for-two: Phase 2 caught two defects; Phase 3 caught twelve, four of which would have failed the phase.
+- **A plan is not a specification until someone has tried to compile it.** Three of the four Phase 3 plans contained literal code that could not work — one that would not typecheck, one that discarded the value it had just computed, one that would have spawned a real SDK subprocess per test. Read every plan's code against the real signatures before dispatch.
+- **When plans share one file by region, put paired marker comments in it before dispatch** (`{/* --- BEGIN phase-3b stop-button slot --- */}` … `END`) and tell each agent to edit only inside its own. Also name a **distinct import-anchor line** per agent, since import blocks have no natural regions. Phase 3 had *three* concurrent agents editing both `src/server/index.ts` and `client/src/App.tsx` and merged with zero conflicts.
+- **Your dispatch prompt is specification, not commentary.** A wrong line in it propagates straight into shipped code, with a faithful report attached explaining that it was deliberate. In Phase 3 an instruction of mine ("guarding by room id matches the link-is-the-credential model" — it does not) produced a critical authorization hole that passed the suite, typecheck and a live acceptance run.
+
+## Verification — three mechanisms, none redundant
+
+Phase 3 ran all three and each caught something the other two missed. Budget for all of them.
+
+- **Mutation testing.** 35 mutants, 2 survived, both real test defects. The recurring shape is a *right assertion at the wrong moment* — asserting a driver still holds the token immediately after reconnecting stays true even with the cancel deleted, because the timer has not fired yet. Commit first, revert with a precise edit.
+- **A real browser.** Found a bug in thirty seconds that 200 tests missed: two tabs share `localStorage`, so the second person reclaimed the first's identity and both collapsed into one roster row.
+- **An adversarial audit of the merged tree.** Found four defects that survived a merge, per-task reviews and a live acceptance run — including a critical one. Every finding attacked by an independent skeptic; 14 candidates, 12 confirmed.
+
+Reusable harnesses live outside the repo but are worth rebuilding: a live acceptance script driving real WebSockets (Node's global `WebSocket` is the same API a browser console uses, which makes the I2 bypass check faithful), and a restart-recovery script that kills the process and asks whether anything survived. **Make the restart harness fail loudly if the process refuses to die** — on Windows `child.kill()` on a `shell: true` spawn leaves the grandchild listening, and the first version silently tested a restart that never happened.
 
 ## Session ledger — write one before you finish
 
@@ -157,6 +167,10 @@ From `BUILD_SPEC.md` §8. Both belong in the README *and* in the room-creation U
 
 - **A shared room is a shared security boundary.** Whatever the room can do, every participant can do — read `.env`, use git credentials, run commands. Rooms are invite-only-among-people-you-trust, not public.
 - **The MVP has no isolation between rooms.** One host process, one filesystem; room A can in principle reach room B's working directory. An accepted MVP tradeoff — do not market this as multi-tenant until per-room sandboxes land.
+
+**The room token is the credential — the room id is not.** The id is 64 bits and appears in every URL, referrer and screenshot; the token is 256 bits. Any route that mutates room state must call `authorize()`, the way `GET /api/rooms/:id`, the WS upgrade and `POST /api/rooms/:id/key` all do. Getting this wrong once already produced a room-hijack hole that passed every test.
+
+**`POST /api/rooms` is not yet safe to expose.** It needs no credential and drives an outbound `git clone` against any host passing a scheme-and-charset regex — link-local and cloud-metadata addresses included — with no rate limit, body cap, or room ceiling. This is **not** covered by the isolation tradeoff above. Fix it before the deploy is shared. Details in the newest `sessions/` `issues.md` §B.
 
 ## Prior art
 
