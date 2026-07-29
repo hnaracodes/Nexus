@@ -82,4 +82,36 @@ describe('recovery', () => {
     // breaking I3.
     expect(getRoom('room_a')?.peekSeq()).toBe(2);
   });
+
+  it('recovers the other rooms even when one room fails to reconstruct', () => {
+    seed('room_a');
+
+    // writeRoomMeta doesn't validate roomId, but openLog does (via
+    // logPathFor's SAFE_ROOM_ID regex) — a space is enough to make it throw
+    // synchronously, before it ever touches disk. That's the cheapest way to
+    // exercise "one room's data is bad" without needing a torn/corrupt log
+    // file: it reliably reproduces the exact throw site named in the finding
+    // (openLog -> logPathFor) with no filesystem trickery.
+    writeRoomMeta(
+      {
+        roomId: 'bad room',
+        token: TOKEN,
+        cwd: '/work',
+        repoUrl: null,
+        createdAt: '2026-07-28T00:00:00.000Z',
+      },
+      dir,
+    );
+
+    let recovered: ReturnType<typeof recoverRooms> = [];
+    expect(() => {
+      recovered = recoverRooms(dir);
+    }).not.toThrow();
+
+    // The good room still recovers correctly; the bad one is skipped, not
+    // silently duplicated or half-registered.
+    expect(recovered).toHaveLength(1);
+    expect(recovered[0]).toMatchObject({ roomId: 'room_a', lastSeq: 2, needsApiKey: true });
+    expect(authorize('room_a', TOKEN)).toBeTruthy();
+  });
 });

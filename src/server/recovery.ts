@@ -56,22 +56,31 @@ export function recoverRooms(
 ): { roomId: string; lastSeq: number; needsApiKey: true }[] {
   const recovered: { roomId: string; lastSeq: number; needsApiKey: true }[] = [];
   for (const meta of readRoomMetas(dataDir)) {
-    const state = reconstruct(openLog(meta.roomId, dataDir).read());
-    if (state === null) continue;
-    // Put the room back in the live registry under its ORIGINAL id and token,
-    // or the recovery is cosmetic: authorize() only reads that registry, so
-    // the original link would still be refused and nobody could rejoin.
-    // lastSeq continues the log's numbering — restarting at 0 re-issues
-    // sequence numbers that already exist on disk and breaks I3.
-    restoreRoom({
-      id: meta.roomId,
-      token: meta.token,
-      cwd: meta.cwd,
-      repoUrl: meta.repoUrl,
-      createdAt: meta.createdAt,
-      lastSeq: state.lastSeq,
-    });
-    recovered.push({ roomId: meta.roomId, lastSeq: state.lastSeq, needsApiKey: true });
+    // One room's corrupt log or unsafe id must not take the rest of recovery
+    // (and therefore server startup) down with it — mirrors the torn-write
+    // tolerance in readRoomMetas above, just one level further in.
+    try {
+      const state = reconstruct(openLog(meta.roomId, dataDir).read());
+      if (state === null) continue;
+      // Put the room back in the live registry under its ORIGINAL id and
+      // token, or the recovery is cosmetic: authorize() only reads that
+      // registry, so the original link would still be refused and nobody
+      // could rejoin. lastSeq continues the log's numbering — restarting at
+      // 0 re-issues sequence numbers that already exist on disk and breaks
+      // I3.
+      restoreRoom({
+        id: meta.roomId,
+        token: meta.token,
+        cwd: meta.cwd,
+        repoUrl: meta.repoUrl,
+        createdAt: meta.createdAt,
+        lastSeq: state.lastSeq,
+      });
+      recovered.push({ roomId: meta.roomId, lastSeq: state.lastSeq, needsApiKey: true });
+    } catch (error) {
+      console.log(`failed to recover room ${meta.roomId}: ${error}`);
+      continue;
+    }
   }
   return recovered;
 }

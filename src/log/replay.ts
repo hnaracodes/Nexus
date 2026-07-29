@@ -14,8 +14,10 @@ export interface ReconstructedRoom {
 }
 
 /**
- * The single reconstruction function. Both the resume path and the restart
- * path call this, so a rejoined view and a recovered view cannot disagree (I3).
+ * The restart-recovery path calls this to rebuild a room's state from disk.
+ * The live resume path (`?since=`) does not need it: a room that's still
+ * attached in memory never lost its state, so it replays raw logged events
+ * directly rather than re-deriving them.
  */
 export function reconstruct(events: NexusEvent[]): ReconstructedRoom | null {
   const created = events.find(
