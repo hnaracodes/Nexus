@@ -5,6 +5,7 @@ import { ConnectionStatus } from './components/ConnectionStatus.js';
 import { MessageList } from './components/MessageList.js';
 import { PromptInput } from './components/PromptInput.js';
 import { Roster } from './components/Roster.js';
+import { StopButton } from './components/StopButton.js';
 import { EMPTY_VIEW } from './store.js';
 import type { RoomView } from './store.js';
 import { connect } from './ws.js';
@@ -95,10 +96,15 @@ export default function App(): JSX.Element {
         the gate.
       */}
       {/* --- BEGIN phase-3b stop-button slot: wrap in a flex row, add <StopButton/> beside it. --- */}
-      <PromptInput
-        disabled={status !== 'open'}
-        onSubmit={(text) => connection?.send({ kind: 'prompt', text })}
-      />
+      <div className="flex items-center gap-2">
+        <div className="flex-1">
+          <PromptInput
+            disabled={status !== 'open'}
+            onSubmit={(text) => connection?.send({ kind: 'prompt', text })}
+          />
+        </div>
+        <StopButton busy={false} onStop={() => connection?.send({ kind: 'interrupt' })} />
+      </div>
       {/* --- END phase-3b stop-button slot --- */}
     </main>
   );
