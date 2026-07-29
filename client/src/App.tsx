@@ -9,6 +9,7 @@ import { EMPTY_VIEW } from './store.js';
 import type { RoomView } from './store.js';
 import { connect } from './ws.js';
 import type { Connection, Status } from './ws.js';
+import { CreateRoom } from './pages/CreateRoom.js';
 
 function readParams(): { roomId: string; token: string; displayName: string } {
   const params = new URLSearchParams(globalThis.location.search);
@@ -40,7 +41,7 @@ export default function App(): JSX.Element {
 
   // --- BEGIN phase-3c landing-page slot: replace this branch with <CreateRoom/>. ---
   if (params.roomId === '' || params.token === '') {
-    return <main className="p-6 text-slate-900">Nexus</main>;
+    return <CreateRoom onCreated={(link) => globalThis.location.assign(link)} />;
   }
   // --- END phase-3c landing-page slot ---
 
