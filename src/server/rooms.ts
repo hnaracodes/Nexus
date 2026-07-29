@@ -10,6 +10,26 @@ export interface CreateRoomOptions {
   apiKey: string;
   cwd: string;
   repoUrl: string | null;
+  /**
+   * Pre-minted id. A caller that must prepare a per-room working directory
+   * *before* the room exists (plan phase-3c clones into `work/<roomId>`) mints
+   * the id with `mintRoomId()`, prepares the directory, then passes both here.
+   * Without this, `cwd` — which is readonly and consumed by `startAgent` the
+   * moment the room is attached — could only ever be the server's own checkout.
+   */
+  id?: string;
+}
+
+/** What a room needs to come back after a restart. Deliberately no `apiKey`. */
+export interface RestoreRoomOptions {
+  id: string;
+  token: string;
+  cwd: string;
+  repoUrl: string | null;
+  createdAt: string;
+  /** Continue the log's numbering. Restarting at 0 would re-issue sequence
+   *  numbers that already exist on disk, which breaks I3. */
+  lastSeq: number;
 }
 
 export interface Room {
@@ -33,14 +53,30 @@ export interface Room {
 const apiKeys = new WeakMap<Room, string>();
 const rooms = new Map<string, Room>();
 
-export function createRoom(opts: CreateRoomOptions): Room {
-  let seq = 0;
+/** Mint an id without building the room, so a caller can name a per-room
+ *  working directory before `createRoom` freezes `cwd`. */
+export function mintRoomId(): string {
+  return `room_${randomUUID().replaceAll('-', '').slice(0, 16)}`;
+}
+
+interface RoomSeed {
+  id: string;
+  token: string;
+  cwd: string;
+  repoUrl: string | null;
+  createdAt: string;
+  lastSeq: number;
+}
+
+/** One shape for both a fresh and a recovered room, so the two cannot drift. */
+function buildRoom(seed: RoomSeed): Room {
+  let seq = seed.lastSeq;
   const room: Room = {
-    id: `room_${randomUUID().replaceAll('-', '').slice(0, 16)}`,
-    token: randomBytes(32).toString('hex'),
-    cwd: opts.cwd,
-    repoUrl: opts.repoUrl,
-    createdAt: new Date().toISOString(),
+    id: seed.id,
+    token: seed.token,
+    cwd: seed.cwd,
+    repoUrl: seed.repoUrl,
+    createdAt: seed.createdAt,
     participants: new Map(),
     sockets: new Set(),
     driverId: null,
@@ -64,9 +100,54 @@ export function createRoom(opts: CreateRoomOptions): Room {
       driverId: room.driverId,
     }),
   };
+  return room;
+}
+
+export function createRoom(opts: CreateRoomOptions): Room {
+  const room = buildRoom({
+    id: opts.id ?? mintRoomId(),
+    token: randomBytes(32).toString('hex'),
+    cwd: opts.cwd,
+    repoUrl: opts.repoUrl,
+    createdAt: new Date().toISOString(),
+    lastSeq: 0,
+  });
   apiKeys.set(room, opts.apiKey);
   rooms.set(room.id, room);
   return room;
+}
+
+/**
+ * Re-register a room rebuilt from its durable sidecar after a restart (plan
+ * phase-3a), under its ORIGINAL id and token so existing links keep working.
+ * Without this the registry is empty after a restart, `authorize()` finds
+ * nothing, and a "recovered" room can never actually be rejoined.
+ *
+ * Sets no API key on purpose: I4 forbids persisting one, so a recovered room
+ * stays keyless until its creator re-supplies it through `attachApiKey`.
+ */
+export function restoreRoom(opts: RestoreRoomOptions): Room {
+  const room = buildRoom({
+    id: opts.id,
+    token: opts.token,
+    cwd: opts.cwd,
+    repoUrl: opts.repoUrl,
+    createdAt: opts.createdAt,
+    lastSeq: opts.lastSeq,
+  });
+  rooms.set(room.id, room);
+  return room;
+}
+
+/** Supply the key a recovered room could not persist (I4). */
+export function attachApiKey(room: Room, apiKey: string): void {
+  apiKeys.set(room, apiKey);
+}
+
+/** A recovered room has no key until its creator returns. Callers use this to
+ *  refuse work rather than throwing out of `getApiKey`. */
+export function hasApiKey(room: Room): boolean {
+  return apiKeys.has(room);
 }
 
 export function getRoom(id: string): Room | undefined {
