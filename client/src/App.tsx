@@ -38,9 +38,11 @@ export default function App(): JSX.Element {
     return () => clearInterval(timer);
   }, []);
 
+  // --- BEGIN phase-3c landing-page slot: replace this branch with <CreateRoom/>. ---
   if (params.roomId === '' || params.token === '') {
     return <main className="p-6 text-slate-900">Nexus</main>;
   }
+  // --- END phase-3c landing-page slot ---
 
   return (
     <main className="mx-auto flex h-screen max-w-3xl flex-col gap-4 p-6">
@@ -62,6 +64,9 @@ export default function App(): JSX.Element {
           <ConnectionStatus status={status} />
         </div>
       </header>
+
+      {/* --- BEGIN phase-3d error banner slot: render <ErrorBanner/> here. --- */}
+      {/* --- END phase-3d error banner slot --- */}
 
       {/* --- BEGIN phase-2d approval slot --- */}
       {deriveApprovals(view.events).pending.map((approval) => (
@@ -89,10 +94,12 @@ export default function App(): JSX.Element {
         input independently (Invariant I2, plan phase-2a) — never treat this as
         the gate.
       */}
+      {/* --- BEGIN phase-3b stop-button slot: wrap in a flex row, add <StopButton/> beside it. --- */}
       <PromptInput
         disabled={status !== 'open'}
         onSubmit={(text) => connection?.send({ kind: 'prompt', text })}
       />
+      {/* --- END phase-3b stop-button slot --- */}
     </main>
   );
 }

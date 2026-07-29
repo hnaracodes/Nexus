@@ -20,10 +20,23 @@ export type ServerFrame =
    * so Release Control and hand-over can never render (Day 2 acceptance
    * requires control to pass in both directions). It rides on this frame
    * rather than a new one because this is already the only per-socket,
-   * non-broadcast frame the server sends. A reconnect issues a fresh
-   * participantId and a fresh frame, so the client re-learns it for free.
+   * non-broadcast frame the server sends.
+   *
+   * `resumeToken` is the secret that lets the next socket reclaim this same
+   * `participantId` (see `resolveParticipantId`), so a refresh or a dropped
+   * connection keeps the roster row and the driver token. It must never be
+   * broadcast or logged: participant ids are public within a room, so the
+   * token is the only thing distinguishing "me, returning" from "someone else
+   * claiming to be me" — and without that distinction any member could
+   * reconnect as the driver, bypassing I2 at the server.
    */
-  | { kind: 'replay_complete'; lastSeq: number; protocolVersion: number; participantId: string }
+  | {
+      kind: 'replay_complete';
+      lastSeq: number;
+      protocolVersion: number;
+      participantId: string;
+      resumeToken: string;
+    }
   | { kind: 'presence'; participants: PresenceEntry[]; driverId: string | null }
   | { kind: 'error'; message: string };
 

@@ -75,7 +75,13 @@ describe('reduce', () => {
   it('clears the replaying flag on replay_complete', () => {
     const view = project([
       ...frames,
-      { kind: 'replay_complete', lastSeq: 9, protocolVersion: 1, participantId: 'p_self' },
+      {
+        kind: 'replay_complete',
+        lastSeq: 9,
+        protocolVersion: 1,
+        participantId: 'p_self',
+        resumeToken: 'r_self',
+      },
     ]);
     expect(view.replaying).toBe(false);
   });
@@ -84,7 +90,13 @@ describe('reduce', () => {
     expect(EMPTY_VIEW.selfId).toBeNull();
     const view = project([
       ...frames,
-      { kind: 'replay_complete', lastSeq: 9, protocolVersion: 1, participantId: 'p_self' },
+      {
+        kind: 'replay_complete',
+        lastSeq: 9,
+        protocolVersion: 1,
+        participantId: 'p_self',
+        resumeToken: 'r_self',
+      },
     ]);
     // Without this the UI cannot tell "you are driving" from "someone else is".
     expect(view.selfId).toBe('p_self');
@@ -92,8 +104,20 @@ describe('reduce', () => {
 
   it('adopts a fresh participant id after a reconnect', () => {
     const view = project([
-      { kind: 'replay_complete', lastSeq: 0, protocolVersion: 1, participantId: 'p_first' },
-      { kind: 'replay_complete', lastSeq: 0, protocolVersion: 1, participantId: 'p_second' },
+      {
+        kind: 'replay_complete',
+        lastSeq: 0,
+        protocolVersion: 1,
+        participantId: 'p_first',
+        resumeToken: 'r_first',
+      },
+      {
+        kind: 'replay_complete',
+        lastSeq: 0,
+        protocolVersion: 1,
+        participantId: 'p_second',
+        resumeToken: 'r_second',
+      },
     ]);
     expect(view.selfId).toBe('p_second');
   });
@@ -109,5 +133,30 @@ describe('reduce', () => {
     const once = project(frames);
     const twice = project([...frames, ...frames]);
     expect(twice.events).toEqual(once.events);
+  });
+});
+
+describe('transient error frames', () => {
+  it('surfaces the message instead of discarding it', () => {
+    const view = project([{ kind: 'error', message: 'You are not driving.' }]);
+    expect(view.lastError).toBe('You are not driving.');
+    expect(view.errorCount).toBe(1);
+  });
+
+  it('counts repeats, so a dismissed banner can come back', () => {
+    // "You are not driving" is the most common error in the product, and a
+    // non-driver hits it repeatedly. Comparing message text alone would
+    // swallow every repeat after the first dismissal.
+    const view = project([
+      { kind: 'error', message: 'You are not driving.' },
+      { kind: 'error', message: 'You are not driving.' },
+    ]);
+    expect(view.errorCount).toBe(2);
+  });
+
+  it('is not a logged event — it never enters the replayable event list', () => {
+    const view = project([{ kind: 'error', message: 'nope' }]);
+    expect(view.events).toHaveLength(0);
+    expect(view.lastSeq).toBe(0);
   });
 });

@@ -27,6 +27,17 @@ export interface RoomView {
   replaying: boolean;
   /** messageId -> accumulated streaming text. Never logged, never replayed. */
   pendingDeltas: Record<string, string>;
+  /**
+   * Text of the most recent transient `error` frame. Not a logged event, so it
+   * carries no seq and never survives a replay.
+   */
+  lastError: string | null;
+  /**
+   * How many error frames have arrived. A dismissable banner needs this: the
+   * same message repeats constantly ("You are not driving"), and comparing
+   * message text alone would swallow every repeat after the first dismissal.
+   */
+  errorCount: number;
 }
 
 export const EMPTY_VIEW: RoomView = {
@@ -38,6 +49,8 @@ export const EMPTY_VIEW: RoomView = {
   lastSeq: 0,
   replaying: true,
   pendingDeltas: {},
+  lastError: null,
+  errorCount: 0,
 };
 
 export function reduce(view: RoomView, frame: ServerFrame): RoomView {
@@ -59,7 +72,7 @@ export function reduce(view: RoomView, frame: ServerFrame): RoomView {
     case 'presence':
       return { ...view, participants: frame.participants, driverId: frame.driverId };
     case 'error':
-      return view;
+      return { ...view, lastError: frame.message, errorCount: view.errorCount + 1 };
     case 'event':
       // A reconnect may resend events we already folded in. Ignore them. The
       // raw event is retained here, in the one place that already knows an

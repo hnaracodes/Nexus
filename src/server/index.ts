@@ -6,8 +6,8 @@ import { WebSocketServer } from 'ws';
 import { PROTOCOL_VERSION } from '../protocol/events.js';
 import { parseClientFrame } from '../protocol/wire.js';
 import { presenceFrame } from './presence.js';
-import { authorize, createRoom, getRoom } from './rooms.js';
-import { attachRoom, getRuntime, newParticipantId } from './ws.js';
+import { authorize, createRoom, getRoom, hasApiKey } from './rooms.js';
+import { attachRoom, getRuntime, resolveParticipantId } from './ws.js';
 import {
   cancelAutoRelease,
   claimIfVacant,
@@ -51,6 +51,10 @@ export function createServer(): { app: Hono; server: Server } {
     return c.json(room.toJSON());
   });
 
+  // --- BEGIN phase-3c re-entry slot: add POST /api/rooms/:id/key here, so a
+  // room recovered without its key (I4) can be re-opened by its creator. ---
+  // --- END phase-3c re-entry slot ---
+
   // The Docker image copies the Vite bundle to client/dist, but no Phase 1
   // plan owned the wiring between the two: phase-1b owns client/**, phase-1c
   // owns the Dockerfile, and this seam belongs to neither. Registered after
@@ -88,8 +92,22 @@ export function createServer(): { app: Hono; server: Server } {
         ws.close(4401, 'unauthorized');
         return;
       }
+      // A room recovered after a restart (plan phase-3a) has its history but
+      // no API key — I4 forbids persisting one. Refuse plainly rather than
+      // attaching an agent that would throw on its first prompt.
+      if (!hasApiKey(room)) {
+        ws.close(4409, 'needs_api_key');
+        return;
+      }
       const runtime = getRuntime(room.id) ?? attachRoom(room);
-      const participantId = newParticipantId();
+      // A returning socket may reclaim its identity by presenting both the id
+      // and the resume token it was issued. Anything else mints a fresh one.
+      const identity = resolveParticipantId(
+        room,
+        url.searchParams.get('participant'),
+        url.searchParams.get('resume'),
+      );
+      const participantId = identity.participantId;
 
       // Replay first, then attach. Order matters: attaching before replay
       // finishes interleaves history with live events.
@@ -101,8 +119,10 @@ export function createServer(): { app: Hono; server: Server } {
           kind: 'replay_complete',
           lastSeq: room.peekSeq(),
           protocolVersion: PROTOCOL_VERSION,
-          // Tell this socket who it is. Only this socket receives it.
+          // Tell this socket who it is, and how to prove it next time. Only
+          // this socket receives it — never broadcast, never logged.
           participantId,
+          resumeToken: identity.resumeToken,
         }),
       );
 
@@ -179,10 +199,17 @@ export function createServer(): { app: Hono; server: Server } {
           }
           return;
         }
+
+        // --- BEGIN phase-3b interrupt slot: add the `interrupt` frame branch here. ---
+        // --- END phase-3b interrupt slot ---
       });
 
       ws.on('close', () => {
         runtime.removeSocket(ws);
+        // Two tabs can share one identity now that ids survive a reconnect.
+        // Closing one of them is not the person leaving, and must not arm the
+        // driver grace timer while they are still here in the other tab.
+        if (runtime.participantSocketCount(participantId) > 0) return;
         const participant = room.participants.get(participantId);
         if (participant !== undefined) participant.connected = false;
         runtime.commit({ type: 'participant_left', participantId, displayName });

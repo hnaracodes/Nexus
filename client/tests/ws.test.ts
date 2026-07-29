@@ -1,13 +1,18 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildUrl, connect } from '../src/ws.js';
 import type { WebSocketLike } from '../src/ws.js';
 import type { RoomView } from '../src/store.js';
+
+// jsdom keeps one localStorage for the whole file, and connect() now persists
+// an identity into it. Without this, a stored id leaks into later tests and
+// they start depending on execution order.
+beforeEach(() => localStorage.clear());
 
 class FakeSocket implements WebSocketLike {
   static instances: FakeSocket[] = [];
   sent: string[] = [];
   onopen: (() => void) | null = null;
-  onclose: (() => void) | null = null;
+  onclose: ((event?: { code?: number }) => void) | null = null;
   onmessage: ((event: { data: unknown }) => void) | null = null;
 
   constructor(readonly url: string) {
@@ -93,6 +98,7 @@ describe('connect', () => {
         lastSeq: 12,
         protocolVersion: 1,
         participantId: 'p_self',
+        resumeToken: 'r_self',
       }),
     });
     h.sockets[0]?.onclose?.();
@@ -140,5 +146,92 @@ describe('connect', () => {
     h.sockets[0]?.onopen?.();
     h.connection.send({ kind: 'prompt', text: 'go' });
     expect(h.sockets[0]?.sent[0]).toBe('{"kind":"prompt","text":"go"}');
+  });
+});
+
+const replayComplete = (participantId: string, resumeToken: string, lastSeq = 3) =>
+  JSON.stringify({ kind: 'replay_complete', lastSeq, protocolVersion: 1, participantId, resumeToken });
+
+describe('identity across reconnects', () => {
+  it('offers its id and resume token back on the next connection', async () => {
+    vi.useFakeTimers();
+    const h = harness();
+    h.sockets[0]?.onopen?.();
+    h.sockets[0]?.onmessage?.({ data: replayComplete('p_ada', 'r_secret') });
+    h.sockets[0]?.onclose?.();
+
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(h.sockets[1]?.url).toContain('participant=p_ada');
+    expect(h.sockets[1]?.url).toContain('resume=r_secret');
+    vi.useRealTimers();
+  });
+
+  it('survives a full page reload by reading storage, not memory', () => {
+    const first = harness();
+    first.sockets[0]?.onopen?.();
+    first.sockets[0]?.onmessage?.({ data: replayComplete('p_ada', 'r_secret') });
+
+    // A reload: a brand-new connect() with an empty in-memory view.
+    const reloaded = harness();
+    expect(reloaded.sockets[0]?.url).toContain('participant=p_ada');
+    expect(reloaded.sockets[0]?.url).toContain('resume=r_secret');
+  });
+
+  it('sends neither parameter before the server has issued an identity', () => {
+    const h = harness();
+    expect(h.sockets[0]?.url).not.toContain('participant=');
+    expect(h.sockets[0]?.url).not.toContain('resume=');
+  });
+
+  it('adopts the server’s answer when it declines the reclaim', async () => {
+    vi.useFakeTimers();
+    const h = harness();
+    h.sockets[0]?.onopen?.();
+    h.sockets[0]?.onmessage?.({ data: replayComplete('p_ada', 'r_secret') });
+    h.sockets[0]?.onclose?.();
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    // The server minted a fresh identity instead of honouring the reclaim.
+    h.sockets[1]?.onopen?.();
+    h.sockets[1]?.onmessage?.({ data: replayComplete('p_new', 'r_new') });
+    h.sockets[1]?.onclose?.();
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect(h.sockets[2]?.url).toContain('participant=p_new');
+    expect(h.sockets[2]?.url).toContain('resume=r_new');
+    vi.useRealTimers();
+  });
+
+  it('stops retrying when the server refuses the connection outright', async () => {
+    vi.useFakeTimers();
+    const h = harness();
+    h.sockets[0]?.onopen?.();
+    // 4401 (bad token) and 4409 (recovered room, no key) never heal by
+    // retrying — backoff would just hammer the server forever.
+    h.sockets[0]?.onclose?.({ code: 4401 });
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(h.sockets).toHaveLength(1);
+    expect(h.statuses.at(-1)).toBe('closed');
+    vi.useRealTimers();
+  });
+
+  it('still reconnects after an ordinary network close', async () => {
+    vi.useFakeTimers();
+    const h = harness();
+    h.sockets[0]?.onopen?.();
+    h.sockets[0]?.onclose?.({ code: 1006 });
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(h.sockets).toHaveLength(2);
+    vi.useRealTimers();
+  });
+
+  it('never puts a resume token in storage under a shared key', () => {
+    const h = harness();
+    h.sockets[0]?.onopen?.();
+    h.sockets[0]?.onmessage?.({ data: replayComplete('p_ada', 'r_secret') });
+    // Scoped per room, so two rooms open in one browser cannot collide.
+    expect(localStorage.getItem('nexus:identity:room_a')).toContain('r_secret');
+    expect(localStorage.getItem('nexus:identity:room_b')).toBeNull();
   });
 });
