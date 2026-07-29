@@ -38,10 +38,18 @@ export default function App(): JSX.Element {
       <header className="flex items-center justify-between">
         <h1 className="text-lg font-semibold">Nexus</h1>
         <div className="flex items-center gap-2">
+          {/* --- BEGIN phase-2b roster slot: replace this span with <Roster/>. --- */}
           <span className="text-xs text-slate-500">{view.participants.length} here</span>
+          {/* --- END phase-2b roster slot --- */}
           <ConnectionStatus status={status} />
         </div>
       </header>
+
+      {/*
+        --- BEGIN phase-2d approval slot: render pending <ApprovalPrompt/> cards here. ---
+        Derive them from `view.events` (the raw log) via deriveApprovals.
+        --- END phase-2d approval slot ---
+      */}
 
       <div className="flex-1 overflow-y-auto">
         <MessageList messages={view.messages} pendingDeltas={view.pendingDeltas} />

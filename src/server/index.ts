@@ -91,6 +91,8 @@ export function createServer(): { app: Hono; server: Server } {
           kind: 'replay_complete',
           lastSeq: room.peekSeq(),
           protocolVersion: PROTOCOL_VERSION,
+          // Tell this socket who it is. Only this socket receives it.
+          participantId,
         }),
       );
 

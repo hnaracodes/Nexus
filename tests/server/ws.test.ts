@@ -110,6 +110,38 @@ describe('websocket attach', () => {
     b.socket.close();
   });
 
+  it('tells each socket its own participant id, and tells them apart', async () => {
+    const room = stubbedRoom();
+    const qs = `room=${room.id}&token=${room.token}`;
+    const a = await connect(`${qs}&name=Ada`);
+    await settle();
+    const b = await connect(`${qs}&name=Grace`);
+    await settle();
+
+    const selfId = (frames: ServerFrame[]) =>
+      frames.find((f) => f.kind === 'replay_complete') as { participantId?: string } | undefined;
+
+    const adaId = selfId(a.frames)?.participantId;
+    const graceId = selfId(b.frames)?.participantId;
+
+    expect(adaId).toMatch(/^p_/);
+    expect(graceId).toMatch(/^p_/);
+    // Two sockets in one room must never be told they are the same person.
+    expect(adaId).not.toBe(graceId);
+
+    // The id must match the roster entry, or the UI cannot locate itself.
+    const graceJoin = b.frames.find(
+      (f) =>
+        f.kind === 'event' &&
+        f.event.type === 'participant_joined' &&
+        (f.event as { displayName: string }).displayName === 'Grace',
+    ) as { event: { participantId: string } } | undefined;
+    expect(graceJoin?.event.participantId).toBe(graceId);
+
+    a.socket.close();
+    b.socket.close();
+  });
+
   it('assigns strictly increasing, unique sequence numbers', async () => {
     const room = stubbedRoom();
     const qs = `room=${room.id}&token=${room.token}`;

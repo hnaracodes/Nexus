@@ -13,6 +13,16 @@ export interface RoomView {
   messages: Message[];
   participants: PresenceEntry[];
   driverId: string | null;
+  /** This client's own participant id, learned from `replay_complete`. */
+  selfId: string | null;
+  /**
+   * Every logged event, in order, exactly as it arrived. Features that project
+   * their own state off the log — pending approvals in phase-2d, and anything
+   * later — read this instead of growing a parallel store of their own, which
+   * would put a second source of truth beside the log and violate I3.
+   * Deduplicated by the same `seq` guard as the rest of the reducer.
+   */
+  events: NexusEvent[];
   lastSeq: number;
   replaying: boolean;
   /** messageId -> accumulated streaming text. Never logged, never replayed. */
@@ -23,6 +33,8 @@ export const EMPTY_VIEW: RoomView = {
   messages: [],
   participants: [],
   driverId: null,
+  selfId: null,
+  events: [],
   lastSeq: 0,
   replaying: true,
   pendingDeltas: {},
@@ -38,14 +50,23 @@ export function reduce(view: RoomView, frame: ServerFrame): RoomView {
       };
     }
     case 'replay_complete':
-      return { ...view, replaying: false, lastSeq: Math.max(view.lastSeq, frame.lastSeq) };
+      return {
+        ...view,
+        replaying: false,
+        lastSeq: Math.max(view.lastSeq, frame.lastSeq),
+        selfId: frame.participantId,
+      };
     case 'presence':
       return { ...view, participants: frame.participants, driverId: frame.driverId };
     case 'error':
       return view;
     case 'event':
-      // A reconnect may resend events we already folded in. Ignore them.
-      return frame.event.seq <= view.lastSeq ? view : applyEvent(view, frame.event);
+      // A reconnect may resend events we already folded in. Ignore them. The
+      // raw event is retained here, in the one place that already knows an
+      // event is new, so `events` can never drift from the reduced view.
+      return frame.event.seq <= view.lastSeq
+        ? view
+        : applyEvent({ ...view, events: [...view.events, frame.event] }, frame.event);
     default:
       return view;
   }

@@ -73,7 +73,41 @@ describe('reduce', () => {
   });
 
   it('clears the replaying flag on replay_complete', () => {
-    const view = project([...frames, { kind: 'replay_complete', lastSeq: 9, protocolVersion: 1 }]);
+    const view = project([
+      ...frames,
+      { kind: 'replay_complete', lastSeq: 9, protocolVersion: 1, participantId: 'p_self' },
+    ]);
     expect(view.replaying).toBe(false);
+  });
+
+  it('learns its own participant id from replay_complete', () => {
+    expect(EMPTY_VIEW.selfId).toBeNull();
+    const view = project([
+      ...frames,
+      { kind: 'replay_complete', lastSeq: 9, protocolVersion: 1, participantId: 'p_self' },
+    ]);
+    // Without this the UI cannot tell "you are driving" from "someone else is".
+    expect(view.selfId).toBe('p_self');
+  });
+
+  it('adopts a fresh participant id after a reconnect', () => {
+    const view = project([
+      { kind: 'replay_complete', lastSeq: 0, protocolVersion: 1, participantId: 'p_first' },
+      { kind: 'replay_complete', lastSeq: 0, protocolVersion: 1, participantId: 'p_second' },
+    ]);
+    expect(view.selfId).toBe('p_second');
+  });
+
+  it('retains every raw event in order for log-derived features', () => {
+    const view = project(frames);
+    expect(view.events.map((e) => e.seq)).toEqual(
+      frames.filter((f) => f.kind === 'event').map((f) => (f as { event: NexusEvent }).event.seq),
+    );
+  });
+
+  it('does not retain a duplicate raw event on replay (I3 idempotence)', () => {
+    const once = project(frames);
+    const twice = project([...frames, ...frames]);
+    expect(twice.events).toEqual(once.events);
   });
 });

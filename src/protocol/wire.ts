@@ -13,7 +13,17 @@ export interface PresenceEntry {
 export type ServerFrame =
   | { kind: 'event'; event: NexusEvent }
   | { kind: 'assistant_delta'; messageId: string; text: string }
-  | { kind: 'replay_complete'; lastSeq: number; protocolVersion: number }
+  /**
+   * Sent once per socket, to that socket alone, at the end of replay.
+   * `participantId` is how a client learns which roster entry is itself —
+   * without it the UI cannot tell "you are driving" from "someone else is",
+   * so Release Control and hand-over can never render (Day 2 acceptance
+   * requires control to pass in both directions). It rides on this frame
+   * rather than a new one because this is already the only per-socket,
+   * non-broadcast frame the server sends. A reconnect issues a fresh
+   * participantId and a fresh frame, so the client re-learns it for free.
+   */
+  | { kind: 'replay_complete'; lastSeq: number; protocolVersion: number; participantId: string }
   | { kind: 'presence'; participants: PresenceEntry[]; driverId: string | null }
   | { kind: 'error'; message: string };
 

@@ -88,7 +88,12 @@ describe('connect', () => {
     const h = harness();
     h.sockets[0]?.onopen?.();
     h.sockets[0]?.onmessage?.({
-      data: JSON.stringify({ kind: 'replay_complete', lastSeq: 12, protocolVersion: 1 }),
+      data: JSON.stringify({
+        kind: 'replay_complete',
+        lastSeq: 12,
+        protocolVersion: 1,
+        participantId: 'p_self',
+      }),
     });
     h.sockets[0]?.onclose?.();
     expect(h.statuses).toContain('reconnecting');
