@@ -1,5 +1,6 @@
 import type { Server } from 'node:http';
 import { createAdaptorServer } from '@hono/node-server';
+import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
 import { WebSocketServer } from 'ws';
 import { PROTOCOL_VERSION } from '../protocol/events.js';
@@ -39,6 +40,24 @@ export function createServer(): { app: Hono; server: Server } {
     }
     return c.json(room.toJSON());
   });
+
+  // The Docker image copies the Vite bundle to client/dist, but no Phase 1
+  // plan owned the wiring between the two: phase-1b owns client/**, phase-1c
+  // owns the Dockerfile, and this seam belongs to neither. Registered after
+  // the API routes so /healthz and /api/* always win. A room link is
+  // "/?room=…&token=…", so only "/" and the hashed asset paths are needed —
+  // no catch-all, which would otherwise swallow unmatched API typos into a
+  // 200 and make them very hard to debug.
+  const clientDir = process.env['NEXUS_CLIENT_DIR'] ?? 'client/dist';
+  app.use('/assets/*', serveStatic({ root: clientDir }));
+  app.get('/', serveStatic({ path: `${clientDir}/index.html` }));
+  app.get('/', (c) =>
+    c.text(
+      'Nexus server is running, but no client bundle was found. ' +
+        'Run `npm --prefix client run build`, or set NEXUS_CLIENT_DIR.',
+      503,
+    ),
+  );
 
   const server = createAdaptorServer({ fetch: app.fetch }) as Server;
   const wss = new WebSocketServer({ noServer: true });

@@ -12,7 +12,10 @@
     "typecheck": "tsc -p tsconfig.json",
     "start": "node dist/server/index.js",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "build:client": "npm --prefix client run build",
+    "test:client": "npm --prefix client test",
+    "test:all": "npm test && npm run test:client"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.1.0",
