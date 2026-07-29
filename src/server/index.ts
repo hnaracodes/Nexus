@@ -7,6 +7,15 @@ import { PROTOCOL_VERSION } from '../protocol/events.js';
 import { parseClientFrame } from '../protocol/wire.js';
 import { authorize, createRoom, getRoom } from './rooms.js';
 import { attachRoom, getRuntime, newParticipantId } from './ws.js';
+import {
+  cancelAutoRelease,
+  claimIfVacant,
+  grantControl,
+  isDriver,
+  releaseControl,
+  requestControl,
+  scheduleAutoRelease,
+} from './driver.js';
 
 export function createServer(): { app: Hono; server: Server } {
   const app = new Hono();
@@ -97,6 +106,7 @@ export function createServer(): { app: Hono; server: Server } {
       );
 
       runtime.addSocket(ws, participantId);
+      cancelAutoRelease(room, participantId);
       room.participants.set(participantId, { id: participantId, displayName, connected: true });
       runtime.commit({ type: 'participant_joined', participantId, displayName });
 
@@ -107,9 +117,51 @@ export function createServer(): { app: Hono; server: Server } {
           return;
         }
         if (frame.kind === 'prompt') {
-          // Phase 0 has no driver gate. Plan phase-2a inserts the I2 check here.
+          // First speaker in an idle room claims the token.
+          for (const event of claimIfVacant(room, participantId, displayName)) {
+            runtime.commit(event);
+          }
+          // I2: enforcement lives here, at the server. Not in the UI.
+          if (!isDriver(room, participantId)) {
+            const holder =
+              room.driverId === null ? null : room.participants.get(room.driverId)?.displayName;
+            ws.send(
+              JSON.stringify({
+                kind: 'error',
+                message: `You are not driving — ${holder ?? 'someone else'} holds control. Use Request Control.`,
+              }),
+            );
+            return;
+          }
           runtime.commit({ type: 'user_prompt', participantId, displayName, text: frame.text });
           runtime.agent.submit(`[${displayName}]: ${frame.text}`);
+          return;
+        }
+
+        if (frame.kind === 'request_control') {
+          for (const event of requestControl(room, participantId, displayName)) {
+            runtime.commit(event);
+          }
+          return;
+        }
+
+        if (frame.kind === 'grant_control') {
+          const events = grantControl(room, participantId, frame.toParticipantId);
+          if (events.length === 0) {
+            ws.send(
+              JSON.stringify({ kind: 'error', message: 'Only the driver can hand over control.' }),
+            );
+            return;
+          }
+          for (const event of events) runtime.commit(event);
+          return;
+        }
+
+        if (frame.kind === 'release_control') {
+          for (const event of releaseControl(room, participantId, 'explicit')) {
+            runtime.commit(event);
+          }
+          return;
         }
       });
 
@@ -118,6 +170,11 @@ export function createServer(): { app: Hono; server: Server } {
         const participant = room.participants.get(participantId);
         if (participant !== undefined) participant.connected = false;
         runtime.commit({ type: 'participant_left', participantId, displayName });
+        if (isDriver(room, participantId)) {
+          scheduleAutoRelease(room, participantId, (events) => {
+            for (const event of events) runtime.commit(event);
+          });
+        }
       });
     });
   });
