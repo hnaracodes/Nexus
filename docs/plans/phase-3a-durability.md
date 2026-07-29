@@ -23,6 +23,8 @@ produces three incompatible reconstructions of one log.
 
 ## Global Constraints
 
+- **Verification is not just `npm test`.** Vitest strips types with esbuild and never type-checks, so a task can show a green suite while the code does not compile. Every "Run tests and commit" step in this plan additionally requires `npm run typecheck` to exit 0 before you commit.
+- **Some of this plan's groundwork is already on master.** `restoreRoom`, `attachApiKey`, `hasApiKey` and `mintRoomId` exist in `src/server/rooms.ts`; the WS upgrade handler already refuses a keyless room with close code `4409`; stable participant identity is implemented via `resolveParticipantId` in `src/server/ws.ts`. Call these existing exports from the files you own. Calling an export is not editing the file — do **not** report BLOCKED for importing from `rooms.ts`.
 - **I3 is the whole plan.** Every view of room state — live, rejoined, or replayed — must be reconstructible from the log alone. State that exists only in memory will be lost, and you will discover that during a demo.
 - **I4 — the API key is never persisted.** The sidecar metadata file must not contain an `apiKey` field, and a test asserts this. A recovered room has no key until its creator supplies one again.
 - The agent keeps working when nobody is watching. Zero attached sockets must never stop, pause, or tear down the `query()` instance.
@@ -193,6 +195,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 import { createServer } from '../../src/server/index.js';
 import { createRoom } from '../../src/server/rooms.js';
+import { attachRoom } from '../../src/server/ws.js';
 import type { ServerFrame } from '../../src/protocol/wire.js';
 
 let port = 0;
@@ -224,12 +227,26 @@ function connect(qs: string): Promise<{ socket: WebSocket; frames: ServerFrame[]
 const seqs = (frames: ServerFrame[]) =>
   frames.filter((f) => f.kind === 'event').map((f) => (f as { event: { seq: number } }).event.seq);
 
-const room = () =>
-  createRoom({
+// Pre-attach with a stubbed runQuery so the upgrade handler finds this
+// runtime instead of starting a real one. Without the stub every test in this
+// file spawns an actual Agent SDK subprocess against a fake key — slow, noisy,
+// and flaky. Copy the pattern from `stubbedRoom()` in tests/server/ws.test.ts.
+const room = () => {
+  const created = createRoom({
     apiKey: 'sk-ant-api03-TESTONLY-not-a-real-key',
     cwd: process.cwd(),
     repoUrl: null,
   });
+  attachRoom(created, undefined, {
+    runQuery: (() => ({
+      async *[Symbol.asyncIterator]() {
+        /* the stub agent never emits */
+      },
+      interrupt: async () => undefined,
+    })) as never,
+  });
+  return created;
+};
 
 describe('resume-from-sequence-number', () => {
   it('replays the whole log when since is absent', async () => {
@@ -444,11 +461,32 @@ export function recoverRooms(
   for (const meta of readRoomMetas(dataDir)) {
     const state = reconstruct(openLog(meta.roomId, dataDir).read());
     if (state === null) continue;
+    // Put the room back in the live registry under its ORIGINAL id and token,
+    // or the recovery is cosmetic: authorize() only reads that registry, so
+    // the original link would still be refused and nobody could rejoin.
+    // lastSeq continues the log's numbering — restarting at 0 re-issues
+    // sequence numbers that already exist on disk and breaks I3.
+    restoreRoom({
+      id: meta.roomId,
+      token: meta.token,
+      cwd: meta.cwd,
+      repoUrl: meta.repoUrl,
+      createdAt: meta.createdAt,
+      lastSeq: state.lastSeq,
+    });
     recovered.push({ roomId: meta.roomId, lastSeq: state.lastSeq, needsApiKey: true });
   }
   return recovered;
 }
 ```
+
+Add `import { restoreRoom } from './rooms.js';`. `restoreRoom` is already on
+master — do not redefine it, and do not report BLOCKED for importing it.
+
+**A test for this is mandatory**, because the plan originally shipped without
+one and the defect it hides is invisible to every other test: after
+`recoverRooms(dir)`, `authorize(roomId, token)` must return the room, and
+`getRoom(roomId)?.peekSeq()` must equal the log's last seq — not 0.
 
 - [ ] **Step 4: Wire it into `src/server/index.ts`**
 
@@ -479,10 +517,29 @@ key. `phase-3c` owns that re-entry flow — do not build it here.
 
 - [ ] **Step 5: Manual acceptance — the Day 4 test**
 
-Start a long-running task, close **every** browser tab, wait 60 seconds, then
-reopen the link. Expected: the work continued and the history is complete.
-Then restart the process (`fly apps restart nexus-mvp`, or locally) and confirm
-the room comes back with its log intact.
+Run locally on `PORT=8099` (8080 is occupied on this machine by an unrelated
+server, and you will get a confusing 404 from it rather than an error).
+
+Part one, no restart: start a long-running task, close **every** browser tab,
+wait 60 seconds, then reopen the link. Expected: the work continued and the
+history is complete. Zero attached sockets must never pause or tear down the
+`query()` instance.
+
+Part two, restart: restart the process. Expected — and state this accurately,
+it is not "the room just comes back":
+
+1. `recoverRooms()` logs the recovered room at its last seq.
+2. Reconnecting with the original link is **refused immediately with WS close
+   code 4409**, not hung, because the key was deliberately never persisted (I4).
+3. Once the creator re-supplies a key, the full history replays and prompting
+   resumes. The re-entry endpoint (`POST /api/rooms/:id/key`) belongs to
+   `phase-3c` and may not be merged when you run this — if it is not, verify
+   only as far as the 4409 close and say so plainly in your report. You can
+   still prove the rest by calling `attachApiKey` + `attachRoom` directly from
+   a scratch script.
+
+Recovery restores the room and its transcript, **not** the agent's context
+window. Do not imply the agent remembers the earlier conversation.
 
 - [ ] **Step 6: Run tests and commit**
 
@@ -500,4 +557,6 @@ git commit -m "feat(recovery): rebuild rooms from disk after restart without per
 
 - Confirm the sidecar contains no `apiKey` and no `sk-ant` substring, and paste one file's contents.
 - State plainly that recovery restores room history, **not** the agent's context window — `phase-3d` must say this in the README.
-- Note that stable participant identity across reconnects is still unimplemented; `phase-2a` and `phase-2b` both flagged it.
+- Confirm `npm run typecheck` exits 0, not just that the suite is green.
+- Confirm a recovered room is actually rejoinable: `authorize()` finds it, and its sequence counter resumes from the log rather than 0.
+- Stable participant identity across reconnects is **already implemented on master** (`resolveParticipantId` in `src/server/ws.ts`). No action needed here; just do not regress it when you edit the upgrade handler.
