@@ -56,6 +56,13 @@ export function grantControl(room: Room, fromId: string, toId: string): Unsequen
   const from = room.participants.get(fromId);
   const to = room.participants.get(toId);
   if (from === undefined || to === undefined) return [];
+  // Participants are never removed from the roster, only marked disconnected,
+  // so a long-departed id stays a valid grant target forever. Handing them the
+  // token wedges the seat permanently: the auto-release timer is only ever
+  // armed by that participant's own socket closing, which already happened, so
+  // nothing frees it and every prompt from anyone is rejected with "You are
+  // not driving."
+  if (!to.connected) return [];
 
   room.driverId = toId;
   return [

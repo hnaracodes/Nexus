@@ -102,7 +102,7 @@ describe('POST /api/rooms/:id/key (re-entry for a recovered room)', () => {
     const room = recoveredRoom('d'.repeat(64));
     const response = await fetch(`http://127.0.0.1:${port}/api/rooms/${room.id}/key`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'X-Nexus-Token': room.token },
       body: JSON.stringify({ apiKey: 'hunter2' }),
     });
     expect(response.status).toBe(400);
@@ -136,9 +136,11 @@ describe('POST /api/rooms/:id/key (re-entry for a recovered room)', () => {
       })) as never,
     });
 
+    // The room token is required: the id alone is a weaker, URL-visible value
+    // and must not be enough to attach a key. See tests/server/audit-fixes.
     const response = await fetch(`http://127.0.0.1:${port}/api/rooms/${room.id}/key`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'X-Nexus-Token': room.token },
       body: JSON.stringify({ apiKey: KEY }),
     });
     expect(response.status).toBe(200);

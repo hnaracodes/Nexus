@@ -34,6 +34,27 @@ export function validateRepoUrl(
   if (typeof value !== 'string' || !SAFE_REPO_URL.test(value)) {
     return { ok: false, message: 'Repository URL must be a plain https:// address.' };
   }
+
+  // The charset above permits ':' and '@', so "https://user:token@host/x.git"
+  // sails through — and repoUrl is committed unredacted into room_created,
+  // broadcast to every socket, and written to the meta sidecar whose whole
+  // point is holding nothing secret. Redaction only ever matched sk-ant-…, so
+  // a git PAT would land in the durable log in clear text.
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return { ok: false, message: 'Repository URL must be a plain https:// address.' };
+  }
+  if (parsed.username !== '' || parsed.password !== '') {
+    return {
+      ok: false,
+      // Never echo the URL back — it is the thing carrying the credential.
+      message:
+        'Remove the credentials from the repository URL. Nexus logs the URL, and the log is meant to be shareable.',
+    };
+  }
+
   return { ok: true, url: value };
 }
 

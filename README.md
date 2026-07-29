@@ -56,9 +56,15 @@ sandboxes are the fix, and they are not built yet.
 (`sk-ant-…`). It is POSTed once over HTTPS, held in memory on the server, used
 only to construct the SDK client, and never sent to any client, written to the
 event log, or placed in a URL. It is **not** persisted: after a server
-restart, a recovered room's history and roster come back, but its key does
-not (I4). The room closes any new connection with WebSocket close code
-`4409` until its creator re-supplies a key via `POST /api/rooms/:id/key`.
+restart a recovered room's **transcript** comes back, but its key does not
+(I4). The room closes any new connection with WebSocket close code `4409`
+until its creator re-supplies a key via `POST /api/rooms/:id/key`, which
+requires the room token — knowing the room id is not enough.
+
+Nobody is *live* in a recovered room until they reconnect: the roster starts
+empty and rebuilds as people rejoin, and whoever was driving when the process
+died has their control released, recorded in the log as `driver_released`
+with reason `server_restart`.
 
 Claude Free, Pro, and Max subscription logins cannot be used. Anthropic's terms
 prohibit third-party developers from routing requests through plan credentials

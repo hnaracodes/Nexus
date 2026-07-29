@@ -78,6 +78,18 @@ export function createServer(): { app: Hono; server: Server } {
     const room = getRoom(c.req.param('id'));
     if (room === undefined) return c.json({ error: 'No such room.' }, 404);
 
+    // The TOKEN is the credential, not the room id. The id is 64 bits and
+    // appears in every room URL, referrer header and screenshot; the token is
+    // 256 bits and is the thing "the link is the credential" actually means.
+    // Without this check anyone who had merely seen a room id could attach
+    // their own key, and because attachRoom is idempotent (I1) whoever wins
+    // that race owns the room's one live agent permanently — a later re-key
+    // by the real creator is accepted and then silently never used.
+    const token = c.req.header('X-Nexus-Token');
+    if (token === undefined || authorize(room.id, token) === undefined) {
+      return c.json({ error: 'Invalid room token.' }, 401);
+    }
+
     const body = (await c.req.json().catch(() => null)) as { apiKey?: string } | null;
     const keyCheck = validateApiKeyShape(body?.apiKey);
     if (!keyCheck.ok) return c.json({ error: keyCheck.message }, 400);
