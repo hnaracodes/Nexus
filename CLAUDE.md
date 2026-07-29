@@ -10,18 +10,25 @@ Strategic frame, from `BUILD_SPEC.md` §9: *collaboration is the mechanism, gove
 
 ## Current repo state — read this first
 
-**Phases 0 and 1 are built, merged, and committed.** 53 root tests + 21 client tests.
+**Phases 0, 1 and 2 are built, merged, and committed.** 84 root tests + 38 client tests.
 
 - **Phase 0** — frozen event protocol, room registry, async prompt queue feeding one `query()` per room, WebSocket broadcast with replay-then-live ordering.
 - **Phase 1a** — durable append-only JSONL log at `data/rooms/<roomId>.jsonl`, redaction at the write boundary. `attachRoom`'s default sink is now `createSink(room.id)`; `MemorySink` is exported but no longer the default.
 - **Phase 1b** — React client in `client/` (its own npm project): idempotent event reducer, WebSocket adapter with backoff reconnect and resume-from-seq, room UI shell.
 - **Phase 1c** — multi-stage `Dockerfile`, `fly.toml`, `scripts/smoke-ws.mjs`. **Image builds and runs; nothing is deployed** — the `fly` CLI is not installed here and no deploy has ever run.
 
-**The core loop is now verified against a real Anthropic key.** Two WebSocket clients attached to one room, one sent a prompt, both received an identical real reply in ~5.5s — Nexus's actual mechanism (one `query()`, N sockets, broadcast) confirmed working end to end, not just asserted from transport tests. An idle watchdog in `src/server/agent.ts` now also surfaces an `agent_error` if the agent goes silently unresponsive (e.g. an invalid key) instead of the room staying alive and doing nothing forever.
+- **Phase 2a** — driver token state machine in `src/server/driver.ts`, 30s disconnect grace, and the I2 guard in the `prompt` branch of `src/server/index.ts`.
+- **Phase 2b** — `src/server/presence.ts` (log-derived roster projection + transient `presence` snapshot) and `client/src/components/Roster.tsx`.
+- **Phase 2c** — `src/server/permissions.ts`: the `canUseTool` gate, first-response-wins, 120s timeout-denies, auto-approve for read-only tools.
+- **Phase 2d** — `client/src/approvals.ts` and `ApprovalPrompt.tsx`, derived from the raw event log rather than a second store.
 
-Still missing: driver enforcement (I2), the permission gate, restart recovery, room-creation UX, and an actual deploy. See the newest `sessions/` folder.
+**Both the core loop and the permission gate are verified against a real Anthropic key.** Day 1: two clients, one room, identical reply in ~5.5s. **Day 3: `canUseTool` suspended a live `query()` on a `Bash` call, both participants saw the actual command, a non-driver denied it with a reason, and the agent adapted and continued rather than crashing — the decision landed in the log with a name attached and no key material.** That retires the project's largest technical unknown, which had been carried as unresolved across two sessions.
 
-Next up is the Phase 2 fan-out — `phase-2a` (driver control), `phase-2b` (presence), `phase-2c` (permission gate), `phase-2d` (approval UI) — dispatched **concurrently**. See `docs/plans/README.md`.
+**Day 2 acceptance also passed live**, including the real I2 check: a raw WebSocket frame sent the way a browser console would send it is rejected at the server, produces no `user_prompt` on *any* socket, and control passes cleanly in both directions.
+
+Still missing: restart recovery and `since=` resume, **stable participant identity across reconnects** (three Phase 2 features quietly degrade without it — read the newest `sessions/` `issues.md` §A first), global interrupt, room-creation UX, and **an actual deploy**.
+
+Next up is `phase-3a` (durability) — **solo**, and start it with stable participant identity. Then the `phase-3b`/`3c`/`3d` fan-out. See `docs/plans/README.md`.
 
 **Model policy: use Sonnet 5 for all subagent dispatches, not Opus or Fable, to conserve API credits.** Applies to `Agent` calls and any `model:` field on dispatched work.
 
@@ -86,8 +93,8 @@ Transcribed from the real root `package.json`. Re-read it rather than trusting t
 
 ```
 npm run dev          # server via tsx watch, port 8080 (PORT overrides — use 8099 locally)
-npm test             # vitest run — 53 tests today
-npm run test:client  # npm --prefix client test — 21 tests
+npm test             # vitest run — 84 tests today
+npm run test:client  # npm --prefix client test — 38 tests
 npm run test:all     # both suites
 npm run typecheck    # tsc over src + tests, noEmit
 npm run build        # tsc -p tsconfig.build.json → dist/, src only
@@ -119,6 +126,15 @@ Immediately upon completing a specific feature, bug fix, or task, stage the rele
 Prefer explicit pathspecs over `git add -A` when the working tree holds changes you did not make.
 
 **Never edit inside a dispatched agent's worktree while any of its agents are still alive.** A subagent that later commits can reset the branch out from under your edit — this happened in the Phase 1 fan-out and silently dropped a commit from the branch. Wait for the whole agent tree to go quiet, or merge its branch first and do follow-up work on `master`.
+
+**Commit before you mutation-test, and revert mutants with a precise edit — never `git checkout --`.** Reverting an uncommitted file restores it from HEAD, which silently discards the real change along with the mutation. This cost a change in the Phase 2 session before it was caught.
+
+## Dispatching a fan-out — two techniques that earned their keep
+
+Both come from the Phase 2 fan-out; `docs/plans/README.md` has the full dispatch protocol.
+
+- **Audit the seams before dispatching, and grep the plans for `BLOCKED`.** File-ownership rules fail at the boundaries *between* partitions, not inside them. A plan that pre-emptively tells an agent to report BLOCKED is a plan whose author already spotted a seam — resolve it on `master` first. In Phase 2 this caught two defects, one of which would have made the phase fail its own acceptance test while every unit test passed.
+- **When two plans share one file by region, put paired marker comments in it before dispatch** (`{/* --- BEGIN phase-2d approval slot --- */}` … `END`) and tell each agent to edit only inside its own. `client/src/App.tsx` was edited by two concurrent agents and auto-merged with zero conflicts.
 
 ## Session ledger — write one before you finish
 

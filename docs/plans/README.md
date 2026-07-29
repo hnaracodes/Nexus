@@ -19,6 +19,11 @@ problem.
 
 ## Fan-out groups and models
 
+**Status: orders 1–3 are done, merged, and acceptance-tested.** Phases 0, 1 and
+2 are on `master`. `phase-3a` is next and is **solo**. The `Model` column below
+is superseded by `CLAUDE.md`'s policy — **dispatch everything on `sonnet`** to
+conserve credits, including the rows that say `opus`.
+
 | Order | Plan | Mode | Model | Owns |
 |---|---|---|---|---|
 | 1 | `phase-0-spine.md` | **solo** | `opus` | repo root config, `src/protocol/**`, `src/server/{index,rooms,agent,ws}.ts` |
