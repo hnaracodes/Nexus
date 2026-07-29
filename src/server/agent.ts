@@ -15,7 +15,19 @@ export interface AgentHandle {
 /** Injection seam so tests can drive the loop without a live API key. */
 export interface AgentDeps {
   runQuery?: typeof query;
+  /** Overridable for tests. Must stay above phase-2c's 120s decision timeout. */
+  idleTimeoutMs?: number;
 }
+
+/**
+ * If a submitted prompt gets no `result` message within this long, something
+ * is wrong (most commonly: an invalid API key). The SDK does not always
+ * surface that as a thrown error — the session can just go quiet — so relying
+ * on the `catch` below alone leaves the room silently unresponsive forever.
+ * Kept comfortably above phase-2c's 120s room-decision timeout so a pending
+ * permission request is never mistaken for a dead agent.
+ */
+const DEFAULT_IDLE_TIMEOUT_MS = 150_000;
 
 /**
  * The SDK's SDKUserMessage, derived from the installed signature rather than
@@ -27,7 +39,30 @@ type PromptMessage =
 
 export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): AgentHandle {
   const runQuery = deps.runQuery ?? query;
+  const idleTimeoutMs = deps.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
   const prompts = new AsyncQueue<PromptMessage>();
+
+  let watchdog: ReturnType<typeof setTimeout> | null = null;
+
+  function clearWatchdog(): void {
+    if (watchdog === null) return;
+    clearTimeout(watchdog);
+    watchdog = null;
+  }
+
+  /** One watchdog covers however many prompts are outstanding, not one per prompt. */
+  function armWatchdog(): void {
+    if (watchdog !== null) return;
+    watchdog = setTimeout(() => {
+      watchdog = null;
+      emit({
+        type: 'agent_error',
+        message:
+          `No response from the agent within ${Math.round(idleTimeoutMs / 1000)}s. ` +
+          'This usually means the API key is invalid or the model is unreachable.',
+      });
+    }, idleTimeoutMs);
+  }
 
   // Exactly one query() call for this room, for the room's whole lifetime (I1).
   const session = runQuery({
@@ -43,15 +78,19 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
   void (async () => {
     try {
       for await (const message of session) {
-        for (const event of translate(message)) emit(event);
+        const events = translate(message);
+        for (const event of events) emit(event);
+        if (events.some((event) => event.type === 'agent_idle')) clearWatchdog();
       }
     } catch (error) {
+      clearWatchdog();
       emit({ type: 'agent_error', message: scrub(String(error), room.getApiKey()) });
     }
   })();
 
   return {
     submit(text: string): void {
+      armWatchdog();
       prompts.push({
         type: 'user',
         message: { role: 'user', content: text },
@@ -60,9 +99,11 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
       } as PromptMessage);
     },
     async interrupt(): Promise<void> {
+      clearWatchdog();
       await session.interrupt();
     },
     stop(): void {
+      clearWatchdog();
       prompts.close();
     },
   };
