@@ -215,6 +215,21 @@ export function createServer(): { app: Hono; server: Server } {
         }
 
         // --- BEGIN phase-3b interrupt slot: add the `interrupt` frame branch here. ---
+        if (frame.kind === 'interrupt') {
+          // Deliberately NOT gated on the driver token — this is the safety
+          // valve. A runaway agent must not require finding the token holder.
+          runtime.commit({ type: 'interrupted', participantId, displayName });
+          void runtime.agent.interrupt().catch(() => {
+            // Never interpolate the raw error: it can carry the API key, and
+            // this text is committed to the durable log (I4). The SDK rejecting
+            // here almost always just means the session already ended.
+            runtime.commit({
+              type: 'agent_error',
+              message: 'Could not stop the agent — the session may have already ended.',
+            });
+          });
+          return;
+        }
         // --- END phase-3b interrupt slot ---
       });
 
