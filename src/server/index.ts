@@ -109,9 +109,15 @@ export function createServer(): { app: Hono; server: Server } {
       );
       const participantId = identity.participantId;
 
+      const parsedSince = Number.parseInt(url.searchParams.get('since') ?? '0', 10);
+      const from = Number.isFinite(parsedSince) && parsedSince > 0 ? parsedSince : 0;
+
       // Replay first, then attach. Order matters: attaching before replay
-      // finishes interleaves history with live events.
+      // finishes interleaves history with live events. Never renumber or
+      // backfill to make this simpler — the log is append-only and
+      // authoritative (I3); `since` only filters what gets resent.
       for (const event of runtime.sink.read()) {
+        if (event.seq <= from) continue;
         ws.send(JSON.stringify({ kind: 'event', event }));
       }
       ws.send(
