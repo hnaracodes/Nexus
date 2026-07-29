@@ -1,7 +1,10 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
+import type { CanUseTool, PermissionResult } from '@anthropic-ai/claude-agent-sdk';
 import type { UnsequencedEvent } from '../protocol/events.js';
 import type { Room } from './rooms.js';
 import { AsyncQueue } from './queue.js';
+import { createPermissionGate } from './permissions.js';
+import type { PermissionGate } from './permissions.js';
 
 export type EmitFn = (event: UnsequencedEvent) => void;
 
@@ -10,6 +13,7 @@ export interface AgentHandle {
   submit(text: string): void;
   interrupt(): Promise<void>;
   stop(): void;
+  gate: PermissionGate;
 }
 
 /** Injection seam so tests can drive the loop without a live API key. */
@@ -41,6 +45,7 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
   const runQuery = deps.runQuery ?? query;
   const idleTimeoutMs = deps.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
   const prompts = new AsyncQueue<PromptMessage>();
+  const gate = createPermissionGate(room, emit);
 
   let watchdog: ReturnType<typeof setTimeout> | null = null;
 
@@ -72,6 +77,21 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
       // The key is read here and nowhere else. It is never stored on anything
       // we serialize, never logged, never sent over the wire (I4).
       env: { ...process.env, ANTHROPIC_API_KEY: room.getApiKey() },
+      canUseTool: (async (toolName, input, options): Promise<PermissionResult> => {
+        // options: { signal: AbortSignal; suggestions?: PermissionUpdate[];
+        //            blockedPath?: string; decisionReason?: string; toolUseID?: string }
+        const decision = await gate.request(toolName, input, options.signal);
+        return decision.decision === 'allow'
+          ? { behavior: 'allow', updatedInput: input }
+          : {
+              behavior: 'deny',
+              message:
+                decision.reason ??
+                `The room denied ${toolName}. Explain what you were trying to do and propose an alternative.`,
+              // Unset on purpose: a denial with guidance should let the model
+              // adapt and continue. `interrupt: true` would halt the session.
+            };
+      }) satisfies CanUseTool,
     },
   });
 
@@ -106,6 +126,7 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
       clearWatchdog();
       prompts.close();
     },
+    gate,
   };
 }
 
