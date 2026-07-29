@@ -10,16 +10,20 @@ Strategic frame, from `BUILD_SPEC.md` §9: *collaboration is the mechanism, gove
 
 ## Current repo state — read this first
 
-**Phases 0 and 1 are built, merged, and committed.** 49 root tests + 21 client tests.
+**Phases 0 and 1 are built, merged, and committed.** 53 root tests + 21 client tests.
 
 - **Phase 0** — frozen event protocol, room registry, async prompt queue feeding one `query()` per room, WebSocket broadcast with replay-then-live ordering.
 - **Phase 1a** — durable append-only JSONL log at `data/rooms/<roomId>.jsonl`, redaction at the write boundary. `attachRoom`'s default sink is now `createSink(room.id)`; `MemorySink` is exported but no longer the default.
 - **Phase 1b** — React client in `client/` (its own npm project): idempotent event reducer, WebSocket adapter with backoff reconnect and resume-from-seq, room UI shell.
 - **Phase 1c** — multi-stage `Dockerfile`, `fly.toml`, `scripts/smoke-ws.mjs`. **Image builds and runs; nothing is deployed** — the `fly` CLI is not installed here and no deploy has ever run.
 
-Still missing: driver enforcement (I2), the permission gate, restart recovery, room-creation UX. **And the core loop has never been observed** — no valid Anthropic key has been available, so no agent has ever actually replied. See the newest `sessions/` folder.
+**The core loop is now verified against a real Anthropic key.** Two WebSocket clients attached to one room, one sent a prompt, both received an identical real reply in ~5.5s — Nexus's actual mechanism (one `query()`, N sockets, broadcast) confirmed working end to end, not just asserted from transport tests. An idle watchdog in `src/server/agent.ts` now also surfaces an `agent_error` if the agent goes silently unresponsive (e.g. an invalid key) instead of the room staying alive and doing nothing forever.
+
+Still missing: driver enforcement (I2), the permission gate, restart recovery, room-creation UX, and an actual deploy. See the newest `sessions/` folder.
 
 Next up is the Phase 2 fan-out — `phase-2a` (driver control), `phase-2b` (presence), `phase-2c` (permission gate), `phase-2d` (approval UI) — dispatched **concurrently**. See `docs/plans/README.md`.
+
+**Model policy: use Sonnet 5 for all subagent dispatches, not Opus or Fable, to conserve API credits.** Applies to `Agent` calls and any `model:` field on dispatched work.
 
 **Local gotcha:** port 8080 is occupied on the primary dev machine by an unrelated `ApplicationWebServer`. Run local servers and containers on `PORT=8099`, or a smoke test will get a confusing 404 from someone else's server while ours dies with `EADDRINUSE`.
 
@@ -82,7 +86,7 @@ Transcribed from the real root `package.json`. Re-read it rather than trusting t
 
 ```
 npm run dev          # server via tsx watch, port 8080 (PORT overrides — use 8099 locally)
-npm test             # vitest run — 49 tests today
+npm test             # vitest run — 53 tests today
 npm run test:client  # npm --prefix client test — 21 tests
 npm run test:all     # both suites
 npm run typecheck    # tsc over src + tests, noEmit

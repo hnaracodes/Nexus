@@ -138,31 +138,111 @@ easily have gone the other way.
 worktree while any of its agents are still alive. Merge first, then do
 follow-up work on `master`.
 
----
+### 9. The core loop had never been observed — now it has
+
+**Resolved with a real key, same session, after the ledger above was first
+written.** The user supplied a valid `ANTHROPIC_API_KEY` in a gitignored
+`.env`. Ran the real Day 1 acceptance test: two WebSocket clients (Ada, Grace)
+attach to one room; Ada sends `"Reply with exactly the word: pong"`; both
+clients receive an identical `assistant_message` event at `seq=5`,
+`text="pong"`, **5.5 seconds** after the prompt.
+
+```
+[+0.6s] [Ada] event seq=4 type=user_prompt
+[+5.5s] [Ada] event seq=5 type=assistant_message
+[+5.5s] [Grace] event seq=5 type=assistant_message
+PASS: both clients saw identical seq=5 text="pong"
+```
+
+Confirmed on the durable log written to disk: `agent_idle` follows at `seq=6`,
+and `grep -c "sk-ant" data/rooms/*.jsonl` → `0` — the reply path does not leak
+the key either. This is the first time across two sessions that the product's
+actual differentiating mechanism (one `query()`, broadcast to N sockets,
+identical `seq` on every client) has been watched working against a real
+model, not just asserted from transport-level tests.
+
+**Method note, for repeating this:** verification was done with a throwaway
+`.mjs` script in the repo root (never committed, deleted immediately after),
+reading the key from `.env` at runtime and never printing it. The room-creation
+API takes the key per-room in the POST body — the server process itself does
+not need `ANTHROPIC_API_KEY` in its own environment.
+
+### 10. Diagnosed issue §B — an invalid key produces a silently stuck agent, not a stuck room
+
+**Reproduced with a working baseline available for comparison** (see #9 above,
+same server, same session). Created a room with a syntactically-valid but fake
+key (`sk-ant-api03-INVALID-...`), sent a prompt, waited 30s:
+
+```
+[+0.6s] frame kind=event type=user_prompt
+[+30.6s] --- RESULT ---
+NO agent_error surfaced within 30s — confirms the silent failure.
+```
+
+No `agent_error`, no `agent_idle`, no server-side log line — identical
+symptom to last session, now confirmed against a real working control.
+
+**Root cause, read from `src/server/agent.ts`:**
+
+```ts
+try {
+  for await (const message of session) {
+    for (const event of translate(message)) emit(event);
+  }
+} catch (error) {
+  emit({ type: 'agent_error', message: scrub(String(error), room.getApiKey()) });
+}
+```
+
+This only emits `agent_error` if the async iterator **throws**. If the
+underlying `query()` subprocess exits (e.g. on an auth failure from the
+Anthropic API) without the SDK surfacing that as an iterator error — the
+`for await` loop simply completes and the async IIFE returns silently. No
+exception, no `result` message, so no `agent_idle` either. The room is not
+"stuck" so much as the agent handle silently going quiet forever, and nothing
+in `startAgent` treats "the iterator ended with zero `result` messages" as
+notable.
+
+**Fixed, same session, commit `fb77c6f`.** Went with option (b) from the
+original diagnosis — a per-submit idle watchdog in `startAgent`, independent
+of whether the SDK's iterator ever throws or completes:
+
+- `submit()` arms a timer (`DEFAULT_IDLE_TIMEOUT_MS = 150_000`) if none is
+  already outstanding — one watchdog covers however many prompts are queued,
+  not one per prompt.
+- Any `agent_idle` event clears it.
+- `interrupt()` and `stop()` also clear it, so a stale timer can't fire after
+  the room has otherwise moved on.
+- The timeout (150s) is deliberately kept above `phase-2c`'s planned 120s
+  room-decision timeout, so a pending permission request — which legitimately
+  holds the agent "idle" for up to two minutes — is never mistaken for a dead
+  agent once that feature exists.
+
+Chose (b) over (a) ("treat an unexpected iterator end as an error") because
+(a) would have broken the existing `stubbedRoom` test fixture in
+`tests/server/ws.test.ts`: that stub's async generator returns immediately by
+design ("the stub agent never emits"), which is indistinguishable at the
+iterator level from a real crash. (b) only reacts to an actual `submit()`
+with no reply, which the stub-based tests never wait long enough to trigger.
+
+Four new tests in `tests/server/agent.test.ts`. **Mutation-tested** — this
+session's own lesson from #2 above applied to itself: removed the
+`agent_idle`-clears-the-watchdog line and confirmed the test suite catches it
+(1 of 4 tests fails). Then re-ran the live Day 1 test against the real key
+afterward to confirm no regression to the working path: `seq=5,
+text="pong"` in 5.9s, unchanged from before the fix.
 
 ## Unresolved — carry into the next session
 
-### A. No valid Anthropic API key — the core loop has never been observed
+### A. `canUseTool` suspending the agent is still unverified against a live session
 
-**This is now the project's largest risk and it is unchanged from last
-session.** Transport, replay, durability, the client, and the container are all
-proven. The one thing the system exists to do — an agent answering a prompt —
-has never been watched working.
+The plan is now correct against the installed SDK types (`issues.md` from the
+prior ledger, §6 above), and the core message loop is now proven end to end.
+What remains unverified is the permission-gate callback itself actually
+suspending a live `query()` — that only happens once `phase-2c` is
+implemented and run against a real key.
 
-Three separate open questions collapse into this one: the Day 1 acceptance
-test, issue §B below, and whether `canUseTool` actually suspends the agent as
-`phase-2c` assumes. **Get a key before dispatching Phase 2.** Everything in
-Phase 2 stacks on an unverified foundation otherwise.
-
-### B. An invalid API key fails completely silently
-
-Carried forward unchanged. Room created with a bad key, prompt sent, ~30s
-wait: zero `agent_error` events, zero server log output, room stays alive and
-responsive. `phase-3d` builds error translation on the assumption that errors
-*arrive*; here there is nothing to translate. Not diagnosed — needs a working
-key as a baseline for comparison.
-
-### C. Nothing is deployed; the proxy hop is untested
+### B. Nothing is deployed; the proxy hop is untested
 
 `fly.toml` exists and is reviewed but has never been applied — no `fly` CLI and
 no credentials on this machine. The whole point of doing deploy on Day 1 is
@@ -183,7 +263,7 @@ fly ssh console -C "ls -la /data/rooms"
 Do **not** run `fly secrets set ANTHROPIC_API_KEY` — the key is per-room at
 runtime, never a deploy secret (I4).
 
-### D. The client has never been opened in a browser
+### C. The client has never been opened in a browser
 
 Components pass under jsdom. Nobody has looked at the actual UI, and no two
 browsers have ever been pointed at the same room. The Day 1 acceptance test

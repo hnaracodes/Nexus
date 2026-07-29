@@ -2,7 +2,8 @@
 
 ## Implemented and verified
 
-Evidence for every row: `npm test` → **9 files, 49 tests, 0 failures**;
+Evidence for every row: `npm test` → **10 files, 53 tests, 0 failures**
+(updated after the agent-watchdog fix below, was 9/49 before it);
 `npm run test:client` → **4 files, 21 tests, 0 failures**; `npm run typecheck`
 → exit 0; `npm run build` → exit 0; `npm --prefix client run build` → exit 0;
 `docker build -t nexus:dev .` → exit 0; containerized smoke test → `SMOKE OK`.
@@ -44,27 +45,51 @@ env inside container | grep anthropic      → nothing
 docker inspect nexus:dev .Config.Env       → no key
 ```
 
+## Day 1 acceptance test — now PASSING
+
+Closed later in this same session once the user supplied a real
+`ANTHROPIC_API_KEY`. Two WebSocket clients, one room, one prompt, both
+receiving an identical reply from the real model:
+
+```
+[+0.6s] user_prompt seq=4
+[+5.5s] assistant_message seq=5 text="pong"   (both clients, identical)
+[+5.5s] agent_idle seq=6
+```
+
+Confirmed on the durable log on disk, with zero key material in it. This is
+the first time the product's core mechanism — one `query()`, broadcast to N
+sockets — has been observed working against a real model. See `issues.md` §9.
+
+While a real key was available, also diagnosed **and fixed** (commit
+`fb77c6f`) that an invalid key previously produced no `agent_error` and no
+`agent_idle` — the agent handle went silently quiet forever. `startAgent` now
+arms a per-submit idle watchdog (150s, above `phase-2c`'s planned 120s
+decision timeout) independent of whether the SDK's iterator ever throws.
+Mutation-tested, and the real-key path re-verified afterward with no
+regression. See `issues.md` §10.
+
 ## Implemented but NOT verified
 
 - **`fly.toml` has never been applied.** No `fly` CLI, no credentials on this
   machine. The proxy hop — the entire reason phase-1c is a Day 1 task — remains
   untested. Everything up to and including a local container is proven; the
   platform proxy is not.
-- **The Day 1 acceptance test is still half-satisfied**, unchanged from last
-  session. Transport, replay, client rendering and the container all work. **No
-  agent has ever actually responded**, because no valid Anthropic key exists
-  here. This is now the single largest unverified claim in the project.
 - The client has never been opened in a real browser. Its components are tested
-  under jsdom; no human has looked at the UI.
+  under jsdom; no human has looked at the UI. Two browsers pointed at the same
+  room, specifically, is the one piece of the Day 1 test not yet covered by
+  the automated WebSocket-client run above.
 - `AgentHandle.interrupt()` still unexercised against a live session
   (`phase-3b`).
+- `canUseTool` suspending a live session — the plan is now correct against the
+  installed SDK, but nothing has exercised it against a real `query()` yet
+  (that's `phase-2c`).
 
 ## Not started — next steps
 
-**Before dispatching Phase 2, close the key gap.** A valid `sk-ant-...` key
-turns three separate unknowns (Day 1 acceptance, carried-forward issue §B, and
-whether `canUseTool` actually suspends the agent) into answered questions. All
-of Phase 2 is built on the assumption that the agent loop works.
+**The key gap is closed — the core loop works.** What remains before Phase 2
+is the small fix in `issues.md` §A (silent agent-error surfacing), and,
+independently, an actual deploy to retire the proxy-hop risk.
 
 Then dispatch the Phase 2 fan-out as four `Agent` calls **in one message**,
 each `isolation: "worktree"` with an explicit `model:`:
