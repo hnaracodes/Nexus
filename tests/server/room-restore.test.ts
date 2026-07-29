@@ -8,8 +8,19 @@ import {
   mintRoomId,
   restoreRoom,
 } from '../../src/server/rooms.js';
+import { MemorySink, attachRoom } from '../../src/server/ws.js';
+import type { NexusEvent } from '../../src/protocol/events.js';
 
 const KEY = 'sk-ant-api03-TESTONLY-not-a-real-key';
+
+const STUB_AGENT = {
+  runQuery: (() => ({
+    async *[Symbol.asyncIterator]() {
+      /* never emits */
+    },
+    interrupt: async () => undefined,
+  })) as never,
+};
 
 function restored() {
   return restoreRoom({
@@ -65,6 +76,34 @@ describe('restoreRoom', () => {
     attachApiKey(room, KEY);
     expect(hasApiKey(room)).toBe(true);
     expect(room.getApiKey()).toBe(KEY);
+  });
+
+  it('does not append a second room_created when the log already has one', () => {
+    const room = restored();
+    attachApiKey(room, KEY);
+
+    // A room rebuilt from disk arrives with its history already populated.
+    const sink = new MemorySink();
+    sink.append({
+      seq: 1,
+      ts: '2026-07-28T00:00:00.000Z',
+      roomId: room.id,
+      type: 'room_created',
+      cwd: room.cwd,
+      repoUrl: null,
+    } as NexusEvent);
+
+    attachRoom(room, sink, STUB_AGENT);
+
+    // The log is append-only, so a duplicate could never be removed later (I3).
+    expect(sink.read().filter((event) => event.type === 'room_created')).toHaveLength(1);
+  });
+
+  it('still records room_created for a genuinely new room', () => {
+    const room = createRoom({ apiKey: KEY, cwd: '/tmp', repoUrl: null });
+    const sink = new MemorySink();
+    attachRoom(room, sink, STUB_AGENT);
+    expect(sink.read().filter((event) => event.type === 'room_created')).toHaveLength(1);
   });
 
   it('never serializes the key or the token', () => {

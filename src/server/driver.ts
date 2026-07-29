@@ -3,6 +3,17 @@ import type { Room } from './rooms.js';
 
 export const GRACE_MS = 30_000;
 
+/**
+ * Read at call time, not at module load, so a test can shorten the window and
+ * actually observe the timer firing. Without that, a test can only assert the
+ * token is still held *immediately* after a reconnect — which stays true even
+ * if the cancel is broken, because the timer has not fired yet.
+ */
+function graceMs(): number {
+  const configured = Number(process.env['NEXUS_DRIVER_GRACE_MS']);
+  return Number.isFinite(configured) && configured > 0 ? configured : GRACE_MS;
+}
+
 /** Grace timers, keyed per room so the module holds no global mutable state. */
 const timers = new WeakMap<Room, Map<string, ReturnType<typeof setTimeout>>>();
 
@@ -84,7 +95,7 @@ export function scheduleAutoRelease(
   room: Room,
   participantId: string,
   emit: (events: UnsequencedEvent[]) => void,
-  delayMs: number = GRACE_MS,
+  delayMs: number = graceMs(),
 ): void {
   cancelAutoRelease(room, participantId);
   const timer = setTimeout(() => {

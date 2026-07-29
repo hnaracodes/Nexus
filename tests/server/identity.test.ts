@@ -13,7 +13,11 @@ const KEY = 'sk-ant-api03-TESTONLY-not-a-real-key';
 let port = 0;
 let started: ReturnType<typeof createServer>;
 
+const previousGrace = process.env['NEXUS_DRIVER_GRACE_MS'];
+
 beforeAll(async () => {
+  // Short enough that a test can outlive the window and watch the timer fire.
+  process.env['NEXUS_DRIVER_GRACE_MS'] = '150';
   started = createServer();
   await new Promise<void>((resolve) => {
     started.server.listen(0, '127.0.0.1', () => {
@@ -24,6 +28,8 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  if (previousGrace === undefined) delete process.env['NEXUS_DRIVER_GRACE_MS'];
+  else process.env['NEXUS_DRIVER_GRACE_MS'] = previousGrace;
   await new Promise<void>((resolve) => started.server.close(() => resolve()));
 });
 
@@ -191,7 +197,37 @@ describe('stable participant identity', () => {
     expect(room.driverId).toBe(ada.participantId);
     expect(loggedEvents(room).some((event) => event.type === 'driver_released')).toBe(false);
 
+    // Asserting only the instant after reconnect is not enough — that stays
+    // true even with the cancel removed, because the timer has not fired yet.
+    // Outlive the grace window and check the token is still theirs.
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(room.driverId).toBe(ada.participantId);
+    expect(loggedEvents(room).some((event) => event.type === 'driver_released')).toBe(false);
+
     await closeAndSettle(second);
+  });
+
+  it('still frees the token when the driver does not come back', async () => {
+    // The mirror of the test above. Without it, "never schedule a release at
+    // all" would satisfy the reconnect case and brick the room for everyone
+    // else the moment one laptop closes.
+    const room = stubbedRoom();
+    const qs = `room=${room.id}&token=${room.token}`;
+
+    const driver = await connect(`${qs}&name=Ada`);
+    await settle();
+    driver.socket.send(JSON.stringify({ kind: 'prompt', text: 'go' }));
+    await settle();
+    const ada = identityOf(driver);
+    expect(room.driverId).toBe(ada.participantId);
+
+    await closeAndSettle(driver);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+
+    expect(room.driverId).toBeNull();
+    const released = loggedEvents(room).filter((event) => event.type === 'driver_released');
+    expect(released).toHaveLength(1);
+    expect((released[0] as { reason: string }).reason).toBe('disconnect');
   });
 
   it('treats two tabs as one person until the last one closes', async () => {
