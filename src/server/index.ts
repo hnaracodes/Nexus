@@ -5,6 +5,7 @@ import { Hono } from 'hono';
 import { WebSocketServer } from 'ws';
 import { PROTOCOL_VERSION } from '../protocol/events.js';
 import { parseClientFrame } from '../protocol/wire.js';
+import { presenceFrame } from './presence.js';
 import { authorize, createRoom, getRoom } from './rooms.js';
 import { attachRoom, getRuntime, newParticipantId } from './ws.js';
 import {
@@ -109,6 +110,7 @@ export function createServer(): { app: Hono; server: Server } {
       cancelAutoRelease(room, participantId);
       room.participants.set(participantId, { id: participantId, displayName, connected: true });
       runtime.commit({ type: 'participant_joined', participantId, displayName });
+      runtime.broadcast(presenceFrame(room));
 
       ws.on('message', (data) => {
         const frame = parseClientFrame(String(data));
@@ -184,6 +186,12 @@ export function createServer(): { app: Hono; server: Server } {
         const participant = room.participants.get(participantId);
         if (participant !== undefined) participant.connected = false;
         runtime.commit({ type: 'participant_left', participantId, displayName });
+        // phase-2b: the roster must show them greyed out immediately.
+        runtime.broadcast(presenceFrame(room));
+        // phase-2a: their token is held for a grace period rather than dropped
+        // now, so a refresh does not cost them control. The later
+        // driver_released event is what updates every client, so no second
+        // presence frame is needed here.
         if (isDriver(room, participantId)) {
           scheduleAutoRelease(room, participantId, (events) => {
             for (const event of events) runtime.commit(event);
