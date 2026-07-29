@@ -10,9 +10,18 @@ Strategic frame, from `BUILD_SPEC.md` §9: *collaboration is the mechanism, gove
 
 ## Current repo state — read this first
 
-**Phase 0 (the server spine) is built and committed.** Node 22+/TypeScript ESM toolchain, the frozen event protocol, the room registry, the async prompt queue feeding one `query()` per room, and the WebSocket broadcast layer all exist with 27 passing tests. There is no client yet, no durable log (rooms use an in-memory sink), no driver enforcement, and no permission gating.
+**Phases 0 and 1 are built, merged, and committed.** 49 root tests + 21 client tests.
 
-Next up is the Phase 1 fan-out — `phase-1a` (durable JSONL log), `phase-1b` (React client), `phase-1c` (Docker + Fly deploy) — dispatched **concurrently**. See `docs/plans/README.md` for the dispatch manifest, per-plan model tiers, and the file-ownership rules that keep parallel agents from colliding.
+- **Phase 0** — frozen event protocol, room registry, async prompt queue feeding one `query()` per room, WebSocket broadcast with replay-then-live ordering.
+- **Phase 1a** — durable append-only JSONL log at `data/rooms/<roomId>.jsonl`, redaction at the write boundary. `attachRoom`'s default sink is now `createSink(room.id)`; `MemorySink` is exported but no longer the default.
+- **Phase 1b** — React client in `client/` (its own npm project): idempotent event reducer, WebSocket adapter with backoff reconnect and resume-from-seq, room UI shell.
+- **Phase 1c** — multi-stage `Dockerfile`, `fly.toml`, `scripts/smoke-ws.mjs`. **Image builds and runs; nothing is deployed** — the `fly` CLI is not installed here and no deploy has ever run.
+
+Still missing: driver enforcement (I2), the permission gate, restart recovery, room-creation UX. **And the core loop has never been observed** — no valid Anthropic key has been available, so no agent has ever actually replied. See the newest `sessions/` folder.
+
+Next up is the Phase 2 fan-out — `phase-2a` (driver control), `phase-2b` (presence), `phase-2c` (permission gate), `phase-2d` (approval UI) — dispatched **concurrently**. See `docs/plans/README.md`.
+
+**Local gotcha:** port 8080 is occupied on the primary dev machine by an unrelated `ApplicationWebServer`. Run local servers and containers on `PORT=8099`, or a smoke test will get a confusing 404 from someone else's server while ours dies with `EADDRINUSE`.
 
 | File | Read it when |
 |---|---|
@@ -48,7 +57,7 @@ Raw terminal/PTY sharing · CRDTs, Yjs, collaborative text editing · per-room c
 
 Design so they drop in cleanly later — the event log and a clean transport abstraction are what make most of them cheap. Then don't build them.
 
-## Intended stack — not yet installed
+## Stack — installed and in use
 
 From `BUILD_SPEC.md` §5.2. Rows marked *load-bearing* need an explicit flag if you deviate; the rest are defaults you may swap with reasoning.
 
@@ -58,7 +67,7 @@ From `BUILD_SPEC.md` §5.2. Rows marked *load-bearing* need an explicit flag if 
 | Agent | `@anthropic-ai/claude-agent-sdk` | *load-bearing* |
 | HTTP + WS | Hono or Express + `ws` | Must support raw WebSocket upgrade on the host |
 | Frontend | React + Vite + TypeScript + Tailwind | Boring on purpose |
-| Room state | In-memory `Map` + append-only JSONL on a persistent volume | No database in the MVP |
+| Room state | In-memory `Map` + append-only JSONL on a persistent volume | Built — `src/log/`, path from `NEXUS_DATA_DIR` (default `./data`) |
 | Deploy | Fly.io with a persistent volume | **Avoid edge/serverless-only** — needs a long-lived process that spawns subprocesses and holds WebSockets |
 | Auth (agent) | BYOK, Anthropic Console API key (`sk-ant-...`) per room | *load-bearing*, and a legal constraint — see §5.5 |
 | Auth (product) | Room link with a high-entropy secret + display name | No accounts in the MVP; the link *is* the credential |
@@ -72,13 +81,28 @@ From `BUILD_SPEC.md` §5.2. Rows marked *load-bearing* need an explicit flag if 
 Transcribed from the real root `package.json`. Re-read it rather than trusting this if they disagree.
 
 ```
-npm run dev        # server via tsx watch, port 8080 (PORT overrides)
-npm test           # vitest run — 27 tests today
-npm run typecheck  # tsc over src + tests, noEmit
-npm run build      # tsc -p tsconfig.build.json → dist/, src only
-npm start          # node dist/server/index.js
-fly deploy         # not wired yet — plan phase-1c
+npm run dev          # server via tsx watch, port 8080 (PORT overrides — use 8099 locally)
+npm test             # vitest run — 49 tests today
+npm run test:client  # npm --prefix client test — 21 tests
+npm run test:all     # both suites
+npm run typecheck    # tsc over src + tests, noEmit
+npm run build        # tsc -p tsconfig.build.json → dist/, src only
+npm run build:client # vite build → client/dist, which the server serves
+npm start            # node dist/server/index.js
+docker build -t nexus:dev .          # full multi-stage image, verified working
+node scripts/smoke-ws.mjs <base-url> # proves the WS upgrade survives a proxy
+fly deploy           # config exists; never run — no fly CLI, no credentials
 ```
+
+**`client/` is a separate npm project.** Root `npm test` does not run client
+tests — use `npm run test:all`. The client imports protocol types across the
+boundary with `import type`; never copy them, a duplicated protocol drifts.
+
+**The server serves `client/dist`** at `/` and `/assets/*` (`src/server/index.ts`),
+overridable with `NEXUS_CLIENT_DIR`. It is deliberately **not** a catch-all —
+an unmatched `/api/*` path must still 404 rather than silently return
+`index.html` with a 200. If the bundle is missing you get a 503 that names the
+fix rather than a bare 404.
 
 **Two tsconfigs, on purpose.** `tsconfig.json` is `noEmit` and covers `src` + `tests`; `tsconfig.build.json` emits `src` alone with `rootDir: "src"`, so the build lands at `dist/server/index.js` and the test suite never reaches the production image. Adding tests to the build config breaks both.
 
@@ -87,6 +111,10 @@ fly deploy         # not wired yet — plan phase-1c
 ## Git — read before any commit
 
 Immediately upon completing a specific feature, bug fix, or task, stage the relevant files and execute a `git commit` with a descriptive message that summarizes the work. Do **not** push to the remote repository — commits remain local until explicitly approved for push.
+
+Prefer explicit pathspecs over `git add -A` when the working tree holds changes you did not make.
+
+**Never edit inside a dispatched agent's worktree while any of its agents are still alive.** A subagent that later commits can reset the branch out from under your edit — this happened in the Phase 1 fan-out and silently dropped a commit from the branch. Wait for the whole agent tree to go quiet, or merge its branch first and do follow-up work on `master`.
 
 ## Session ledger — write one before you finish
 
