@@ -6,6 +6,7 @@ import { WebSocketServer } from 'ws';
 import { PROTOCOL_VERSION } from '../protocol/events.js';
 import { parseClientFrame } from '../protocol/wire.js';
 import { presenceFrame } from './presence.js';
+import { recoverRooms, writeRoomMeta } from './recovery.js';
 import { authorize, createRoom, getRoom, hasApiKey } from './rooms.js';
 import { attachRoom, getRuntime, resolveParticipantId } from './ws.js';
 import {
@@ -36,6 +37,13 @@ export function createServer(): { app: Hono; server: Server } {
       apiKey,
       cwd: body?.cwd ?? process.cwd(),
       repoUrl: body?.repoUrl ?? null,
+    });
+    writeRoomMeta({
+      roomId: room.id,
+      token: room.token,
+      cwd: room.cwd,
+      repoUrl: room.repoUrl,
+      createdAt: room.createdAt,
     });
     attachRoom(room);
     return c.json({ roomId: room.id, token: room.token });
@@ -109,9 +117,15 @@ export function createServer(): { app: Hono; server: Server } {
       );
       const participantId = identity.participantId;
 
+      const parsedSince = Number.parseInt(url.searchParams.get('since') ?? '0', 10);
+      const from = Number.isFinite(parsedSince) && parsedSince > 0 ? parsedSince : 0;
+
       // Replay first, then attach. Order matters: attaching before replay
-      // finishes interleaves history with live events.
+      // finishes interleaves history with live events. Never renumber or
+      // backfill to make this simpler — the log is append-only and
+      // authoritative (I3); `since` only filters what gets resent.
       for (const event of runtime.sink.read()) {
+        if (event.seq <= from) continue;
         ws.send(JSON.stringify({ kind: 'event', event }));
       }
       ws.send(
@@ -227,6 +241,12 @@ export function createServer(): { app: Hono; server: Server } {
       });
     });
   });
+
+  for (const recovered of recoverRooms()) {
+    console.log(
+      `recovered room ${recovered.roomId} at seq ${recovered.lastSeq} (awaiting API key)`,
+    );
+  }
 
   return { app, server };
 }
