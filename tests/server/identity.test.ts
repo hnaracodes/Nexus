@@ -2,7 +2,7 @@ import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 import { createServer } from '../../src/server/index.js';
-import { createRoom } from '../../src/server/rooms.js';
+import { attachApiKey, createRoom, mintRoomId, restoreRoom } from '../../src/server/rooms.js';
 import type { Room } from '../../src/server/rooms.js';
 import { attachRoom, getRuntime } from '../../src/server/ws.js';
 import { projectPresence } from '../../src/server/presence.js';
@@ -217,6 +217,41 @@ describe('stable participant identity', () => {
     await closeAndSettle(tabTwo);
     expect(room.participants.get(ada.participantId)?.connected).toBe(false);
     expect(loggedEvents(room).filter((event) => event.type === 'participant_left')).toHaveLength(1);
+  });
+
+  it('refuses a recovered room that has no key yet, instead of attaching a doomed agent', async () => {
+    // I4 forbids persisting the key, so a room rebuilt from disk comes back
+    // keyless. Attaching an agent anyway would throw on the first prompt and
+    // leave the room looking alive but permanently mute.
+    const room = restoreRoom({
+      id: mintRoomId(),
+      token: 'c'.repeat(64),
+      cwd: process.cwd(),
+      repoUrl: null,
+      createdAt: '2026-07-28T00:00:00.000Z',
+      lastSeq: 5,
+    });
+
+    const socket = new WebSocket(
+      `ws://127.0.0.1:${port}/ws?room=${room.id}&token=${room.token}&name=Ada`,
+    );
+    const code = await new Promise<number>((resolve) => socket.on('close', resolve));
+    expect(code).toBe(4409);
+
+    // Once the creator returns with a key, the same link works again.
+    attachApiKey(room, KEY);
+    attachRoom(room, undefined, {
+      runQuery: (() => ({
+        async *[Symbol.asyncIterator]() {
+          /* the stub agent never emits */
+        },
+        interrupt: async () => undefined,
+      })) as never,
+    });
+    const rejoined = await connect(`room=${room.id}&token=${room.token}&name=Ada`);
+    await settle();
+    expect(identityOf(rejoined).participantId).toMatch(/^p_/);
+    await closeAndSettle(rejoined);
   });
 
   it('never broadcasts a resume token to anyone else', async () => {
