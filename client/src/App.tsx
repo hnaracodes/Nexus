@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ConnectionStatus } from './components/ConnectionStatus.js';
 import { MessageList } from './components/MessageList.js';
 import { PromptInput } from './components/PromptInput.js';
+import { Roster } from './components/Roster.js';
 import { EMPTY_VIEW } from './store.js';
 import type { RoomView } from './store.js';
 import { connect } from './ws.js';
@@ -39,7 +40,16 @@ export default function App(): JSX.Element {
         <h1 className="text-lg font-semibold">Nexus</h1>
         <div className="flex items-center gap-2">
           {/* --- BEGIN phase-2b roster slot: replace this span with <Roster/>. --- */}
-          <span className="text-xs text-slate-500">{view.participants.length} here</span>
+          <Roster
+            participants={view.participants}
+            driverId={view.driverId}
+            selfId={view.selfId}
+            onRequestControl={() => connection?.send({ kind: 'request_control' })}
+            onReleaseControl={() => connection?.send({ kind: 'release_control' })}
+            onGrantControl={(toParticipantId) =>
+              connection?.send({ kind: 'grant_control', toParticipantId })
+            }
+          />
           {/* --- END phase-2b roster slot --- */}
           <ConnectionStatus status={status} />
         </div>
