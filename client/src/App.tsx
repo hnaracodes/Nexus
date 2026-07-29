@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { deriveApprovals } from './approvals.js';
+import { ApprovalPrompt } from './components/ApprovalPrompt.js';
 import { ConnectionStatus } from './components/ConnectionStatus.js';
 import { MessageList } from './components/MessageList.js';
 import { PromptInput } from './components/PromptInput.js';
@@ -22,6 +24,7 @@ export default function App(): JSX.Element {
   const [view, setView] = useState<RoomView>(EMPTY_VIEW);
   const [status, setStatus] = useState<Status>('connecting');
   const [connection, setConnection] = useState<Connection | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     if (params.roomId === '' || params.token === '') return undefined;
@@ -29,6 +32,11 @@ export default function App(): JSX.Element {
     setConnection(active);
     return () => active.close();
   }, [params]);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   if (params.roomId === '' || params.token === '') {
     return <main className="p-6 text-slate-900">Nexus</main>;
@@ -55,11 +63,22 @@ export default function App(): JSX.Element {
         </div>
       </header>
 
-      {/*
-        --- BEGIN phase-2d approval slot: render pending <ApprovalPrompt/> cards here. ---
-        Derive them from `view.events` (the raw log) via deriveApprovals.
-        --- END phase-2d approval slot ---
-      */}
+      {/* --- BEGIN phase-2d approval slot --- */}
+      {deriveApprovals(view.events).pending.map((approval) => (
+        <ApprovalPrompt
+          key={approval.requestId}
+          approval={approval}
+          now={now}
+          onDecide={(requestId, decision, reason) =>
+            connection?.send(
+              reason === undefined
+                ? { kind: 'permission_decision', requestId, decision }
+                : { kind: 'permission_decision', requestId, decision, reason },
+            )
+          }
+        />
+      ))}
+      {/* --- END phase-2d approval slot --- */}
 
       <div className="flex-1 overflow-y-auto">
         <MessageList messages={view.messages} pendingDeltas={view.pendingDeltas} />
