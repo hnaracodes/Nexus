@@ -5,14 +5,27 @@ import type { Room } from './rooms.js';
 import { AsyncQueue } from './queue.js';
 import { createPermissionGate } from './permissions.js';
 import type { PermissionGate } from './permissions.js';
+import { createTurnGate } from './turnGate.js';
+import type { Batch, PendingPrompt } from './turnGate.js';
 import { toUserMessage } from './errors.js';
 
 export type EmitFn = (event: UnsequencedEvent) => void;
 
+/** Who pressed Stop. Needed to attribute a discarded batch in the log. */
+export interface Interrupter {
+  participantId: string;
+  displayName: string;
+}
+
 export interface AgentHandle {
-  /** Enqueue a prompt. Already attributed by the caller. */
-  submit(text: string): void;
-  interrupt(): Promise<void>;
+  /**
+   * Enqueue a prompt. Attribution is applied by the turn gate at flush time,
+   * not by the caller — a prompt held behind a running turn is rendered
+   * alongside whatever else arrived with it, and the driver marker reflects
+   * who held the token then.
+   */
+  submit(prompt: PendingPrompt): void;
+  interrupt(by: Interrupter): Promise<void>;
   stop(): void;
   gate: PermissionGate;
 }
@@ -35,6 +48,32 @@ export interface AgentDeps {
 const DEFAULT_IDLE_TIMEOUT_MS = 150_000;
 
 /**
+ * The reconciliation rule (I2'). The server deliberately does not try to detect
+ * whether two prompts conflict — it cannot, without an LLM, and the agent is
+ * one. So it forwards both, marks who holds the driver token, and states the
+ * precedence rule here. Compatible instructions are then simply all carried
+ * out, with no conflict-detection code anywhere.
+ */
+const ROOM_SYSTEM_PROMPT = [
+  'You are working in a shared session. Several people are connected to the same',
+  'room and any of them may send you instructions.',
+  '',
+  'Prompts reach you tagged with their author, as `[Name]` or `[Name — driver]`.',
+  'Sometimes several arrive together under a line saying they arrived at the same',
+  'time; that means the people typed concurrently, not that they agreed in advance.',
+  '',
+  'Carry out every instruction that can be carried out together — that is the',
+  'normal case, and you should not treat concurrent prompts as a conflict merely',
+  'because they came from different people.',
+  '',
+  'When two instructions genuinely conflict — they cannot both be satisfied —',
+  'follow the one tagged `— driver`. Then say plainly which instruction you set',
+  'aside and why, so its author can re-send it or take the driver token. Never',
+  'silently drop one. If no prompt in the batch is tagged as driver, say that the',
+  'instructions conflict and ask the room to resolve it rather than picking one.',
+].join('\n');
+
+/**
  * The SDK's SDKUserMessage, derived from the installed signature rather than
  * restated — verified against @anthropic-ai/claude-agent-sdk 0.1.77, where
  * query() accepts `prompt: string | AsyncIterable<SDKUserMessage>`.
@@ -47,6 +86,7 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
   const idleTimeoutMs = deps.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
   const prompts = new AsyncQueue<PromptMessage>();
   const gate = createPermissionGate(room, emit);
+  const turns = createTurnGate();
 
   let watchdog: ReturnType<typeof setTimeout> | null = null;
 
@@ -70,11 +110,45 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
     }, idleTimeoutMs);
   }
 
+  /**
+   * The single path from the turn gate to the agent. Three call sites reach it
+   * — a prompt into an idle room, a batch released at a turn boundary, and
+   * nothing else — so the watchdog and the delivery event cannot drift apart.
+   *
+   * The watchdog is armed HERE, not in submit(). Arming it at submit would
+   * start the 150s dead-agent timer on a prompt that is merely queued behind a
+   * healthy long turn, and a slow-but-working agent would trip a spurious
+   * "No response from the agent" error.
+   */
+  function deliver(batch: Batch): void {
+    armWatchdog();
+    emit({
+      type: 'prompt_batch_delivered',
+      promptSeqs: batch.promptSeqs,
+      driverId: room.driverId,
+    });
+    prompts.push({
+      type: 'user',
+      message: { role: 'user', content: batch.text },
+      parent_tool_use_id: null,
+      session_id: room.id,
+    } as PromptMessage);
+  }
+
   // Exactly one query() call for this room, for the room's whole lifetime (I1).
   const session = runQuery({
     prompt: prompts,
     options: {
       cwd: room.cwd,
+      // A bare string, deliberately, and NOT { type: 'preset', preset:
+      // 'claude_code', append }. Verified in sdk.mjs:21316-21325: an omitted
+      // systemPrompt — which is what this room had until now — makes the SDK
+      // send `customSystemPrompt = ""`, i.e. the Claude Code preset is already
+      // replaced by nothing. Switching to the preset-plus-append form would
+      // restore that entire preset, a large behaviour change well outside this
+      // feature and one that would invalidate the verified acceptance run.
+      // A bare string writes to the same slot, which is currently empty.
+      systemPrompt: ROOM_SYSTEM_PROMPT,
       // The key is read here and nowhere else. It is never stored on anything
       // we serialize, never logged, never sent over the wire (I4).
       env: { ...process.env, ANTHROPIC_API_KEY: room.getApiKey() },
@@ -101,7 +175,13 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
       for await (const message of session) {
         const events = translate(message);
         for (const event of events) emit(event);
-        if (events.some((event) => event.type === 'agent_idle')) clearWatchdog();
+        if (events.some((event) => event.type === 'agent_idle')) {
+          clearWatchdog();
+          // The turn boundary. Anything typed while that turn ran goes now,
+          // as one batch, and re-arms the watchdog via deliver().
+          const next = turns.onIdle();
+          if (next !== null) deliver(next);
+        }
       }
     } catch (error) {
       clearWatchdog();
@@ -110,17 +190,29 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
   })();
 
   return {
-    submit(text: string): void {
-      armWatchdog();
-      prompts.push({
-        type: 'user',
-        message: { role: 'user', content: text },
-        parent_tool_use_id: null,
-        session_id: room.id,
-      } as PromptMessage);
+    submit(prompt: PendingPrompt): void {
+      const batch = turns.submit(prompt);
+      if (batch !== null) deliver(batch);
     },
-    async interrupt(): Promise<void> {
+    async interrupt(by: Interrupter): Promise<void> {
       clearWatchdog();
+      // Drain BEFORE awaiting: session.interrupt() makes the SDK emit `result`,
+      // which yields agent_idle, which would otherwise flush the very buffer we
+      // are trying to cancel. Confirmed from sdk.mjs:8341 — interrupt() is a
+      // side-channel control request and does not clear anything queued.
+      //
+      // Discarding rather than preserving is deliberate: Stop should mean stop.
+      // It is recoverable because the text is already in the log (I3), so the
+      // client can offer one-click resend.
+      const dropped = turns.discard();
+      if (dropped.length > 0) {
+        emit({
+          type: 'prompt_batch_discarded',
+          promptSeqs: dropped,
+          byParticipantId: by.participantId,
+          byDisplayName: by.displayName,
+        });
+      }
       await session.interrupt();
     },
     stop(): void {

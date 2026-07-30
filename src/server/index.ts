@@ -261,20 +261,25 @@ export function createServer(
           for (const event of claimIfVacant(room, participantId, displayName)) {
             runtime.commit(event);
           }
-          // I2: enforcement lives here, at the server. Not in the UI.
-          if (!isDriver(room, participantId)) {
-            const holder =
-              room.driverId === null ? null : room.participants.get(room.driverId)?.displayName;
-            ws.send(
-              JSON.stringify({
-                kind: 'error',
-                message: `You are not driving — ${holder ?? 'someone else'} holds control. Use Request Control.`,
-              }),
-            );
-            return;
-          }
-          runtime.commit({ type: 'user_prompt', participantId, displayName, text: frame.text });
-          runtime.agent.submit(`[${displayName}]: ${frame.text}`);
+          // I2': the floor is open. The token no longer decides who may speak —
+          // it decides whose instruction wins when two conflict, and that is
+          // arbitrated by the agent, not here. What is still enforced at the
+          // server is attribution: wasDriver is derived from room.driverId and
+          // never read off the client frame, so it cannot be forged.
+          const wasDriver = isDriver(room, participantId);
+          const logged = runtime.commit({
+            type: 'user_prompt',
+            participantId,
+            displayName,
+            text: frame.text,
+            wasDriver,
+          });
+          runtime.agent.submit({
+            seq: logged.seq,
+            displayName,
+            text: frame.text,
+            wasDriver,
+          });
           return;
         }
 
@@ -323,7 +328,9 @@ export function createServer(
           // Deliberately NOT gated on the driver token — this is the safety
           // valve. A runaway agent must not require finding the token holder.
           runtime.commit({ type: 'interrupted', participantId, displayName });
-          void runtime.agent.interrupt().catch(() => {
+          // phase-4 widened this signature: a discarded batch is logged with
+          // the identity of whoever stopped it.
+          void runtime.agent.interrupt({ participantId, displayName }).catch(() => {
             // Never interpolate the raw error: it can carry the API key, and
             // this text is committed to the durable log (I4). The SDK rejecting
             // here almost always just means the session already ended.
