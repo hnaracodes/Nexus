@@ -7,6 +7,12 @@ export interface Message {
   author: string | null;
   text: string;
   seq: number;
+  /**
+   * Set only on user prompts, and only when the log says so. Optional on the
+   * wire (logs predating phase 4 lack it), so `undefined` means "unknown" and
+   * must not be rendered as "was not driving".
+   */
+  wasDriver?: boolean;
 }
 
 export interface RoomView {
@@ -96,6 +102,9 @@ function applyEvent(view: RoomView, event: NexusEvent): RoomView {
         author: event.displayName,
         text: event.text,
         seq: event.seq,
+        // `=== true`, never a truthy check: the field is optional, and an
+        // absent one means unknown rather than false.
+        ...(event.wasDriver === true ? { wasDriver: true } : {}),
       });
 
     case 'assistant_message': {
@@ -192,6 +201,25 @@ function applyEvent(view: RoomView, event: NexusEvent): RoomView {
         kind: 'system',
         author: null,
         text: 'Agent idle',
+        seq: event.seq,
+      });
+
+    case 'prompt_batch_delivered':
+      // Deliberately produces no transcript line. Every turn emits one, and the
+      // prompts it names are already rendered as user messages — a row per
+      // batch would be noise. Its job is to retire prompts from the queued list
+      // in PendingPrompts, which reads `events` directly.
+      return next;
+
+    case 'prompt_batch_discarded':
+      return push(next, {
+        id: `e${event.seq}`,
+        kind: 'system',
+        author: null,
+        text:
+          `${event.byDisplayName} stopped the agent — ` +
+          `${event.promptSeqs.length} queued prompt${event.promptSeqs.length === 1 ? '' : 's'} ` +
+          'were not sent.',
         seq: event.seq,
       });
 

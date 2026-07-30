@@ -8,6 +8,7 @@ import { PromptInput } from './components/PromptInput.js';
 import { Roster } from './components/Roster.js';
 import { StopButton } from './components/StopButton.js';
 import { InterruptNotice } from './components/InterruptNotice.js';
+import { PendingPrompts } from './components/PendingPrompts.js';
 import { EMPTY_VIEW } from './store.js';
 import type { RoomView } from './store.js';
 import { connect } from './ws.js';
@@ -99,10 +100,18 @@ export default function App(): JSX.Element {
         <MessageList messages={view.messages} pendingDeltas={view.pendingDeltas} />
       </div>
 
+      {/* --- BEGIN phase-4 pending-prompts slot --- */}
+      <PendingPrompts
+        events={view.events}
+        onResend={(text) => connection?.send({ kind: 'prompt', text })}
+      />
+      {/* --- END phase-4 pending-prompts slot --- */}
+
       {/*
-        The disabled input is presentation only. The server rejects non-driver
-        input independently (Invariant I2, plan phase-2a) — never treat this as
-        the gate.
+        The input is gated on connection state only, never on the driver token —
+        that is the point of I2'. Anyone may speak; the server orders, attributes
+        and batches, and the agent resolves genuine conflicts in the driver's
+        favour. Adding a driver check here would undo the feature.
       */}
       {/* --- BEGIN phase-3b stop-button slot: wrap in a flex row, add <StopButton/> beside it. --- */}
       <InterruptNotice events={view.events} />
