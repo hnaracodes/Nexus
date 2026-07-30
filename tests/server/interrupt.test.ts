@@ -81,4 +81,39 @@ describe('global interrupt', () => {
     ada.socket.close();
     grace.socket.close();
   });
+
+  it('never leaks the raw rejection into the committed agent_error message', async () => {
+    const POISON = 'sk-ant-api03-LEAKED-key-should-never-reach-the-log';
+    const created = createRoom({
+      apiKey: 'sk-ant-api03-TESTONLY-not-a-real-key',
+      cwd: process.cwd(),
+      repoUrl: null,
+    });
+    attachRoom(created, undefined, {
+      runQuery: (() => ({
+        async *[Symbol.asyncIterator]() {
+          /* the stub agent never emits */
+        },
+        interrupt: async () => {
+          throw new Error(POISON);
+        },
+      })) as never,
+    });
+
+    const qs = `room=${created.id}&token=${created.token}`;
+    const ada = await connect(`${qs}&name=Ada`);
+    await settle();
+
+    ada.socket.send(JSON.stringify({ kind: 'interrupt' }));
+    await settle();
+
+    const errors = ada.frames.filter((f) => f.kind === 'event' && f.event.type === 'agent_error');
+    expect(errors).toHaveLength(1);
+    expect((errors[0] as { event: { message: string } }).event.message).toBe(
+      'Could not stop the agent — the session may have already ended.',
+    );
+    expect(ada.frames.some((f) => JSON.stringify(f).includes(POISON))).toBe(false);
+
+    ada.socket.close();
+  });
 });
