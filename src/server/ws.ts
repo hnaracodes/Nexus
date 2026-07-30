@@ -3,6 +3,7 @@ import type { WebSocket } from 'ws';
 import type { NexusEvent, UnsequencedEvent } from '../protocol/events.js';
 import type { ServerFrame } from '../protocol/wire.js';
 import { createSink } from '../log/index.js';
+import { redactEvent } from '../log/redact.js';
 import type { AgentDeps, AgentHandle } from './agent.js';
 import { startAgent } from './agent.js';
 import type { Room } from './rooms.js';
@@ -69,12 +70,23 @@ export function attachRoom(
       }
     },
     commit(event: UnsequencedEvent): NexusEvent {
-      const sealed = {
+      // Redact ONCE, here, and use that single object for all three
+      // destinations. Previously the sink redacted into a new object while the
+      // broadcast — and the return value — still carried the original, so a
+      // secret was scrubbed from disk and sent verbatim to every attached
+      // browser in the same call. Replay looked clean, which is exactly why no
+      // replay-based test ever caught it (I4).
+      //
+      // The sink redacts again. That is deliberate: redaction is idempotent
+      // (`[REDACTED]` contains no pattern, and slicing twice is a no-op), and
+      // keeping it there preserves the write-boundary guarantee for callers
+      // that reach the log directly, such as recovery.ts.
+      const sealed = redactEvent({
         ...event,
         seq: room.nextSeq(),
         ts: new Date().toISOString(),
         roomId: room.id,
-      } as NexusEvent;
+      } as NexusEvent);
       sink.append(sealed);
       runtime.broadcast({ kind: 'event', event: sealed });
       return sealed;
