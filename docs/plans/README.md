@@ -47,7 +47,31 @@ everything on `sonnet`** to conserve credits, including the rows that say
 | 5 | `phase-3c-room-creation-ux.md` | parallel | `sonnet` | `src/server/create.ts`, `client/src/pages/**`, `POST /api/rooms` + re-entry slot in `src/server/index.ts`, `phase-3c` region of `client/src/App.tsx`, `client/tests/smoke.test.tsx` |
 | 5 | `phase-3d-readme-errors.md` | parallel | `sonnet` | `README.md`, `src/server/errors.ts`, `client/src/components/ErrorBanner.tsx`, one line of `src/server/agent.ts`, `phase-3d` region of `client/src/App.tsx` |
 | 6 | `phase-4-open-floor-prompts.md` *(post-MVP, built early)* | **solo** | `opus` | Tasks 1–2 **solo, sequential**: `src/protocol/events.ts`, then `src/server/turnGate.ts`. Tasks 3–5: `src/server/agent.ts` + `prompt` branch of `src/server/index.ts`; `client/src/components/PendingPrompts.tsx` + `client/src/store.ts` + `phase-4` region of `client/src/App.tsx`; `BUILD_SPEC.md` + `CLAUDE.md` + this file |
+| 7 | `phase-5a-marketing-site.md` *(post-MVP)* | parallel | `sonnet` | `client/src/pages/**`, `client/src/router.tsx`, `client/src/design/**`, `client/index.html`, `client/tailwind.config.js`, `phase-5a` regions of `client/src/index.css` and `client/src/App.tsx`, static-route block of `src/server/index.ts`, `tests/server/static-routes.test.ts` |
+| 7 | `phase-5b-room-ui-redesign.md` *(post-MVP)* | parallel | `sonnet` | `client/src/components/**`, `client/src/hooks/**`, `client/src/{agentStatus,identity,rooms,store}.ts`, `phase-5b` regions of `client/src/App.tsx` and `client/src/index.css`, `client/package.json` (`lucide-react` only) |
 | — | **still owed: deploy, `POST /api/rooms` hardening, Day 5 demo, phase-4 browser pass** | | | |
+
+**Order 7 is a UI phase, not an MVP phase.** Both plans consume
+`design-system/nexus/MASTER.md`, which is the single source of colour, type,
+spacing, icon and motion tokens for both surfaces — read it before either
+dispatch. They are genuinely parallel: `phase-5a` owns `pages/`, `phase-5b` owns
+`components/`. The seam is `client/src/App.tsx` and `client/src/index.css`, which
+carry paired marker regions (`phase-5a routing` / `phase-5b layout`, `phase-5a
+tokens` / `phase-5b keyframes`) and a distinct import-anchor line per agent.
+**Put those markers in on `master` before dispatching**, per the fan-out
+technique in `CLAUDE.md` — Phase 3 merged three concurrent agents editing both
+of these files with zero conflicts by doing exactly this.
+
+One ordering constraint: `phase-5b` writes against the Tailwind semantic colour
+utilities that `phase-5a` Task 1 creates. Under parallel dispatch those will not
+exist on `phase-5b`'s branch. That is expected and the plan says so — the class
+names resolve at merge. Merge `phase-5a` first, then `phase-5b`, then run the
+client build before doing anything else.
+
+**Neither plan may be deployed publicly until `POST /api/rooms` is hardened**
+(newest `sessions/` `issues.md` §B). A landing page that invites strangers to
+click "Open a room" turns an unauthenticated outbound-request primitive from a
+latent issue into an exposed one.
 
 **Order 4 pre-work landed on `master` first** (commits `369f495`..`1fbd316`):
 stable participant identity with resume tokens, `restoreRoom`/`attachApiKey`/
