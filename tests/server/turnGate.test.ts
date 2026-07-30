@@ -73,6 +73,21 @@ describe('turn gate', () => {
     expect(gate.onIdle()).toBeNull();
   });
 
+  it('delivers a prompt typed after a quiet turn ended', () => {
+    // The ordinary case, and the one the assertion above misses: someone waits
+    // for the agent to finish, then types. Found by mutation testing — deleting
+    // `busy = false` from onIdle() left every earlier test green, because when
+    // the buffer is non-empty flush() sets busy itself. It only bites when the
+    // turn ends with nothing queued, and then it strands the room: the next
+    // prompt is buffered awaiting an agent_idle that cannot come, because
+    // nothing was sent.
+    gate.submit({ seq: 1, displayName: 'Ada', text: 'go', wasDriver: true });
+    expect(gate.onIdle()).toBeNull();
+
+    const batch = gate.submit({ seq: 2, displayName: 'Bob', text: 'now me', wasDriver: false });
+    expect(batch?.promptSeqs).toEqual([2]);
+  });
+
   it('discards buffered prompts and reports what it dropped', () => {
     gate.submit({ seq: 1, displayName: 'Ada', text: 'occupy', wasDriver: true });
     gate.submit({ seq: 2, displayName: 'Bob', text: 'queued', wasDriver: false });
