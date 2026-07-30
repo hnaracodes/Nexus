@@ -75,6 +75,20 @@ before believing a survivor. Deleting a line is safer than inserting one.
 
 ## Unresolved — carry forward
 
+**Update, later on 2026-07-30: A and B below are resolved, per the user
+directly.** A live two-browser pass against the deployed phase-4 build has
+been done by the user. `POST /api/rooms` hardening landed in commit `b102542`
+(host-block via `node:net.BlockList`, per-IP rate limit, room ceiling,
+body-size cap) and the app has been redeployed to `https://nexus-mvp.fly.dev/`
+on top of it. C and D (the two named test gaps) were also closed, by commits
+`ba150a1`, `a6b042f` and `6d3656e` — this ledger's "unchanged and untouched"
+line below predates those and was stale even before this note. None of this
+was re-run against the live URL by an agent in this session; it is recorded
+here on the user's word. See `CLAUDE.md`'s "Current repo state" for the
+canonical current wording, and rerun `acceptance.mjs` / `restart-recovery.mjs`
+yourself if you need first-hand evidence. Original text below is left as the
+historical record of what this session found.
+
 ### A. Phase 4 has never run against a real model
 
 The whole arbitration mechanism rests on `ROOM_SYSTEM_PROMPT` in

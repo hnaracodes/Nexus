@@ -7,6 +7,14 @@ plan is now built, and — apart from deployment — verified running. What
 remains is not another phase: it is a deploy, a hardening pass on one endpoint,
 and a demo.
 
+**Update, 2026-07-30 — the three items below are now closed.** The `POST
+/api/rooms` hardening landed (commit `b102542`); the deploy is live at
+`https://nexus-mvp.fly.dev/` and the Day 5 demo has been run, both reported
+directly by the user rather than re-verified against the deployed URL by an
+agent in this repo. The MVP figure below (~80%) is this session's own number
+as of 2026-07-28 and was not recomputed here — see the newest `sessions/`
+folder for the current standing figure. Left as originally written below.
+
 ## Percent complete — the arithmetic
 
 Same day-weighted method the previous three ledgers used, so the numbers stay

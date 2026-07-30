@@ -182,6 +182,16 @@ teardown.
 
 ## Unresolved — carry into the next session
 
+**Update, 2026-07-30: A, B, C and D below are resolved.** The SSRF/rate-limit/
+body-cap hardening in §B landed in commit `b102542`; §C and §D were closed by
+`ba150a1`, `a6b042f` and `6d3656e`. §A (deploy) and the Day 5 demo were done by
+the user directly and reported in-session — not re-verified here via the
+`acceptance.mjs`/`restart-recovery.mjs` harnesses, so treat that portion as the
+user's word, not rerun evidence, until an agent actually runs those scripts
+against `https://nexus-mvp.fly.dev/`. See `CLAUDE.md`'s "Current repo state"
+for the live wording. Original text below is left as the historical record of
+what this session actually found and did not touch.
+
 ### A. Nothing is deployed; the proxy hop is still untested
 
 Unchanged for four sessions and now three phases overdue. Every phase has added

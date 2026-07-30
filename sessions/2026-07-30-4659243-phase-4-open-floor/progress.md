@@ -1,5 +1,14 @@
 # Progress — 2026-07-30, phase 4 open-floor prompts
 
+**Update, later on 2026-07-30 — per the user directly: `POST /api/rooms`
+hardening is done (commit `b102542`), the app is deployed and live at
+`https://nexus-mvp.fly.dev/`, the Day 5 demo has been run, and phase 4 has had
+its live two-browser pass.** None of this was re-verified against the
+deployed URL by an agent in this session — it is recorded on the user's word,
+not rerun evidence. The 88% figure and the "0%"/"20%"/"not started" rows below
+are this session's own numbers as of when it was written and were not
+recomputed against the update above.
+
 ## MVP completion: ~88%
 
 Unchanged from the previous session's number in the areas that define the MVP,
