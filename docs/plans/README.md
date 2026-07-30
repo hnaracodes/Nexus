@@ -19,11 +19,13 @@ problem.
 
 ## Fan-out groups and models
 
-**Status: orders 1 through 5 are done, merged, and acceptance-tested.** Phases 0
-through 3 are on `master`. Remaining MVP work is a deploy, a hardening pass on
+**Status: orders 1 through 6 are done and merged.** Orders 1–5 are also
+acceptance-tested; **order 6 is suite-green but has had neither its browser pass
+nor a live acceptance run.** Remaining MVP work is a deploy, a hardening pass on
 `POST /api/rooms`, two named test gaps, and the Day 5 demo — see the newest
-`sessions/` folder, not this manifest. **Order 6 is a post-MVP feature request
-and is not scheduled** — do not dispatch it ahead of the MVP work above. The
+`sessions/` folder, not this manifest. Order 6 was a post-MVP feature request
+built early at the user's request, ahead of that MVP work rather than after it.
+The
 `Model` column below is superseded by `CLAUDE.md`'s policy — **dispatch
 everything on `sonnet`** to conserve credits, including the rows that say
 `opus`.
@@ -44,8 +46,8 @@ everything on `sonnet`** to conserve credits, including the rows that say
 | 5 | `phase-3b-interrupt.md` | parallel | `sonnet` | `client/src/components/{StopButton,InterruptNotice}.tsx`, `interrupt` branch in `src/server/index.ts`, `phase-3b` regions of `client/src/App.tsx` |
 | 5 | `phase-3c-room-creation-ux.md` | parallel | `sonnet` | `src/server/create.ts`, `client/src/pages/**`, `POST /api/rooms` + re-entry slot in `src/server/index.ts`, `phase-3c` region of `client/src/App.tsx`, `client/tests/smoke.test.tsx` |
 | 5 | `phase-3d-readme-errors.md` | parallel | `sonnet` | `README.md`, `src/server/errors.ts`, `client/src/components/ErrorBanner.tsx`, one line of `src/server/agent.ts`, `phase-3d` region of `client/src/App.tsx` |
-| — | **MVP: deploy, `POST /api/rooms` hardening, Day 5 demo** | | | |
-| 6 | `phase-4-open-floor-prompts.md` *(post-MVP, unscheduled)* | mixed | `sonnet` | Tasks 1–2 **solo, sequential**: `src/protocol/events.ts`, then `src/server/turnGate.ts`. Tasks 3–5 parallel: `src/server/agent.ts` + `prompt` branch of `src/server/index.ts`; `client/src/components/PendingPrompts.tsx` + `client/src/store.ts` + `phase-4` region of `client/src/App.tsx`; `BUILD_SPEC.md` + `CLAUDE.md` + this file |
+| 6 | `phase-4-open-floor-prompts.md` *(post-MVP, built early)* | **solo** | `opus` | Tasks 1–2 **solo, sequential**: `src/protocol/events.ts`, then `src/server/turnGate.ts`. Tasks 3–5: `src/server/agent.ts` + `prompt` branch of `src/server/index.ts`; `client/src/components/PendingPrompts.tsx` + `client/src/store.ts` + `phase-4` region of `client/src/App.tsx`; `BUILD_SPEC.md` + `CLAUDE.md` + this file |
+| — | **still owed: deploy, `POST /api/rooms` hardening, Day 5 demo, phase-4 browser pass** | | | |
 
 **Order 4 pre-work landed on `master` first** (commits `369f495`..`1fbd316`):
 stable participant identity with resume tokens, `restoreRoom`/`attachApiKey`/
@@ -56,7 +58,11 @@ order-5 group depends on. Every order-5 plan assumes these exist.
 There is no separate contracts step before Phase 2. `phase-0-spine` Task 2
 deliberately freezes the **whole** event union up front — including the driver,
 permission, and interrupt members — precisely so no later feature branch has to
-widen `src/protocol/events.ts` and collide with its siblings.
+widen `src/protocol/events.ts` and collide with its siblings. Order 6 is the one
+exception and honoured the rule the freeze exists to protect: it widened the
+union in a **solo commit of its own, landed before any other phase-4 work**.
+Note that widening it means two edits, not one — a new member must also join the
+runtime `LOGGED_TYPES` set, or `isLoggedEvent()` drops it silently on reload.
 
 **Verification must include a type check.** Vitest transforms with esbuild and
 never type-checks, so a task can show a fully green suite while the code does
@@ -120,10 +126,10 @@ These are correctness properties, not preferences. Each plan's Global
 Constraints section repeats the ones it can violate.
 
 - **I1** — one room owns exactly one live `query()` instance.
-- **I2** — exactly one driver; non-driver input rejected **at the server**.
-  *(Order 6 would replace this with **I2′** — every prompt admitted, ordered,
-  attributed and turn-batched by the server, with the driver taking precedence
-  only when instructions conflict. Still true as written until that lands.)*
+- **I2′** — every prompt admitted, ordered, attributed and turn-batched **at the
+  server**, with the driver taking precedence only when instructions conflict.
+  *(Order 6 replaced I2, "non-driver input rejected at the server". Plans 1–5
+  above were written against I2 and are left as the record of what they built.)*
 - **I3** — the event log is append-only and authoritative; never mutate a
   logged event.
 - **I4** — API keys never reach the client, never hit the log, never enter a

@@ -10,19 +10,20 @@ Strategic frame, from `BUILD_SPEC.md` §9: *collaboration is the mechanism, gove
 
 ## Current repo state — read this first
 
-**Phases 0 through 3 are built, merged, and committed.** 145 root tests + 69 client tests. Phase 3 was the last planned phase; what remains is a deploy, one hardening pass, and a demo — not another phase.
+**Phases 0 through 3 are built, merged, and committed, and phase 4 landed on top.** 182 root tests + 79 client tests. Phase 3 was the last *planned* phase; what remains for the MVP is a deploy, one hardening pass, and a demo — not another phase. Phase 4 was a post-MVP feature request built early at the user's request; it is code-complete and suite-green but **has not had its browser pass or live acceptance run** (see the plan's "Verification — beyond the suites").
 
 - **Phase 0** — frozen event protocol, room registry, async prompt queue feeding one `query()` per room, WebSocket broadcast with replay-then-live ordering.
 - **Phase 1a** — durable append-only JSONL log at `data/rooms/<roomId>.jsonl`, redaction at the write boundary. `attachRoom`'s default sink is now `createSink(room.id)`; `MemorySink` is exported but no longer the default.
 - **Phase 1b** — React client in `client/` (its own npm project): idempotent event reducer, WebSocket adapter with backoff reconnect and resume-from-seq, room UI shell.
 - **Phase 1c** — multi-stage `Dockerfile`, `fly.toml`, `scripts/smoke-ws.mjs`. **Image builds and runs; nothing is deployed** — the `fly` CLI is not installed here and no deploy has ever run.
 
-- **Phase 2a–2d** — driver token state machine (`src/server/driver.ts`) with 30s disconnect grace and the I2 guard in `src/server/index.ts`; log-derived presence (`src/server/presence.ts`); the `canUseTool` gate (`src/server/permissions.ts`) with first-response-wins and 120s timeout-denies; approval UI derived from the raw event log.
+- **Phase 2a–2d** — driver token state machine (`src/server/driver.ts`) with 30s disconnect grace and (until phase 4 replaced it with arbitration) the I2 admission guard in `src/server/index.ts`; log-derived presence (`src/server/presence.ts`); the `canUseTool` gate (`src/server/permissions.ts`) with first-response-wins and 120s timeout-denies; approval UI derived from the raw event log.
 - **Phase 3** — stable participant identity with resume tokens (`resolveParticipantId` in `src/server/ws.ts`); deterministic reconstruction (`src/log/replay.ts`); `?since=` resume; restart recovery via a key-free sidecar (`src/server/recovery.ts`, `restoreRoom` in `rooms.ts`); global interrupt; room-creation page with per-room repo cloning (`src/server/create.ts`); key re-entry; error translation (`src/server/errors.ts`) and a dismissible banner.
+- **Phase 4 (post-MVP, built early)** — open-floor prompts with driver arbitration. The admission check is gone; a pure turn gate (`src/server/turnGate.ts`) holds prompts arriving mid-turn and releases them as one attributed batch on `agent_idle`. The agent is told the precedence rule via a `systemPrompt`, so no code detects "conflict" — the LLM does. `PendingPrompts.tsx` shows the queue, derived from the log. Plan: `docs/plans/phase-4-open-floor-prompts.md`.
 
 **Everything below is verified running, not merely asserted.** 24/24 live acceptance against a real Anthropic key (core loop, I2 raw-frame bypass, identity reclaim, `since=` resume, and `canUseTool` suspending a live `query()` while a *non-driver* denies a `Bash` call and the agent adapts). 10/10 restart recovery against a genuinely killed process: the room comes back under its original link, refuses with `4409` until re-keyed, replays its full history, and **continues its sequence numbering** rather than restarting.
 
-**The client has now been opened in a real browser** — carried unresolved for three sessions. Two Chrome tabs, one room: both saw the same live reply from one agent, the roster showed both people, and a non-driver's prompt produced the error banner while her text reached the log nowhere. It found a real bug in thirty seconds (see the newest `sessions/` `issues.md` §4).
+**The client has now been opened in a real browser** — carried unresolved for three sessions. Two Chrome tabs, one room: both saw the same live reply from one agent, the roster showed both people, and a non-driver's prompt produced the error banner while her text reached the log nowhere. It found a real bug in thirty seconds (see the newest `sessions/` `issues.md` §4). *That last observation is now historical: phase 4 admits the non-driver's prompt deliberately.*
 
 Still missing: **an actual deploy**, hardening of `POST /api/rooms` (see `issues.md` §B — it is currently an unauthenticated outbound-request primitive), two named test gaps (§C, §D), and the Day 5 demo. Read the newest `sessions/` folder before starting.
 
@@ -44,7 +45,7 @@ Still missing: **an actual deploy**, hardening of `POST /api/rooms` (see `issues
 Everything else in the specs is a considered default you may override with reasoning. These four are correctness properties; violating one produces a system that silently corrupts itself. Full text at `BUILD_SPEC.md` §4.
 
 - **I1 — One room, one agent, one context window.** A room owns exactly one live `query()` instance. Joining never forks, copies, or re-instantiates the agent. Spawning a second instance to serve a second viewer is a different product.
-- **I2 — Exactly one driver, enforced server-side.** Non-driver input is rejected *at the server*. A disabled input box in the UI is decoration, not enforcement. Verify by sending a raw WebSocket message from the browser console, not by clicking a greyed-out button.
+- **I2′ — Every prompt is admitted, ordered, attributed and turn-batched by the server; when instructions conflict, the driver's take precedence.** The token is precedence, not admission. Enforcement still lives *at the server*: a client cannot forge attribution, cannot forge driver status, and cannot jump the batch. A disabled input box in the UI is decoration, not enforcement. Verify by sending a raw WebSocket message from the browser console — a forged `wasDriver: true` must come back logged as `false`. *(This replaced I2, "non-driver input is rejected at the server", in phase 4. What it defends against — unarbitrated interleaving, `clay`'s failure mode — is unchanged.)*
 - **I3 — The event log is append-only and authoritative.** Never mutate or delete a logged event. Every view of room state — live, rejoined, or replayed — must be reconstructible from the log alone. State that exists only in memory will be lost.
 - **I4 — API keys never reach the client, never hit the log, never enter a URL.** The creator's key lives server-side on the room object and is used only to construct the SDK client. Scrub it from every logging path and stack trace. Assume the event log will be shared.
 
@@ -89,8 +90,8 @@ Transcribed from the real root `package.json`. Re-read it rather than trusting t
 
 ```
 npm run dev          # server via tsx watch, port 8080 (PORT overrides — use 8099 locally)
-npm test             # vitest run — 145 tests today
-npm run test:client  # npm --prefix client test — 69 tests
+npm test             # vitest run — 182 tests today
+npm run test:client  # npm --prefix client test — 79 tests
 npm run test:all     # both suites
 npm run typecheck    # tsc over src + tests, noEmit
 npm run build        # tsc -p tsconfig.build.json → dist/, src only
@@ -174,7 +175,7 @@ From `BUILD_SPEC.md` §8. Both belong in the README *and* in the room-creation U
 
 ## Prior art
 
-- **`chadbyte/clay`** (MIT) — the only project that actually implements multi-human single-context sessions. Read `lib/sessions.js` (one `queryInstance`, N sockets, broadcast) and `lib/sdk-message-queue.js` — its **unlocked FIFO queue is precisely why Invariant I2 exists.** Reading material only; its `CONTRIBUTING.md` says feature PRs aren't accepted.
+- **`chadbyte/clay`** (MIT) — the only project that actually implements multi-human single-context sessions. Read `lib/sessions.js` (one `queryInstance`, N sockets, broadcast) and `lib/sdk-message-queue.js` — its **unlocked FIFO queue is precisely why Invariant I2′ exists.** Reading material only; its `CONTRIBUTING.md` says feature PRs aren't accepted.
 - **`coder/agentapi`** — HTTP + SSE wrapper over eleven agent CLIs. Not an MVP dependency, but read its event model before designing ours; it's the natural post-MVP path to agent-agnosticism.
 
 More in `BUILD_SPEC.md` §7 and `project_goal.md` §5.4.

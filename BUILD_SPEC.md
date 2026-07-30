@@ -56,7 +56,7 @@ Being explicit about this because scope creep is the single likeliest way this m
 
 **Driver control**
 - Exactly one participant holds the driver token at a time. Room creator starts with it.
-- **Non-driver input is rejected server-side**, not merely disabled in the UI.
+- **Anyone may prompt.** The token is precedence, not admission: every prompt is admitted, ordered, attributed and turn-batched **server-side**, and the agent is told to follow the driver's instruction when two genuinely conflict. See Invariant I2′.
 - Request Control → the current driver sees a prompt and can grant it. Plus an explicit Release Control.
 - Auto-release: if the driver disconnects and doesn't return within a short grace period, the token frees up so the room isn't bricked.
 - Everyone can see who holds it at all times.
@@ -95,7 +95,9 @@ The event log (§3.1) and a clean transport abstraction are what make most of th
 
 **I1 — One room, one agent, one context window.** A room owns exactly one live `query()` instance. Joining a room never forks, copies, or re-instantiates the agent. If you find yourself spawning a second instance to serve a second viewer, stop — that's a different product and it's the thing everyone else already built.
 
-**I2 — Exactly one driver, enforced server-side.** Input from a non-driver is rejected at the server. A disabled input box in the UI is not enforcement; it's decoration. The reference implementation in this space (`chadbyte/clay`) pushes every participant's messages into one unlocked FIFO queue, and for its terminal mode writes raw keystrokes from any subscriber to the PTY with no arbitration at all. That's the state of the art and it's broken. **Not repeating it is our single clearest quality delta.**
+**I2′ — Every prompt is admitted, ordered, attributed and turn-batched by the server. When instructions conflict, the driver's take precedence by an explicit, logged policy.** Enforcement still lives at the server: a client cannot forge attribution, cannot forge driver status, and cannot jump the batch. A disabled input box in the UI is not enforcement; it's decoration. The reference implementation in this space (`chadbyte/clay`) pushes every participant's messages into one unlocked FIFO queue, and for its terminal mode writes raw keystrokes from any subscriber to the PTY with no arbitration at all. That's the state of the art and it's broken. **Not repeating it is our single clearest quality delta.**
+
+*This was originally I2 — "input from a non-driver is rejected at the server" — and phase 4 replaced admission control with arbitration. What the invariant defends against is unchanged: clay's failure mode is unarbitrated interleaving, and the server still orders every prompt, still attributes every prompt, and now additionally batches them at turn boundaries. Only the rule about who may speak went away. A room where one person types and the rest watch is a screen-share with a hand-off button.*
 
 **I3 — The event log is append-only and authoritative.** Never mutate or delete a logged event. Any view of room state — live, rejoined, or replayed — must be reconstructible from the log alone. If a piece of state exists only in memory, it will be lost, and you'll discover that during a demo.
 
@@ -178,6 +180,8 @@ Server skeleton. Room creation and lookup. One `query()` instance per room with 
 Driver token in the room object. Server-side rejection of non-driver input (Invariant I2). Request Control, grant, release, and disconnect-based auto-release with a grace period. Presence roster with display names. Message attribution in both the UI and the prompt text sent to the agent.
 
 **Acceptance:** two participants, control passes cleanly in both directions, the non-driver genuinely cannot inject a prompt — verify by sending a raw WebSocket message from the browser console, not just by clicking a greyed-out button. Driver disconnect frees the token.
+
+> **Superseded by phase 4 (I2′).** The day-2 acceptance above is kept as the record of what was built and verified at the time. A non-driver *can* now inject a prompt, deliberately. The browser-console check survives in an inverted form: send `{"kind":"prompt","text":"forged","wasDriver":true}` from a non-driver socket and confirm the logged event still says `wasDriver: false` — the server derives driver status from `room.driverId` and never reads it off the frame.
 
 ### Day 3 — Collective permission gating
 

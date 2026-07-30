@@ -2,9 +2,29 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status: FEATURE REQUEST — not scheduled.** This is post-MVP. The MVP still owes a
-deploy, the `POST /api/rooms` hardening pass, and the Day 5 demo. Do not dispatch this
-ahead of those.
+**Status: BUILT — 2026-07-30, solo, not dispatched.** All five tasks are implemented and
+merged on `master`. 182 root tests + 79 client tests green; `npm run typecheck` and
+`npm --prefix client run build` both exit 0. **The verification below the suites has NOT
+been done** — no three-profile browser pass, no live acceptance run against a real key,
+so the one behaviour no test can assert (does the agent actually follow the driver and
+say what it set aside?) remains unobserved.
+
+Three corrections found while building, recorded because the plan text above them is
+now wrong in three places:
+
+1. **`systemPrompt` must be a bare string, not the preset-plus-append object.** Task 3
+   Step 6 guessed the opposite. `sdk.mjs:21316-21325`: an omitted `systemPrompt` — what
+   this room had — sends `customSystemPrompt = ""`, so the `claude_code` preset is
+   *already* replaced by nothing. Using the preset form would restore that whole preset:
+   a large out-of-scope behaviour change.
+2. **Widening `events.ts` is two edits, not one.** Task 1 missed the runtime
+   `LOGGED_TYPES` set that `isLoggedEvent()` gates on. A type in the union but not in
+   that set is written to the JSONL and silently dropped when the log is read back.
+3. **`tests/server/agent.test.ts` also calls `submit()`/`interrupt()`** and needed
+   updating. Task 3's file list named only `driver-enforcement.test.ts`.
+
+The MVP still owes a deploy, the `POST /api/rooms` hardening pass, and the Day 5 demo.
+This landed ahead of them at the user's request, not because the sequencing changed.
 
 **Goal:** Everyone in a room can type to the agent. The driver token stops being a gate
 on *who may speak* and becomes a *precedence marker* the agent honours when two
