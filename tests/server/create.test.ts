@@ -4,12 +4,26 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
+import type { AgentDeps } from '../../src/server/agent.js';
 import { prepareWorkspace, validateApiKeyShape, validateRepoUrl } from '../../src/server/create.js';
 import { createServer } from '../../src/server/index.js';
+import { readRoomMetas } from '../../src/server/recovery.js';
 import { attachApiKey, hasApiKey, mintRoomId, restoreRoom } from '../../src/server/rooms.js';
 import { attachRoom } from '../../src/server/ws.js';
 
 const KEY = 'sk-ant-api03-TESTONLY-not-a-real-key';
+
+/** Never touches the real SDK — same shape as tests/server/interrupt.test.ts. */
+function stubAgentDeps(): AgentDeps {
+  return {
+    runQuery: (() => ({
+      async *[Symbol.asyncIterator]() {
+        /* the stub agent never emits */
+      },
+      interrupt: async () => undefined,
+    })) as never,
+  };
+}
 
 describe('validateApiKeyShape', () => {
   it('accepts a console key and carries it forward', () => {
@@ -57,6 +71,52 @@ describe('prepareWorkspace', () => {
   it('rejects a room id that would escape the base directory', async () => {
     const base = mkdtempSync(join(tmpdir(), 'nexus-work-'));
     await expect(prepareWorkspace('../../etc', null, base)).rejects.toThrow(/unsafe room id/i);
+  });
+});
+
+describe('POST /api/rooms (success path)', () => {
+  let port = 0;
+  let started: ReturnType<typeof createServer>;
+
+  beforeAll(async () => {
+    started = createServer({ agentDeps: stubAgentDeps() });
+    await new Promise<void>((resolve) => {
+      started.server.listen(0, '127.0.0.1', () => {
+        port = (started.server.address() as AddressInfo).port;
+        resolve();
+      });
+    });
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((resolve) => started.server.close(() => resolve()));
+  });
+
+  it('persists recovery metadata and attaches a live runtime, not just a 200', async () => {
+    const response = await fetch(`http://127.0.0.1:${port}/api/rooms`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ apiKey: KEY }),
+    });
+    expect(response.status).toBe(200);
+    const { roomId, token } = (await response.json()) as { roomId: string; token: string };
+
+    // Catches a deleted writeRoomMeta call: without it, restart recovery has
+    // nothing to read and this room is gone forever the moment the process dies.
+    const meta = readRoomMetas().find((m) => m.roomId === roomId);
+    expect(meta).toBeDefined();
+    expect(meta?.token).toBe(token);
+
+    // Catches a deleted (or no-op) attachRoom call: without a live runtime,
+    // the WS upgrade for this room has nothing to attach to and would refuse
+    // or hang instead of opening.
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws?room=${roomId}&token=${token}&name=Ada`);
+    const opened = await new Promise<boolean>((resolve) => {
+      ws.on('open', () => resolve(true));
+      ws.on('close', () => resolve(false));
+    });
+    expect(opened).toBe(true);
+    ws.close();
   });
 });
 

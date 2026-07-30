@@ -21,6 +21,7 @@ import {
   mintRoomId,
   roomCount,
 } from './rooms.js';
+import type { AgentDeps } from './agent.js';
 import { attachRoom, getRuntime, resolveParticipantId } from './ws.js';
 import {
   cancelAutoRelease,
@@ -64,7 +65,9 @@ function clientIp(c: Context): string {
   return getConnInfo(c).remote.address ?? 'unknown';
 }
 
-export function createServer(): { app: Hono; server: Server } {
+export function createServer(
+  opts: { agentDeps?: AgentDeps } = {},
+): { app: Hono; server: Server } {
   const app = new Hono();
 
   app.get('/healthz', (c) => c.json({ ok: true }));
@@ -120,7 +123,7 @@ export function createServer(): { app: Hono; server: Server } {
         repoUrl: room.repoUrl,
         createdAt: room.createdAt,
       });
-      attachRoom(room);
+      attachRoom(room, undefined, opts.agentDeps);
       return c.json({ roomId: room.id, token: room.token });
     },
   );
