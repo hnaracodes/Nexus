@@ -40,6 +40,14 @@ export interface UserPrompt extends EventEnvelope {
   displayName: string;
   /** The raw text the human typed, without the attribution prefix. */
   text: string;
+  /**
+   * Whether the sender held the driver token at submit time. OPTIONAL is
+   * load-bearing: JSONL logs already on disk predate this field, and
+   * src/log/replay.ts must keep reconstructing them. Absent means "unknown",
+   * NOT false. Derived server-side from room.driverId — never read off the
+   * client frame, which a participant could forge (I2').
+   */
+  wasDriver?: boolean;
 }
 
 /** A completed assistant message. Deltas are never logged — see wire.ts. */
@@ -130,6 +138,26 @@ export interface Interrupted extends EventEnvelope {
   displayName: string;
 }
 
+/**
+ * One turn's worth of prompts handed to the agent together. `promptSeqs` names
+ * the `user_prompt` events in this batch, so "what is still queued" is derivable
+ * from the log alone (I3) without a second source of truth.
+ */
+export interface PromptBatchDelivered extends EventEnvelope {
+  type: 'prompt_batch_delivered';
+  promptSeqs: number[];
+  /** Who held the token at flush time — may differ from submit time. */
+  driverId: string | null;
+}
+
+/** Prompts dropped because someone interrupted before they were delivered. */
+export interface PromptBatchDiscarded extends EventEnvelope {
+  type: 'prompt_batch_discarded';
+  promptSeqs: number[];
+  byParticipantId: string;
+  byDisplayName: string;
+}
+
 export type NexusEvent =
   | RoomCreated
   | ParticipantJoined
@@ -145,7 +173,9 @@ export type NexusEvent =
   | DriverRequested
   | PermissionRequested
   | PermissionDecided
-  | Interrupted;
+  | Interrupted
+  | PromptBatchDelivered
+  | PromptBatchDiscarded;
 
 export type NexusEventType = NexusEvent['type'];
 
@@ -170,6 +200,12 @@ const LOGGED_TYPES = new Set<string>([
   'permission_requested',
   'permission_decided',
   'interrupted',
+  // Adding a union member is not enough: isLoggedEvent() gates what survives a
+  // reload, so a type missing from this set is written to the JSONL and then
+  // silently dropped when the log is read back — the batch history would exist
+  // on disk but vanish on restart.
+  'prompt_batch_delivered',
+  'prompt_batch_discarded',
 ]);
 
 export function isLoggedEvent(value: unknown): value is NexusEvent {
