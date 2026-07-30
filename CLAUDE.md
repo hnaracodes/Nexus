@@ -10,7 +10,7 @@ Strategic frame, from `BUILD_SPEC.md` §9: *collaboration is the mechanism, gove
 
 ## Current repo state — read this first
 
-**Phases 0 through 3 are built, merged, and committed, and phase 4 landed on top.** 182 root tests + 79 client tests. Phase 3 was the last *planned* phase; what remains for the MVP is a deploy, one hardening pass, and a demo — not another phase. Phase 4 was a post-MVP feature request built early at the user's request; it is code-complete and suite-green but **has not had its browser pass or live acceptance run** (see the plan's "Verification — beyond the suites").
+**Phases 0 through 3 are built, merged, and committed, and phase 4 landed on top.** 183 root tests + 79 client tests. Phase 3 was the last *planned* phase; what remains for the MVP is a deploy, one hardening pass, and a demo — not another phase. Phase 4 was a post-MVP feature request built early at the user's request; it is code-complete and suite-green but **has not had its browser pass or live acceptance run** (see the plan's "Verification — beyond the suites").
 
 - **Phase 0** — frozen event protocol, room registry, async prompt queue feeding one `query()` per room, WebSocket broadcast with replay-then-live ordering.
 - **Phase 1a** — durable append-only JSONL log at `data/rooms/<roomId>.jsonl`, redaction at the write boundary. `attachRoom`'s default sink is now `createSink(room.id)`; `MemorySink` is exported but no longer the default.
@@ -90,7 +90,7 @@ Transcribed from the real root `package.json`. Re-read it rather than trusting t
 
 ```
 npm run dev          # server via tsx watch, port 8080 (PORT overrides — use 8099 locally)
-npm test             # vitest run — 182 tests today
+npm test             # vitest run — 183 tests today
 npm run test:client  # npm --prefix client test — 79 tests
 npm run test:all     # both suites
 npm run typecheck    # tsc over src + tests, noEmit
