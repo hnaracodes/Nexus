@@ -9,7 +9,7 @@ import { prepareWorkspace, validateApiKeyShape, validateRepoUrl } from '../../sr
 import { createServer } from '../../src/server/index.js';
 import { readRoomMetas } from '../../src/server/recovery.js';
 import { attachApiKey, hasApiKey, mintRoomId, restoreRoom } from '../../src/server/rooms.js';
-import { attachRoom } from '../../src/server/ws.js';
+import { attachRoom, getRuntime } from '../../src/server/ws.js';
 
 const KEY = 'sk-ant-api03-TESTONLY-not-a-real-key';
 
@@ -107,9 +107,12 @@ describe('POST /api/rooms (success path)', () => {
     expect(meta).toBeDefined();
     expect(meta?.token).toBe(token);
 
-    // Catches a deleted (or no-op) attachRoom call: without a live runtime,
-    // the WS upgrade for this room has nothing to attach to and would refuse
-    // or hang instead of opening.
+    // Catches a deleted (or no-op) attachRoom call in the handler itself.
+    // Checked before ever opening a socket: the WS upgrade path has its own
+    // `getRuntime(id) ?? attachRoom(room)` fallback, which would silently
+    // start a REAL (non-stub) agent and mask a missing attachRoom here.
+    expect(getRuntime(roomId)).toBeDefined();
+
     const ws = new WebSocket(`ws://127.0.0.1:${port}/ws?room=${roomId}&token=${token}&name=Ada`);
     const opened = await new Promise<boolean>((resolve) => {
       ws.on('open', () => resolve(true));
