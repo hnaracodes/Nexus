@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import type { NexusEvent } from '../protocol/events.js';
+import type { GithubRepoRef, NexusEvent } from '../protocol/events.js';
 import { openLog } from '../log/event-log.js';
 import { reconstruct } from '../log/replay.js';
 import { restoreRoom } from './rooms.js';
@@ -18,6 +18,14 @@ export interface RoomMeta {
   cwd: string;
   repoUrl: string | null;
   createdAt: string;
+  /**
+   * The GitHub binding, when there is one (plan phase-6). Persisting this is
+   * what makes "authorize once, ever" true across restarts — and it is safe
+   * precisely because it is NOT a credential: an installation id is a public
+   * identifier, and every token is re-minted from the App private key on
+   * demand. Contrast `apiKey`, which is deliberately absent above.
+   */
+  github?: GithubRepoRef | null;
 }
 
 function metaPath(roomId: string, dataDir: string): string {
@@ -26,13 +34,18 @@ function metaPath(roomId: string, dataDir: string): string {
 
 export function writeRoomMeta(meta: RoomMeta, dataDir: string = DEFAULT_DATA_DIR): void {
   mkdirSync(join(resolve(dataDir), 'rooms'), { recursive: true });
-  // Explicit field list — never spread a Room into this file.
+  // Explicit field list — never spread a Room into this file. The cost of that
+  // discipline is that adding a field to RoomMeta above does NOT add it here:
+  // it compiles, typechecks, passes tests, and silently writes nothing. Any
+  // new field must be added in both places, and proved with a write→read round
+  // trip rather than an assertion about the type.
   const safe: RoomMeta = {
     roomId: meta.roomId,
     token: meta.token,
     cwd: meta.cwd,
     repoUrl: meta.repoUrl,
     createdAt: meta.createdAt,
+    github: meta.github ?? null,
   };
   writeFileSync(metaPath(meta.roomId, dataDir), JSON.stringify(safe), 'utf8');
 }
@@ -107,6 +120,9 @@ export function recoverRooms(
         repoUrl: meta.repoUrl,
         createdAt: meta.createdAt,
         lastSeq,
+        // Carried back so a recovered room can still clone and publish
+        // without asking the human to reconnect GitHub.
+        github: meta.github ?? null,
       });
       recovered.push({ roomId: meta.roomId, lastSeq, needsApiKey: true });
     } catch (error) {

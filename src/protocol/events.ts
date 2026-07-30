@@ -15,11 +15,35 @@ export interface EventEnvelope {
   roomId: string;
 }
 
+/**
+ * A room's GitHub binding (plan phase-6). Defined HERE, in the protocol, and
+ * imported by `src/server/github.ts` — not the other way round. The client
+ * renders this, so the shape has to live at the layer both sides already
+ * import, or it would be duplicated and drift.
+ *
+ * Non-secret by construction: an installation id is a public identifier, and
+ * every token minted from it is short-lived and derived server-side. This is
+ * exactly why one authorize click can survive a restart.
+ */
+export interface GithubRepoRef {
+  installationId: number;
+  owner: string;
+  repo: string;
+  defaultBranch: string;
+}
+
 export interface RoomCreated extends EventEnvelope {
   type: 'room_created';
   /** Never the API key. Never the room token. */
   cwd: string;
   repoUrl: string | null;
+  /**
+   * Set when the room was created through the GitHub App connect flow.
+   * OPTIONAL is load-bearing, the same way `UserPrompt.wasDriver` is: JSONL
+   * logs already on disk predate this field and `src/log/replay.ts` must keep
+   * reconstructing them. Absent means "not GitHub-backed".
+   */
+  github?: GithubRepoRef | null;
 }
 
 export interface ParticipantJoined extends EventEnvelope {
@@ -158,6 +182,22 @@ export interface PromptBatchDiscarded extends EventEnvelope {
   byDisplayName: string;
 }
 
+/**
+ * The room's work reached GitHub as a pull request (plan phase-6). Carries no
+ * credential: every field here is public once the PR exists. Logged so "what
+ * did this room actually ship" is answerable from the log alone (I3).
+ */
+export interface GithubPublished extends EventEnvelope {
+  type: 'github_published';
+  prUrl: string;
+  prNumber: number;
+  branch: string;
+  commitSha: string;
+  filesChanged: number;
+  /** False when an existing PR for this room's branch was updated instead. */
+  created: boolean;
+}
+
 export type NexusEvent =
   | RoomCreated
   | ParticipantJoined
@@ -175,7 +215,8 @@ export type NexusEvent =
   | PermissionDecided
   | Interrupted
   | PromptBatchDelivered
-  | PromptBatchDiscarded;
+  | PromptBatchDiscarded
+  | GithubPublished;
 
 export type NexusEventType = NexusEvent['type'];
 
@@ -206,6 +247,7 @@ const LOGGED_TYPES = new Set<string>([
   // on disk but vanish on restart.
   'prompt_batch_delivered',
   'prompt_batch_discarded',
+  'github_published',
 ]);
 
 export function isLoggedEvent(value: unknown): value is NexusEvent {

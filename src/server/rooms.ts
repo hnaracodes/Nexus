@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import type { GithubRepoRef } from '../protocol/events.js';
 
 export interface Participant {
   id: string;
@@ -18,6 +19,8 @@ export interface CreateRoomOptions {
    * moment the room is attached — could only ever be the server's own checkout.
    */
   id?: string;
+  /** Set when the room was created through the GitHub App flow (phase-6). */
+  github?: GithubRepoRef | null;
 }
 
 /** What a room needs to come back after a restart. Deliberately no `apiKey`. */
@@ -30,6 +33,13 @@ export interface RestoreRoomOptions {
   /** Continue the log's numbering. Restarting at 0 would re-issue sequence
    *  numbers that already exist on disk, which breaks I3. */
   lastSeq: number;
+  /**
+   * Unlike the API key, this SURVIVES a restart — and must, or the human
+   * would have to re-authorize GitHub every time the process bounced. It is
+   * safe to persist precisely because it holds no credential: every token is
+   * minted fresh from the App private key at the moment it is needed.
+   */
+  github?: GithubRepoRef | null;
 }
 
 export interface Room {
@@ -37,6 +47,14 @@ export interface Room {
   readonly token: string;
   readonly cwd: string;
   readonly repoUrl: string | null;
+  /**
+   * Fixed at creation, like `cwd`. Attaching a repository afterwards would
+   * mean either mutating a readonly field the agent has already read (I1) or
+   * committing a second, contradictory `room_created` — which reconstruct()'s
+   * first-match `events.find()` would keep believing the stale version of (I3).
+   * So a room's GitHub binding is decided once and never changes.
+   */
+  readonly github: GithubRepoRef | null;
   readonly createdAt: string;
   readonly participants: Map<string, Participant>;
   readonly sockets: Set<unknown>;
@@ -66,6 +84,7 @@ interface RoomSeed {
   repoUrl: string | null;
   createdAt: string;
   lastSeq: number;
+  github: GithubRepoRef | null;
 }
 
 /** One shape for both a fresh and a recovered room, so the two cannot drift. */
@@ -76,6 +95,7 @@ function buildRoom(seed: RoomSeed): Room {
     token: seed.token,
     cwd: seed.cwd,
     repoUrl: seed.repoUrl,
+    github: seed.github,
     createdAt: seed.createdAt,
     participants: new Map(),
     sockets: new Set(),
@@ -95,6 +115,9 @@ function buildRoom(seed: RoomSeed): Room {
       id: room.id,
       cwd: room.cwd,
       repoUrl: room.repoUrl,
+      // Safe to expose: holds no credential, and the client shows which repo
+      // the room is bound to.
+      github: room.github,
       createdAt: room.createdAt,
       participantCount: room.participants.size,
       driverId: room.driverId,
@@ -111,6 +134,7 @@ export function createRoom(opts: CreateRoomOptions): Room {
     repoUrl: opts.repoUrl,
     createdAt: new Date().toISOString(),
     lastSeq: 0,
+    github: opts.github ?? null,
   });
   apiKeys.set(room, opts.apiKey);
   rooms.set(room.id, room);
@@ -134,6 +158,7 @@ export function restoreRoom(opts: RestoreRoomOptions): Room {
     repoUrl: opts.repoUrl,
     createdAt: opts.createdAt,
     lastSeq: opts.lastSeq,
+    github: opts.github ?? null,
   });
   rooms.set(room.id, room);
   return room;

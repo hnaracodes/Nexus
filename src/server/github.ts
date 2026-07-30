@@ -18,6 +18,7 @@
  */
 
 import { createHash, createSign, randomBytes, randomUUID } from 'node:crypto';
+import type { GithubRepoRef } from '../protocol/events.js';
 
 const GITHUB_API = 'https://api.github.com';
 const GITHUB_WEB = 'https://github.com';
@@ -33,14 +34,14 @@ export interface GithubDeps {
   fetch?: typeof fetch;
 }
 
-/** A resolved, verified repository binding. None of this is secret — all four
- *  fields are safe to persist in the room's meta sidecar and to show a client. */
-export interface GithubBinding {
-  installationId: number;
-  owner: string;
-  repo: string;
-  defaultBranch: string;
-}
+/**
+ * A resolved, verified repository binding. None of this is secret — all four
+ * fields are safe to persist in the room's meta sidecar and to show a client.
+ *
+ * Aliased from the protocol rather than redeclared: the client renders this
+ * shape too, and a duplicated protocol drifts.
+ */
+export type GithubBinding = GithubRepoRef;
 
 export interface VerifiedRepo {
   owner: string;
