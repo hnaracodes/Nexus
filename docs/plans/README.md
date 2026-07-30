@@ -19,12 +19,14 @@ problem.
 
 ## Fan-out groups and models
 
-**Status: every order here is done, merged, and acceptance-tested.** Phases 0
-through 3 are on `master`; there is no order 6. Remaining work is a deploy, a
-hardening pass on `POST /api/rooms`, two named test gaps, and the Day 5 demo —
-see the newest `sessions/` folder, not this manifest. The `Model` column below
-is superseded by `CLAUDE.md`'s policy — **dispatch everything on `sonnet`** to
-conserve credits, including the rows that say `opus`.
+**Status: orders 1 through 5 are done, merged, and acceptance-tested.** Phases 0
+through 3 are on `master`. Remaining MVP work is a deploy, a hardening pass on
+`POST /api/rooms`, two named test gaps, and the Day 5 demo — see the newest
+`sessions/` folder, not this manifest. **Order 6 is a post-MVP feature request
+and is not scheduled** — do not dispatch it ahead of the MVP work above. The
+`Model` column below is superseded by `CLAUDE.md`'s policy — **dispatch
+everything on `sonnet`** to conserve credits, including the rows that say
+`opus`.
 
 | Order | Plan | Mode | Model | Owns |
 |---|---|---|---|---|
@@ -42,6 +44,8 @@ conserve credits, including the rows that say `opus`.
 | 5 | `phase-3b-interrupt.md` | parallel | `sonnet` | `client/src/components/{StopButton,InterruptNotice}.tsx`, `interrupt` branch in `src/server/index.ts`, `phase-3b` regions of `client/src/App.tsx` |
 | 5 | `phase-3c-room-creation-ux.md` | parallel | `sonnet` | `src/server/create.ts`, `client/src/pages/**`, `POST /api/rooms` + re-entry slot in `src/server/index.ts`, `phase-3c` region of `client/src/App.tsx`, `client/tests/smoke.test.tsx` |
 | 5 | `phase-3d-readme-errors.md` | parallel | `sonnet` | `README.md`, `src/server/errors.ts`, `client/src/components/ErrorBanner.tsx`, one line of `src/server/agent.ts`, `phase-3d` region of `client/src/App.tsx` |
+| — | **MVP: deploy, `POST /api/rooms` hardening, Day 5 demo** | | | |
+| 6 | `phase-4-open-floor-prompts.md` *(post-MVP, unscheduled)* | mixed | `sonnet` | Tasks 1–2 **solo, sequential**: `src/protocol/events.ts`, then `src/server/turnGate.ts`. Tasks 3–5 parallel: `src/server/agent.ts` + `prompt` branch of `src/server/index.ts`; `client/src/components/PendingPrompts.tsx` + `client/src/store.ts` + `phase-4` region of `client/src/App.tsx`; `BUILD_SPEC.md` + `CLAUDE.md` + this file |
 
 **Order 4 pre-work landed on `master` first** (commits `369f495`..`1fbd316`):
 stable participant identity with resume tokens, `restoreRoom`/`attachApiKey`/
@@ -117,6 +121,9 @@ Constraints section repeats the ones it can violate.
 
 - **I1** — one room owns exactly one live `query()` instance.
 - **I2** — exactly one driver; non-driver input rejected **at the server**.
+  *(Order 6 would replace this with **I2′** — every prompt admitted, ordered,
+  attributed and turn-batched by the server, with the driver taking precedence
+  only when instructions conflict. Still true as written until that lands.)*
 - **I3** — the event log is append-only and authoritative; never mutate a
   logged event.
 - **I4** — API keys never reach the client, never hit the log, never enter a
