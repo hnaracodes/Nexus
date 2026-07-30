@@ -1,14 +1,26 @@
 import type { Server } from 'node:http';
 import { createAdaptorServer } from '@hono/node-server';
+import { getConnInfo } from '@hono/node-server/conninfo';
 import { serveStatic } from '@hono/node-server/serve-static';
+import type { Context } from 'hono';
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { WebSocketServer } from 'ws';
 import { PROTOCOL_VERSION } from '../protocol/events.js';
 import { parseClientFrame } from '../protocol/wire.js';
 import { presenceFrame } from './presence.js';
 import { recoverRooms, writeRoomMeta } from './recovery.js';
 import { prepareWorkspace, validateApiKeyShape, validateRepoUrl } from './create.js';
-import { attachApiKey, authorize, createRoom, getRoom, hasApiKey, mintRoomId } from './rooms.js';
+import { consumeRateLimit } from './rate-limit.js';
+import {
+  attachApiKey,
+  authorize,
+  createRoom,
+  getRoom,
+  hasApiKey,
+  mintRoomId,
+  roomCount,
+} from './rooms.js';
 import { attachRoom, getRuntime, resolveParticipantId } from './ws.js';
 import {
   cancelAutoRelease,
@@ -20,47 +32,98 @@ import {
   scheduleAutoRelease,
 } from './driver.js';
 
+// {apiKey, repoUrl} never needs more than a few hundred bytes. This is not
+// about legitimate payloads — it stops an anonymous caller from streaming an
+// arbitrarily large body at the endpoint before validation ever runs. Fixed,
+// not env-tunable: there is no legitimate reason to raise it.
+const CREATE_ROOM_MAX_BODY_BYTES = 16 * 1024;
+
+// Read at call time, not frozen into a module-level const at import time —
+// the driver grace window mutant (see the Phase 3 session's audit) is the
+// reason: a test that sets the env var after this module has already loaded
+// must still see the new value, or the "right assertion at the wrong moment"
+// failure mode repeats itself here.
+function createRoomRateLimit(): number {
+  return Number(process.env['NEXUS_ROOM_RATE_LIMIT'] ?? 5);
+}
+function createRoomRateWindowMs(): number {
+  return Number(process.env['NEXUS_ROOM_RATE_WINDOW_MS'] ?? 10 * 60 * 1000);
+}
+function maxRooms(): number {
+  return Number(process.env['NEXUS_MAX_ROOMS'] ?? 200);
+}
+
+/** Fly sets Fly-Client-IP on proxied requests; X-Forwarded-For is the more
+ *  general fallback. getConnInfo covers direct/local connections (tests,
+ *  dev), where neither header is present. */
+function clientIp(c: Context): string {
+  const flyIp = c.req.header('Fly-Client-IP');
+  if (flyIp !== undefined && flyIp !== '') return flyIp;
+  const forwarded = c.req.header('X-Forwarded-For');
+  if (forwarded !== undefined && forwarded !== '') return forwarded.split(',')[0]?.trim() ?? '';
+  return getConnInfo(c).remote.address ?? 'unknown';
+}
+
 export function createServer(): { app: Hono; server: Server } {
   const app = new Hono();
 
   app.get('/healthz', (c) => c.json({ ok: true }));
 
-  app.post('/api/rooms', async (c) => {
-    const body = (await c.req.json().catch(() => null)) as
-      | { apiKey?: string; repoUrl?: string | null }
-      | null;
+  app.post(
+    '/api/rooms',
+    bodyLimit({
+      maxSize: CREATE_ROOM_MAX_BODY_BYTES,
+      onError: (c) => c.json({ error: 'Request body too large.' }, 413),
+    }),
+    async (c) => {
+      // Cheapest checks first — an anonymous caller pays as little of the
+      // server's time as possible before being turned away. Cast-in-stone
+      // order: rate limit → room ceiling → body validation → the actual clone.
+      if (
+        !consumeRateLimit(`create:${clientIp(c)}`, createRoomRateLimit(), createRoomRateWindowMs())
+      ) {
+        return c.json({ error: 'Too many rooms created from this address. Try again later.' }, 429);
+      }
+      if (roomCount() >= maxRooms()) {
+        return c.json({ error: 'Nexus is at capacity. Try again later.' }, 503);
+      }
 
-    const keyCheck = validateApiKeyShape(body?.apiKey);
-    if (!keyCheck.ok) return c.json({ error: keyCheck.message }, 400);
+      const body = (await c.req.json().catch(() => null)) as
+        | { apiKey?: string; repoUrl?: string | null }
+        | null;
 
-    const repoCheck = validateRepoUrl(body?.repoUrl);
-    if (!repoCheck.ok) return c.json({ error: repoCheck.message }, 400);
+      const keyCheck = validateApiKeyShape(body?.apiKey);
+      if (!keyCheck.ok) return c.json({ error: keyCheck.message }, 400);
 
-    // Name the workspace before the room exists, because cwd is readonly and
-    // the agent reads it the moment the room attaches.
-    const roomId = mintRoomId();
-    let cwd: string;
-    try {
-      cwd = await prepareWorkspace(roomId, repoCheck.url);
-    } catch {
-      // Never surface the raw git error — it can echo the URL and credentials.
-      return c.json(
-        { error: 'Could not clone that repository. Check the URL and try again.' },
-        400,
-      );
-    }
+      const repoCheck = validateRepoUrl(body?.repoUrl);
+      if (!repoCheck.ok) return c.json({ error: repoCheck.message }, 400);
 
-    const room = createRoom({ id: roomId, apiKey: keyCheck.apiKey, cwd, repoUrl: repoCheck.url });
-    writeRoomMeta({
-      roomId: room.id,
-      token: room.token,
-      cwd: room.cwd,
-      repoUrl: room.repoUrl,
-      createdAt: room.createdAt,
-    });
-    attachRoom(room);
-    return c.json({ roomId: room.id, token: room.token });
-  });
+      // Name the workspace before the room exists, because cwd is readonly and
+      // the agent reads it the moment the room attaches.
+      const roomId = mintRoomId();
+      let cwd: string;
+      try {
+        cwd = await prepareWorkspace(roomId, repoCheck.url);
+      } catch {
+        // Never surface the raw git error — it can echo the URL and credentials.
+        return c.json(
+          { error: 'Could not clone that repository. Check the URL and try again.' },
+          400,
+        );
+      }
+
+      const room = createRoom({ id: roomId, apiKey: keyCheck.apiKey, cwd, repoUrl: repoCheck.url });
+      writeRoomMeta({
+        roomId: room.id,
+        token: room.token,
+        cwd: room.cwd,
+        repoUrl: room.repoUrl,
+        createdAt: room.createdAt,
+      });
+      attachRoom(room);
+      return c.json({ roomId: room.id, token: room.token });
+    },
+  );
 
   app.get('/api/rooms/:id', (c) => {
     const room = getRoom(c.req.param('id'));

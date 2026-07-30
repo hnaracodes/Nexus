@@ -154,6 +154,11 @@ export function getRoom(id: string): Room | undefined {
   return rooms.get(id);
 }
 
+/** How many rooms are currently live. Used to cap unbounded room creation. */
+export function roomCount(): number {
+  return rooms.size;
+}
+
 /** Constant-time comparison — the token is the only credential in the MVP. */
 export function authorize(id: string, token: string): Room | undefined {
   const room = rooms.get(id);

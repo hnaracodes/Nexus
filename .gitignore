@@ -8,3 +8,5 @@ work/
 *.local
 .env
 .DS_Store
+tutorial.md
+tutorial-async-queue.md
