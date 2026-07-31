@@ -67,3 +67,14 @@ existing gate untouched. What remains is largely *confirmation*, not *design*.
 4. Note `issues.md` §C: subagent dispatches in this session ran on Opus by
    omission. `agent()` inherits the session model; set `model: 'sonnet'`
    explicitly on every call.
+
+## A note on this session's numbers
+
+Two sessions ran concurrently against one working tree — this one (phase 6,
+server-side) and a phase-5 UI session (client-side). The suite counts above
+(**245 root, 227 client**) are the *combined* tree at `010325e`, not phase 6's
+contribution alone: phase 6 added 58 root tests (`github` 17, `publish` 23,
+`clone` 9, `broadcast-redaction` 3, `github-binding-persistence` 6) and 8 client
+tests to `create-room.test.tsx`. The rest of the client growth from 79 to 227 is
+the phase-5 UI work and belongs to that session's ledger, which lives in its own
+folder. Do not read the client number as evidence about phase 6.

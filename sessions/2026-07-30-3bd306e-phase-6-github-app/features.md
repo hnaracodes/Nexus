@@ -121,9 +121,10 @@ an account no agent here has. Unit-green is not the same as working.
 ## Concrete next steps
 
 1. Run the setup checklist and the five live bars above.
-2. `tests/server/static-routes.test.ts` is still untracked — it belongs to the
-   phase-5a work committed in `3b21497` and should be committed with it.
-3. Two `create-room` test files now exist (`client/tests/` and
+2. Two `create-room` test files now exist (`client/tests/` and
    `client/src/pages/__tests__/`) with overlapping coverage and different
-   stubbing strategies. Pick one home and delete the other.
-4. Low-severity findings deliberately left open are listed in `issues.md` §B.
+   `location` stubbing strategies. Pick one home and delete the other.
+3. Low-severity findings deliberately left open are listed in `issues.md` §B.
+
+*(An earlier revision of this file listed `tests/server/static-routes.test.ts`
+as outstanding. The concurrent phase-5 session committed it in `010325e`.)*
