@@ -182,7 +182,21 @@ function applyEvent(view: RoomView, event: NexusEvent): RoomView {
         id: `e${event.seq}`,
         kind: 'system',
         author: null,
-        text: `Room opened in ${event.cwd}`,
+        text:
+          event.github == null
+            ? `Room opened in ${event.cwd}`
+            : `Room opened on ${event.github.owner}/${event.github.repo} (${event.github.defaultBranch})`,
+        seq: event.seq,
+      });
+
+    case 'github_published':
+      return push(next, {
+        id: `e${event.seq}`,
+        kind: 'system',
+        author: null,
+        text:
+          `${event.created ? 'Opened' : 'Updated'} pull request #${event.prNumber} ` +
+          `— ${event.filesChanged} file${event.filesChanged === 1 ? '' : 's'} changed: ${event.prUrl}`,
         seq: event.seq,
       });
 

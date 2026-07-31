@@ -109,13 +109,25 @@ export function attachRoom(
     },
   };
 
-  runtime.agent = startAgent(room, (event) => runtime.commit(event), deps);
+  // `readEvents` is threaded in here because this is the only place that holds
+  // the sink. The publish tool uses it to find the room's own last published
+  // commit from the log rather than from memory (I3) — which is what lets a
+  // restarted room keep publishing to the same pull request.
+  runtime.agent = startAgent(room, (event) => runtime.commit(event), {
+    readEvents: () => sink.read(),
+    ...deps,
+  });
   runtimes.set(room.id, runtime);
   // A room recovered from disk (plan phase-3a) already has `room_created` in
   // its log. Committing a second one on every re-key would permanently pollute
   // the history — the log is append-only, so a duplicate can never be removed.
   if (!sink.read().some((event) => event.type === 'room_created')) {
-    runtime.commit({ type: 'room_created', cwd: room.cwd, repoUrl: room.repoUrl });
+    runtime.commit({
+      type: 'room_created',
+      cwd: room.cwd,
+      repoUrl: room.repoUrl,
+      github: room.github,
+    });
   }
   return runtime;
 }

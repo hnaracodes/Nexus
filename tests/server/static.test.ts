@@ -53,7 +53,10 @@ describe('static client serving', () => {
     const app = freshApp();
     const health = await app.fetch(new Request('http://localhost/healthz'));
     expect(health.status).toBe(200);
-    expect(await health.json()).toEqual({ ok: true });
+    // `/healthz` also reports whether the GitHub App integration is
+    // configured (`githubConnectEnabled`) — an optional, additive field, not
+    // part of what this test guards.
+    expect(await health.json()).toMatchObject({ ok: true });
 
     // An unmatched API path must still 404 — a catch-all static handler would
     // turn every API typo into a 200 serving index.html.

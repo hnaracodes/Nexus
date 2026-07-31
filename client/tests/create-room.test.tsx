@@ -141,7 +141,16 @@ describe('CreateRoom', () => {
     typeKey();
     submit();
 
-    await waitFor(() => expect(JSON.stringify(localStorage)).not.toContain('sk-ant'));
+    // Wait for the SUBMIT TO COMPLETE before asserting, not for the assertion
+    // itself to hold. `waitFor` evaluates its callback synchronously on the
+    // first check, so `waitFor(() => expect(storage).not.toContain(...))`
+    // passes at t=0 — before `handleSubmit`'s `await fetch` has resolved — and
+    // any write performed after that await ships undetected. This is the
+    // "right assertion at the wrong moment" shape that has already survived
+    // mutation testing twice in this project.
+    await screen.findByLabelText(/room link/i);
+
+    expect(JSON.stringify(localStorage)).not.toContain('sk-ant');
     expect(JSON.stringify(sessionStorage)).not.toContain('sk-ant');
   });
 
@@ -249,6 +258,34 @@ describe('CreateRoom', () => {
       // An offer to try again, not a dead end and not a stack trace.
       expect(screen.getByRole('button', { name: /connect github/i })).toBeInTheDocument();
       expect(alert.textContent ?? '').not.toMatch(/\bat \w+ \(/);
+    });
+
+    /**
+     * The server redirects to `/new?github_error=…` when the authorize round
+     * trip itself failed — a replayed single-use `state`, or a failed code
+     * exchange. It cannot say more, because the underlying error describes a
+     * request carrying the client secret. If the page ignores that parameter
+     * the user lands back on an ordinary "Connect GitHub" button with no
+     * indication anything went wrong, and loops.
+     */
+    it('explains a failed authorize round trip carried back on the URL', async () => {
+      globalThis.history.replaceState({}, '', '/new?github_error=expired');
+      const fetchMock = stubFetch({ enabled: true });
+      render(<CreateRoom onCreated={vi.fn()} />);
+
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent(/already been used or had expired/i);
+      expect(screen.getByRole('button', { name: /connect github/i })).toBeInTheDocument();
+      // It must not have tried to load repositories: there is no handle.
+      expect(urls(fetchMock).some((url) => url.includes('/api/github/repos'))).toBe(false);
+    });
+
+    it('distinguishes a failed exchange from an expired link', async () => {
+      globalThis.history.replaceState({}, '', '/new?github_error=failed');
+      stubFetch({ enabled: true });
+      render(<CreateRoom onCreated={vi.fn()} />);
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(/could not complete the sign-in/i);
     });
 
     it('treats a 410 the same as a 404', async () => {

@@ -1,7 +1,8 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { CanUseTool, PermissionResult } from '@anthropic-ai/claude-agent-sdk';
-import type { UnsequencedEvent } from '../protocol/events.js';
+import type { NexusEvent, UnsequencedEvent } from '../protocol/events.js';
 import type { Room } from './rooms.js';
+import { createGithubMcpServer } from './publishTool.js';
 import { AsyncQueue } from './queue.js';
 import { createPermissionGate } from './permissions.js';
 import type { PermissionGate } from './permissions.js';
@@ -35,6 +36,12 @@ export interface AgentDeps {
   runQuery?: typeof query;
   /** Overridable for tests. Must stay above phase-2c's 120s decision timeout. */
   idleTimeoutMs?: number;
+  /**
+   * The room's logged events, for state the agent's tools must derive from the
+   * log rather than from memory (I3) — currently the last published commit sha.
+   * Supplied by `attachRoom`, which is the only place that holds the sink.
+   */
+  readEvents?: () => NexusEvent[];
 }
 
 /**
@@ -87,6 +94,10 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
   const prompts = new AsyncQueue<PromptMessage>();
   const gate = createPermissionGate(room, emit);
   const turns = createTurnGate();
+
+  // Null for a room with no GitHub binding, so a plain room simply has no
+  // publish tool rather than one that fails the moment it is called.
+  const githubTools = createGithubMcpServer(room, emit, deps.readEvents ?? (() => []));
 
   let watchdog: ReturnType<typeof setTimeout> | null = null;
 
@@ -149,6 +160,11 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
       // feature and one that would invalidate the verified acceptance run.
       // A bare string writes to the same slot, which is currently empty.
       systemPrompt: ROOM_SYSTEM_PROMPT,
+      // The publish tool. Registered here so it reaches the agent through the
+      // SAME canUseTool gate as Bash or Write — pushing to someone's repository
+      // is precisely what the room's four-eyes approval exists for, and routing
+      // it this way needed no change to permissions.ts at all.
+      ...(githubTools === null ? {} : { mcpServers: { nexus_github: githubTools } }),
       // The key is read here and nowhere else. It is never stored on anything
       // we serialize, never logged, never sent over the wire (I4).
       env: { ...process.env, ANTHROPIC_API_KEY: room.getApiKey() },

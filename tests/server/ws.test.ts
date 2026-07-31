@@ -206,7 +206,10 @@ describe('http api', () => {
   it('answers the health check', async () => {
     const response = await fetch(`http://127.0.0.1:${port}/healthz`);
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ ok: true });
+    // `/healthz` also reports whether the GitHub App integration is
+    // configured (`githubConnectEnabled`) — an optional, additive field, not
+    // part of what this test guards.
+    expect(await response.json()).toMatchObject({ ok: true });
   });
 
   it('rejects room creation without a console key, without echoing input', async () => {

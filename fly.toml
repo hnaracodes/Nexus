@@ -12,6 +12,11 @@ primary_region = 'sjc'
 [env]
   NEXUS_DATA_DIR = '/data'
   PORT = '8080'
+  # On the persistent volume, NOT ephemeral container storage. A room's clone
+  # has to outlive a restart or every recovered room would have an empty
+  # working directory under a link that still resolves. Sized with the volume:
+  # private clones accumulate here and nothing evicts them yet.
+  NEXUS_WORKDIR = '/data/work'
 
 [[mounts]]
   source = 'nexus_data'

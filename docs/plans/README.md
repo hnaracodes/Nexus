@@ -49,7 +49,7 @@ everything on `sonnet`** to conserve credits, including the rows that say
 | 6 | `phase-4-open-floor-prompts.md` *(post-MVP, built early)* | **solo** | `opus` | Tasks 1–2 **solo, sequential**: `src/protocol/events.ts`, then `src/server/turnGate.ts`. Tasks 3–5: `src/server/agent.ts` + `prompt` branch of `src/server/index.ts`; `client/src/components/PendingPrompts.tsx` + `client/src/store.ts` + `phase-4` region of `client/src/App.tsx`; `BUILD_SPEC.md` + `CLAUDE.md` + this file |
 | 7 | `phase-5a-marketing-site.md` *(post-MVP)* | parallel | `sonnet` | `client/src/pages/**`, `client/src/router.tsx`, `client/src/design/**`, `client/index.html`, `client/tailwind.config.js`, `phase-5a` regions of `client/src/index.css` and `client/src/App.tsx`, static-route block of `src/server/index.ts`, `tests/server/static-routes.test.ts` |
 | 7 | `phase-5b-room-ui-redesign.md` *(post-MVP)* | parallel | `sonnet` | `client/src/components/**`, `client/src/hooks/**`, `client/src/{agentStatus,identity,rooms,store}.ts`, `phase-5b` regions of `client/src/App.tsx` and `client/src/index.css`, `client/package.json` (`lucide-react` only) |
-| — | **still owed: deploy, `POST /api/rooms` hardening, Day 5 demo, phase-4 browser pass** | | | |
+| 8 | `phase-6-github-app-auth.md` *(post-MVP)* | **solo** | `sonnet` | `src/server/{github,publish,publishTool,create,recovery,rooms}.ts`, phase-6 route block + `POST /api/rooms` body of `src/server/index.ts`, `mcpServers` wiring in `src/server/agent.ts`, `commit`/`room_created` in `src/server/ws.ts`, `src/protocol/events.ts`, `src/log/redact.ts`, `client/src/pages/CreateRoom.tsx`, `client/src/store.ts` (`github_published` case), `Dockerfile`, `fly.toml` |
 
 **Order 7 is a UI phase, not an MVP phase.** Both plans consume
 `design-system/nexus/MASTER.md`, which is the single source of colour, type,
@@ -71,7 +71,23 @@ client build before doing anything else.
 **Neither plan may be deployed publicly until `POST /api/rooms` is hardened**
 (newest `sessions/` `issues.md` §B). A landing page that invites strangers to
 click "Open a room" turns an unauthenticated outbound-request primitive from a
-latent issue into an exposed one.
+latent issue into an exposed one. *(That hardening has since landed — host
+guard, per-IP rate limit, room ceiling, body cap.)*
+
+**Order 8 was dispatched as a hybrid, not a pure fan-out.** The two properties
+everything else depends on — the broadcast-redaction fix and `src/server/github.ts`
+— were written and committed on `master` first, precisely so the three parallel
+agents coded against real signatures instead of a plan's guesses. Phase 3's
+lesson stands: *a plan is not a specification until someone has tried to compile
+it.* The parallel agents were also told **not to commit**, since the orchestrator
+was editing other files in the same working tree at the same time; a subagent
+commit would have swept up unrelated in-flight work.
+
+Order 8 is **unit- and integration-verified only**. Every GitHub interaction is
+tested with an injected `fetch` and an injected `git`; none of it has met a real
+GitHub App, because registering one needs an account no agent here has. The live
+bars are listed at the end of `phase-6-github-app-auth.md` and are the user's to
+run.
 
 **Order 4 pre-work landed on `master` first** (commits `369f495`..`1fbd316`):
 stable participant identity with resume tokens, `restoreRoom`/`attachApiKey`/

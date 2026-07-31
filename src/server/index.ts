@@ -6,8 +6,28 @@ import type { Context } from 'hono';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { WebSocketServer } from 'ws';
+import type { GithubRepoRef } from '../protocol/events.js';
 import { PROTOCOL_VERSION } from '../protocol/events.js';
 import { parseClientFrame } from '../protocol/wire.js';
+// STATIC import, deliberately. Evaluating github.ts is what reads the App
+// secrets and DELETES them from process.env, and that has to happen before any
+// room can attach an agent — startAgent spawns the SDK subprocess with
+// `{...process.env}`, so anything still in the environment is readable by any
+// participant who asks the agent to run `printenv`. A lazy `await import()`
+// inside a route handler would leave the private key exposed until the first
+// GitHub request. This import looks removable. It is not.
+import {
+  beginConnect,
+  buildAuthorizeUrl,
+  completeConnect,
+  consumeConnectState,
+  exchangeCodeForUserToken,
+  findLeakedEnvSecrets,
+  findVerifiedRepo,
+  getConnect,
+  hasGithubAppConfig,
+  listUserInstallationsWithRepos,
+} from './github.js';
 import { presenceFrame } from './presence.js';
 import { recoverRooms, writeRoomMeta } from './recovery.js';
 import { prepareWorkspace, validateApiKeyShape, validateRepoUrl } from './create.js';
@@ -65,12 +85,109 @@ function clientIp(c: Context): string {
   return getConnInfo(c).remote.address ?? 'unknown';
 }
 
+/**
+ * The origin GitHub must redirect back to. `redirect_uri` has to match the
+ * App's configured callback EXACTLY, so a deployment sets NEXUS_PUBLIC_URL
+ * rather than relying on a proxied Host header.
+ */
+function publicOrigin(c: Context): string {
+  const configured = process.env['NEXUS_PUBLIC_URL'];
+  if (configured !== undefined && configured !== '') return configured.replace(/\/+$/, '');
+  const proto = c.req.header('X-Forwarded-Proto') ?? 'http';
+  return `${proto}://${c.req.header('Host') ?? 'localhost'}`;
+}
+
+function githubCallbackUrl(c: Context): string {
+  return `${publicOrigin(c)}/api/github/callback`;
+}
+
 export function createServer(
   opts: { agentDeps?: AgentDeps } = {},
 ): { app: Hono; server: Server } {
   const app = new Hono();
 
-  app.get('/healthz', (c) => c.json({ ok: true }));
+  // A room link is "/?room=…&token=…", and the token IS the credential. Without
+  // this, following any outbound link from a room page — including the GitHub
+  // authorize redirect this phase adds — hands the room token to the
+  // destination in the Referer header. Registered before every route so no
+  // handler can be reached without it.
+  app.use('*', async (c, next) => {
+    await next();
+    c.header('Referrer-Policy', 'no-referrer');
+  });
+
+  app.get('/healthz', (c) =>
+    c.json({ ok: true, githubConnectEnabled: hasGithubAppConfig() }),
+  );
+
+  // --- BEGIN phase-6 GitHub App connect routes ---
+
+  app.get('/api/github/status', (c) => c.json({ enabled: hasGithubAppConfig() }));
+
+  app.get('/api/github/connect', (c) => {
+    if (!hasGithubAppConfig()) {
+      // A redirect, not a 404 body. The browser NAVIGATES here, so returning
+      // JSON would drop the user out of the app onto a bare error document
+      // with no way back. Reachable with a stale `?connect=` link on a server
+      // where the App was never configured or has been removed.
+      return c.redirect('/new?github_error=failed', 302);
+    }
+    const { state, challenge } = beginConnect();
+    return c.redirect(
+      buildAuthorizeUrl({
+        state,
+        codeChallenge: challenge,
+        redirectUri: githubCallbackUrl(c),
+      }),
+      302,
+    );
+  });
+
+  /**
+   * The callback is the security-critical half of the flow.
+   *
+   * GitHub's own documentation warns that the setup/callback URL can be hit
+   * with a spoofed `installation_id`, so NOTHING here is taken on the request's
+   * word. The code is exchanged for a user-to-server token, that token is used
+   * once to ask GitHub which installations genuinely belong to this human, and
+   * is then discarded — it is never stored, never logged, never persisted.
+   * Only the resulting verified list survives, behind an opaque connect id.
+   */
+  app.get('/api/github/callback', async (c) => {
+    if (!hasGithubAppConfig()) {
+      return c.json({ error: 'GitHub is not configured on this server.' }, 404);
+    }
+    const code = c.req.query('code') ?? '';
+    // Single use: a replayed callback must not be honoured twice.
+    const pending = consumeConnectState(c.req.query('state') ?? '');
+    if (code === '' || pending === undefined) {
+      return c.redirect('/new?github_error=expired', 302);
+    }
+    try {
+      const userToken = await exchangeCodeForUserToken(
+        code,
+        pending.verifier,
+        githubCallbackUrl(c),
+      );
+      const installations = await listUserInstallationsWithRepos(userToken);
+      // `userToken` goes out of scope here and is deliberately never stored.
+      return c.redirect(`/new?connect=${completeConnect(installations)}`, 302);
+    } catch {
+      // Never surface the raw error: it describes a request that carried the
+      // client secret, and this string would reach a browser.
+      return c.redirect('/new?github_error=failed', 302);
+    }
+  });
+
+  app.get('/api/github/repos', (c) => {
+    const installations = getConnect(c.req.query('connect') ?? '');
+    if (installations === undefined) {
+      return c.json({ error: 'That GitHub connection expired. Connect again.' }, 404);
+    }
+    return c.json({ installations });
+  });
+
+  // --- END phase-6 GitHub App connect routes ---
 
   app.post(
     '/api/rooms',
@@ -92,21 +209,58 @@ export function createServer(
       }
 
       const body = (await c.req.json().catch(() => null)) as
-        | { apiKey?: string; repoUrl?: string | null }
+        | {
+            apiKey?: string;
+            repoUrl?: string | null;
+            connectId?: string;
+            owner?: string;
+            repo?: string;
+          }
         | null;
 
       const keyCheck = validateApiKeyShape(body?.apiKey);
       if (!keyCheck.ok) return c.json({ error: keyCheck.message }, 400);
 
-      const repoCheck = validateRepoUrl(body?.repoUrl);
-      if (!repoCheck.ok) return c.json({ error: repoCheck.message }, 400);
+      // Two mutually exclusive ways to name a repository. The GitHub path wins
+      // when present; a caller sending both gets the verified one, never the
+      // free-text one.
+      let github: GithubRepoRef | null = null;
+      let repoUrl: string | null = null;
+
+      if (typeof body?.connectId === 'string' && body.connectId !== '') {
+        // THE load-bearing check. `installationId` and `defaultBranch` are read
+        // out of the server-side list this server fetched with the user's own
+        // token — never off the request. A caller naming a repository they did
+        // not actually grant resolves to nothing and no room is created, which
+        // is what stops a spoofed installation id.
+        const binding = findVerifiedRepo(
+          body.connectId,
+          typeof body.owner === 'string' ? body.owner : '',
+          typeof body.repo === 'string' ? body.repo : '',
+        );
+        if (binding === undefined) {
+          return c.json(
+            {
+              error:
+                'That repository is not available on your GitHub connection. Connect again and pick from the list.',
+            },
+            400,
+          );
+        }
+        github = binding;
+        repoUrl = `https://github.com/${binding.owner}/${binding.repo}`;
+      } else {
+        const repoCheck = validateRepoUrl(body?.repoUrl);
+        if (!repoCheck.ok) return c.json({ error: repoCheck.message }, 400);
+        repoUrl = repoCheck.url;
+      }
 
       // Name the workspace before the room exists, because cwd is readonly and
       // the agent reads it the moment the room attaches.
       const roomId = mintRoomId();
       let cwd: string;
       try {
-        cwd = await prepareWorkspace(roomId, repoCheck.url);
+        cwd = await prepareWorkspace(roomId, repoUrl, undefined, github);
       } catch {
         // Never surface the raw git error — it can echo the URL and credentials.
         return c.json(
@@ -115,13 +269,16 @@ export function createServer(
         );
       }
 
-      const room = createRoom({ id: roomId, apiKey: keyCheck.apiKey, cwd, repoUrl: repoCheck.url });
+      const room = createRoom({ id: roomId, apiKey: keyCheck.apiKey, cwd, repoUrl, github });
       writeRoomMeta({
         roomId: room.id,
         token: room.token,
         cwd: room.cwd,
         repoUrl: room.repoUrl,
         createdAt: room.createdAt,
+        // Survives the restart, unlike the API key — this is what makes
+        // "authorize once, ever" true.
+        github: room.github,
       });
       attachRoom(room, undefined, opts.agentDeps);
       return c.json({ roomId: room.id, token: room.token });
@@ -169,20 +326,32 @@ export function createServer(
   // The Docker image copies the Vite bundle to client/dist, but no Phase 1
   // plan owned the wiring between the two: phase-1b owns client/**, phase-1c
   // owns the Dockerfile, and this seam belongs to neither. Registered after
-  // the API routes so /healthz and /api/* always win. A room link is
-  // "/?room=…&token=…", so only "/" and the hashed asset paths are needed —
-  // no catch-all, which would otherwise swallow unmatched API typos into a
-  // 200 and make them very hard to debug.
+  // the API routes so /healthz and /api/* always win.
+  //
+  // phase-5a: an explicit allow-list, still NOT a catch-all. Client-side
+  // routing (client/src/router.tsx) needs each page path to return the SPA
+  // shell so the browser's own address bar can land directly on /new,
+  // /privacy, /terms or /security, but a wildcard would swallow unmatched
+  // API typos into a 200 and make them very hard to debug — that is the
+  // entire reason this list is enumerated rather than a fallthrough.
+  // Adding a page means adding its path here; that friction is intentional.
+  // A room link is "/?room=…&token=…" (and now also "/room?…"), so "/"
+  // serves the shell either way and the client decides which view to mount.
+  const PAGE_ROUTES = ['/', '/new', '/privacy', '/terms', '/security', '/room'] as const;
   const clientDir = process.env['NEXUS_CLIENT_DIR'] ?? 'client/dist';
   app.use('/assets/*', serveStatic({ root: clientDir }));
-  app.get('/', serveStatic({ path: `${clientDir}/index.html` }));
-  app.get('/', (c) =>
-    c.text(
-      'Nexus server is running, but no client bundle was found. ' +
-        'Run `npm --prefix client run build`, or set NEXUS_CLIENT_DIR.',
-      503,
-    ),
-  );
+  for (const path of PAGE_ROUTES) {
+    app.get(path, serveStatic({ path: `${clientDir}/index.html` }));
+  }
+  for (const path of PAGE_ROUTES) {
+    app.get(path, (c) =>
+      c.text(
+        'Nexus server is running, but no client bundle was found. ' +
+          'Run `npm --prefix client run build`, or set NEXUS_CLIENT_DIR.',
+        503,
+      ),
+    );
+  }
 
   const server = createAdaptorServer({ fetch: app.fetch }) as Server;
   const wss = new WebSocketServer({ noServer: true });
@@ -367,6 +536,18 @@ export function createServer(
       });
     });
   });
+
+  // Deliberately generic rather than naming the two GitHub variables. Importing
+  // github.ts deletes THOSE; the underlying fragility — agent.ts handing the
+  // whole environment to a subprocess participants can drive — remains for
+  // whatever secret someone adds next. This is the cheap guard for that.
+  const leaked = findLeakedEnvSecrets();
+  if (leaked.length > 0) {
+    console.log(
+      `WARNING: secret-shaped environment variables are visible to every room's agent: ${leaked.join(', ')}. ` +
+        'Read them into module state and delete them from process.env, the way src/server/github.ts does.',
+    );
+  }
 
   for (const recovered of recoverRooms()) {
     console.log(

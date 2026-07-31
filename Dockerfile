@@ -22,6 +22,10 @@ ENV NODE_ENV=production
 ENV PORT=8080
 # Must match the fly.toml mount destination exactly.
 ENV NEXUS_DATA_DIR=/data
+# Per-room clones live on the persistent volume too (plan phase-6): a room
+# recovered after a restart must still have its working directory, or its link
+# resolves to an agent with nothing to work on.
+ENV NEXUS_WORKDIR=/data/work
 
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
