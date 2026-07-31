@@ -298,7 +298,7 @@ export function CreateRoom({ onCreated }: { onCreated: (link: string) => void })
             git credentials, run commands.
           </p>
           <p className="mb-2">
-            The MVP has no isolation between rooms. Only share this link with people you trust.
+            Nexus has no isolation between rooms. Only share this link with people you trust.
           </p>
           <a href="/security" className="font-medium text-info underline underline-offset-2">
             Read the full security model

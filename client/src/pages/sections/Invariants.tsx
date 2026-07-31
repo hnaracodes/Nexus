@@ -34,7 +34,10 @@ export function Invariants(): JSX.Element {
         </p>
         <div className="mt-10 grid gap-6 sm:grid-cols-2">
           {INVARIANTS.map((inv) => (
-            <div key={inv.id} className="rounded-lg border border-border bg-surface p-6">
+            <div
+              key={inv.id}
+              className="card-lift rounded-xl border border-border bg-surface p-6 hover:border-accent/40"
+            >
               <h3 className="text-lg font-semibold text-fg">
                 <span className="text-accent">{inv.id}</span> — {inv.plain}
               </h3>

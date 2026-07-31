@@ -32,7 +32,10 @@ export function HowItWorks(): JSX.Element {
         </h2>
         <ol className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {STEPS.map(({ icon: Icon, title, body }, index) => (
-            <li key={title} className="rounded-lg border border-border bg-surface p-6">
+            <li
+              key={title}
+              className="card-lift rounded-xl border border-border bg-surface p-6 hover:border-accent/40"
+            >
               <div className="flex items-center gap-2">
                 <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-dim text-sm font-bold text-fg">
                   {index + 1}

@@ -12,6 +12,8 @@ export default {
         'fg-muted': 'var(--fg-muted)',
         accent: 'var(--accent)',
         'accent-dim': 'var(--accent-dim)',
+        'accent-2': 'var(--accent-2)',
+        'accent-3': 'var(--accent-3)',
         warn: 'var(--warn)',
         danger: 'var(--danger)',
         info: 'var(--info)',

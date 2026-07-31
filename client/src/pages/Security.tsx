@@ -31,7 +31,7 @@ export function Security(): JSX.Element {
           with shell access to that machine.
         </p>
         <p className="mt-4 text-lg font-semibold text-fg">
-          &ldquo;The MVP has no isolation between rooms.&rdquo;
+          &ldquo;Nexus has no isolation between rooms.&rdquo;
         </p>
         <p className="mt-3">
           One host process serves every room, sharing one filesystem; room A can in principle

@@ -15,6 +15,10 @@ export const COLORS = {
   fgMuted: '#94A3B8',
   accent: '#22C55E',
   accentDim: '#166534',
+  /* Gradient partners for the marketing surface. Never used alone for text on
+     --bg at body size; the headline gradient is large-text only (3:1 floor). */
+  accent2: '#6366F1',
+  accent3: '#22D3EE',
   warn: '#F59E0B',
   danger: '#EF4444',
   info: '#38BDF8',

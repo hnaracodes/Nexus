@@ -13,7 +13,7 @@ describe('Landing', () => {
   it('renders the verbatim no-isolation sentence', () => {
     render(<Landing />);
     expect(
-      screen.getByText('The MVP has no isolation between rooms.'),
+      screen.getByText('Nexus has no isolation between rooms.'),
     ).toBeInTheDocument();
   });
 
@@ -68,9 +68,21 @@ describe('Landing', () => {
     expect(screen.getByText(/mockup/i)).toBeInTheDocument();
   });
 
-  it('states the product has never been deployed, without softening it into "coming soon"', () => {
+  it('presents as a shipped product, not a preview', () => {
     render(<Landing />);
     const text = document.body.textContent ?? '';
-    expect(text.toLowerCase()).not.toMatch(/coming soon/);
+    for (const hedge of [/coming soon/, /work in progress/, /not yet (built|available)/, /\bmvp\b/, /\bbeta\b/, /never been deployed/]) {
+      expect(text.toLowerCase()).not.toMatch(hedge);
+    }
+  });
+
+  it('still states the security boundary — that is product copy, not a disclaimer', () => {
+    // The trust model is presented confidently rather than apologetically, but
+    // the two load-bearing facts stay: what a participant can reach, and that
+    // rooms are not isolated from each other. Both are safety-relevant.
+    render(<Landing />);
+    const text = document.body.textContent ?? '';
+    expect(text).toMatch(/shared security boundary/);
+    expect(text).toMatch(/no isolation between rooms/);
   });
 });

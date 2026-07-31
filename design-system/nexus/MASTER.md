@@ -36,6 +36,8 @@ Tailwind via `tailwind.config.js` `theme.extend.colors` so utilities read
 | `--fg-muted` | `#94A3B8` | `fg-muted` | secondary text |
 | `--accent` | `#22C55E` | `accent` | driver token, agent running, primary CTA |
 | `--accent-dim` | `#166534` | `accent-dim` | accent backgrounds, rings at low emphasis |
+| `--accent-2` | `#6366F1` | `accent-2` | gradient partner, ambient mesh — marketing only |
+| `--accent-3` | `#22D3EE` | `accent-3` | gradient partner, ambient mesh — marketing only |
 | `--warn` | `#F59E0B` | `warn` | permission requests, security callouts |
 | `--danger` | `#EF4444` | `danger` | denials, errors, destructive tools |
 | `--info` | `#38BDF8` | `info` | neutral notices |
@@ -64,6 +66,9 @@ Verify with a contrast checker at build review, not by eye:
 | `--fg-muted` on `--bg` | 7.5:1 | AAA |
 | `--fg-muted` on `--surface` | 6.0:1 | AA+ |
 | `--accent` on `--bg` | 8.3:1 | AAA |
+| `--accent-2` on `--bg` | 4.4:1 | AA — large text and decoration only |
+| `--accent-3` on `--bg` | 9.0:1 | AAA |
+| `--accent` on `--accent-dim` | 3.1:1 | **FAILS body text** — use `--fg` for the label, accent on the icon |
 | `--warn` on `--bg` | 8.9:1 | AAA |
 | `--danger` on `--bg` | 4.9:1 | AA (body-size OK) |
 
@@ -187,6 +192,26 @@ or `left` — they trigger layout on every frame.
   }
 }
 ```
+
+### Marketing motion (landing and legal pages only)
+
+Implemented in CSS plus one `IntersectionObserver` hook (`useReveal`) — no GSAP,
+no animation dependency. The values come from the design DB's *Standard*
+scroll-reveal and Bento hover presets.
+
+| Effect | Utility | Values |
+|---|---|---|
+| Scroll reveal | `.reveal` / `.is-visible` | opacity 0→1, y 24→0, 500ms, `cubic-bezier(0.16,1,0.3,1)` |
+| Stagger | `useReveal({stagger:true})` | 80ms per child, capped at 8 children |
+| Ambient mesh | `.nexus-blob-a` / `-b` | blurred accent blobs, 22s/27s drift, opacity ≤0.20 |
+| Headline gradient | `.text-gradient` | `--fg` → `--accent` → `--accent-3`, large text only |
+| CTA glow | `.glow-accent` | shadow expansion + 2px lift, 250ms |
+| Card lift | `.card-lift` | 4px lift + shadow, 200ms |
+
+`useReveal` adds the `.reveal` class **itself, on mount**. Markup therefore
+ships visible: a crawler, a failed bundle, or an error upstream leaves a
+readable page rather than a blank one. The hook opts out entirely under
+`prefers-reduced-motion` rather than relying on the global override.
 
 **The reduced-motion fallback must not remove information.** The agent-activity
 indicator pulses when the agent is working — with motion disabled, the pulse
