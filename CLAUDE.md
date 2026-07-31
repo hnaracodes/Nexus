@@ -10,7 +10,7 @@ Strategic frame, from `BUILD_SPEC.md` §9: *collaboration is the mechanism, gove
 
 ## Current repo state — read this first
 
-**Phases 0 through 3 are built, merged, and committed, and phase 4 landed on top.** 183 root tests + 79 client tests. Phase 3 was the last *planned* phase. **The MVP queue that used to sit here — deploy, `POST /api/rooms` hardening, the two named test gaps, the Day 5 demo — is now closed out**, per the user directly: the app is deployed and live at `https://nexus-mvp.fly.dev/`, redeployed after the hardening fix below; the demo has been run; and phase 4 has had its own live two-browser pass. None of that was re-verified by an agent in this session via the automated harness scripts (`acceptance.mjs` / `restart-recovery.mjs`, kept outside the repo — see the newest session's ledger) — it is recorded here on the user's word, not rerun evidence. If you need to re-confirm any of it yourself, those scripts are the way; do not assume a prior agent's absence of evidence means the work didn't happen.
+**Phases 0 through 3 are built, merged, and committed; phases 4, 5 and 6 landed on top.** 245 root tests + 227 client tests. Phase 3 was the last *planned* phase. **The MVP queue that used to sit here — deploy, `POST /api/rooms` hardening, the two named test gaps, the Day 5 demo — is now closed out**, per the user directly: the app is deployed and live at `https://nexus-mvp.fly.dev/`, redeployed after the hardening fix below; the demo has been run; and phase 4 has had its own live two-browser pass. None of that was re-verified by an agent in this session via the automated harness scripts (`acceptance.mjs` / `restart-recovery.mjs`, kept outside the repo — see the newest session's ledger) — it is recorded here on the user's word, not rerun evidence. If you need to re-confirm any of it yourself, those scripts are the way; do not assume a prior agent's absence of evidence means the work didn't happen.
 
 - **Phase 0** — frozen event protocol, room registry, async prompt queue feeding one `query()` per room, WebSocket broadcast with replay-then-live ordering.
 - **Phase 1a** — durable append-only JSONL log at `data/rooms/<roomId>.jsonl`, redaction at the write boundary. `attachRoom`'s default sink is now `createSink(room.id)`; `MemorySink` is exported but no longer the default.
@@ -27,7 +27,9 @@ Strategic frame, from `BUILD_SPEC.md` §9: *collaboration is the mechanism, gove
 
 Nothing from the old "still missing" list remains open as of the user's report above. If you're an agent picking this up cold and want first-hand evidence rather than a carried-forward claim, rerun `acceptance.mjs` / `restart-recovery.mjs` against `https://nexus-mvp.fly.dev/` yourself — see the newest `sessions/` folder for where they live and how to invoke them.
 
-**Model policy: use Sonnet 5 for all subagent dispatches, not Opus or Fable, to conserve API credits.** Applies to `Agent` calls and any `model:` field on dispatched work.
+- **Phase 6 (post-MVP)** — GitHub App auth and private repositories. One authorize click, then the human never supplies a GitHub credential again, including across a restart: only `{installationId, owner, repo, defaultBranch}` is persisted and every token is minted server-side from the App private key. Private clone via a credential helper reading a child env var (`src/server/create.ts`), publish-as-pull-request over the Git Data API (`src/server/publish.ts`), exposed to the agent as an **MCP tool** so it flows through the *unmodified* `canUseTool` four-eyes gate (`src/server/publishTool.ts`). Plan: `docs/plans/phase-6-github-app-auth.md`. **Written and unit-verified, NOT live-verified** — every GitHub interaction is tested against an injected `fetch` and an injected `git`, and none of it has met a real GitHub App. Setup checklist and the five open live bars are in the newest `sessions/` `features.md`. Treat it as "written", not "working", until those pass.
+
+**Model policy: use Sonnet 5 for all subagent dispatches, not Opus or Fable, to conserve API credits.** Applies to `Agent` calls and any `model:` field on dispatched work. **`Workflow`'s `agent()` inherits the session model when `model:` is omitted** — set it explicitly on every call, or a fan-out silently runs on Opus (this happened in the phase 6 session: 584k tokens at the wrong tier).
 
 **Local gotcha:** port 8080 is occupied on the primary dev machine by an unrelated `ApplicationWebServer`. Run local servers and containers on `PORT=8099`, or a smoke test will get a confusing 404 from someone else's server while ours dies with `EADDRINUSE`.
 
@@ -90,8 +92,8 @@ Transcribed from the real root `package.json`. Re-read it rather than trusting t
 
 ```
 npm run dev          # server via tsx watch, port 8080 (PORT overrides — use 8099 locally)
-npm test             # vitest run — 183 tests today
-npm run test:client  # npm --prefix client test — 79 tests
+npm test             # vitest run — 245 tests today
+npm run test:client  # npm --prefix client test — 227 tests
 npm run test:all     # both suites
 npm run typecheck    # tsc over src + tests, noEmit
 npm run build        # tsc -p tsconfig.build.json → dist/, src only
@@ -171,7 +173,11 @@ From `BUILD_SPEC.md` §8. Both belong in the README *and* in the room-creation U
 
 **The room token is the credential — the room id is not.** The id is 64 bits and appears in every URL, referrer and screenshot; the token is 256 bits. Any route that mutates room state must call `authorize()`, the way `GET /api/rooms/:id`, the WS upgrade and `POST /api/rooms/:id/key` all do. Getting this wrong once already produced a room-hijack hole that passed every test.
 
-**`POST /api/rooms` is not yet safe to expose.** It needs no credential and drives an outbound `git clone` against any host passing a scheme-and-charset regex — link-local and cloud-metadata addresses included — with no rate limit, body cap, or room ceiling. This is **not** covered by the isolation tradeoff above. Fix it before the deploy is shared. Details in the newest `sessions/` `issues.md` §B.
+**`POST /api/rooms` is hardened** — `node:net.BlockList` host guard checked at validation *and* again at clone time, per-IP rate limit, room ceiling, body cap. It still needs no credential, so treat any change to it as security-relevant.
+
+**A server-wide secret is readable by every room's agent.** `startAgent` spawns the SDK subprocess with `env: { ...process.env, … }`, and a participant can ask the agent to run `printenv`. Nexus only ever had *per-room* secrets until phase 6; the GitHub App private key is the first server-wide one, and it mints installation tokens for **every** installation. `src/server/github.ts` therefore reads its secrets and `delete`s them from `process.env` at module import — which is why `src/server/index.ts` imports it **statically**. That import looks removable; it is not. Any future server-wide secret must do the same, and `findLeakedEnvSecrets()` warns at boot about names matching `/SECRET|PRIVATE_KEY|_TOKEN$/i`.
+
+**Phase 6 widened the blast radius of a server compromise.** An RCE now exposes a deployment-wide App private key, not a per-room credential. State that plainly; do not soften it.
 
 ## Prior art
 
