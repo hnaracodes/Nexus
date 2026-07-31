@@ -70,8 +70,8 @@ export function PendingPrompts({
           key={prompt.seq}
           className={`flex items-center gap-2 rounded border px-2 py-1 text-xs ${
             prompt.status === 'discarded'
-              ? 'border-rose-200 bg-rose-50 text-rose-800'
-              : 'border-amber-200 bg-amber-50 text-amber-900'
+              ? 'border-danger bg-surface text-danger'
+              : 'border-warn bg-surface text-warn'
           }`}
         >
           <span className="font-semibold">{prompt.displayName}</span>
@@ -80,7 +80,7 @@ export function PendingPrompts({
           {prompt.status === 'discarded' ? (
             <button
               type="button"
-              className="rounded border border-rose-300 px-2 py-0.5 font-medium"
+              className="rounded border border-danger px-2 py-0.5 font-medium text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
               onClick={() => onResend(prompt.text)}
             >
               Resend

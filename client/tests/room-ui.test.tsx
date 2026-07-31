@@ -3,24 +3,30 @@ import { describe, expect, it, vi } from 'vitest';
 import { ConnectionStatus } from '../src/components/ConnectionStatus.js';
 import { MessageList } from '../src/components/MessageList.js';
 import { PromptInput } from '../src/components/PromptInput.js';
-import type { Message } from '../src/store.js';
+import type { NexusEvent } from '../../src/protocol/events.js';
 
-const messages: Message[] = [
-  { id: 'a', kind: 'user', author: 'Ada', text: 'list the files', seq: 1 },
-  { id: 'b', kind: 'assistant', author: null, text: 'One file.', seq: 2 },
-  { id: 'c', kind: 'tool', author: null, text: 'Glob {"pattern":"**/*.ts"}', seq: 3 },
-];
+function log(...partials: Record<string, unknown>[]): NexusEvent[] {
+  return partials.map(
+    (p, i) => ({ seq: i + 1, ts: '2026-07-30T00:00:00.000Z', roomId: 'room_a', ...p }) as NexusEvent,
+  );
+}
+
+const events = log(
+  { type: 'user_prompt', participantId: 'p_ada', displayName: 'Ada', text: 'list the files' },
+  { type: 'assistant_message', messageId: 'm1', text: 'One file.' },
+  { type: 'tool_start', toolUseId: 'tu_1', toolName: 'Glob', input: { pattern: '**/*.ts' } },
+);
 
 describe('MessageList', () => {
   it('renders every message with its author', () => {
-    render(<MessageList messages={messages} pendingDeltas={{}} />);
+    render(<MessageList events={events} pendingDeltas={{}} />);
     expect(screen.getByText('list the files')).toBeInTheDocument();
     expect(screen.getByText('Ada')).toBeInTheDocument();
     expect(screen.getByText('One file.')).toBeInTheDocument();
   });
 
   it('renders in-flight delta text below the settled messages', () => {
-    render(<MessageList messages={messages} pendingDeltas={{ msg_9: 'thinking' }} />);
+    render(<MessageList events={events} pendingDeltas={{ msg_9: 'thinking' }} />);
     expect(screen.getByText('thinking')).toBeInTheDocument();
   });
 });

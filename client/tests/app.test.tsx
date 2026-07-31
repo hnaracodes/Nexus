@@ -137,8 +137,11 @@ describe('App — the live room view', () => {
       driverId: 'p_ada',
     });
 
-    expect(screen.getByText(/ada/i)).toBeInTheDocument();
-    expect(screen.getByText(/grace/i)).toBeInTheDocument();
+    // The roster now renders twice by design — a compact avatar row in the
+    // header (RoomHeader) and the full list with driver controls in the side
+    // rail (SideRail) — so this asserts presence, not uniqueness.
+    expect(screen.getAllByText(/ada/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/grace/i).length).toBeGreaterThan(0);
   });
 
   it('renders a pending approval and sends the decision', () => {
@@ -167,12 +170,13 @@ describe('App — the live room view', () => {
   });
 });
 
-describe('App — the landing page', () => {
-  it('renders room creation when the link carries no room', () => {
+describe('App — a malformed link', () => {
+  it('renders a malformed-link page when the link carries no room', () => {
+    // Under the phase-5a router, "/" with no room/token never reaches App —
+    // Router sends it to the marketing landing page instead. App only
+    // renders this branch for a room link missing at least one half.
     window.history.pushState({}, '', '/');
     render(<App />);
-    expect(screen.getByText(/open a nexus room/i)).toBeInTheDocument();
-    // The security model belongs on the page, not only in the README.
-    expect(screen.getByText(/shared security boundary/i)).toBeInTheDocument();
+    expect(screen.getByText(/this room link is incomplete/i)).toBeInTheDocument();
   });
 });

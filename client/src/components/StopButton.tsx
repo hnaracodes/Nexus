@@ -4,8 +4,8 @@ export function StopButton({ onStop, busy }: { onStop: () => void; busy: boolean
       type="button"
       onClick={onStop}
       title="Anyone in the room can stop the agent"
-      className={`rounded px-3 py-2 text-sm ${
-        busy ? 'bg-rose-600 text-white' : 'border border-rose-300 text-rose-700'
+      className={`rounded px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg ${
+        busy ? 'bg-danger text-fg' : 'border border-danger text-danger'
       }`}
     >
       Stop

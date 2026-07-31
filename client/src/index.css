@@ -1,3 +1,77 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* --- BEGIN phase-5a tokens --- */
+@layer base {
+  :root {
+    --bg: #0F172A;
+    --surface: #1E293B;
+    --surface-2: #334155;
+    --muted: #272F42;
+    --border: #475569;
+    --fg: #F8FAFC;
+    --fg-muted: #94A3B8;
+    --accent: #22C55E;
+    --accent-dim: #166534;
+    --warn: #F59E0B;
+    --danger: #EF4444;
+    --info: #38BDF8;
+    --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-mono: ui-monospace, 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
+    color-scheme: dark;
+  }
+
+  /*
+    Marketing pages only. The room is dark-only by design — it sits beside a
+    terminal. `.surface-marketing` is set on the <body> by the router for the
+    landing and legal routes, never for the room.
+    Accent, warn and danger MUST darken here: #22C55E on white is 1.8:1.
+  */
+  @media (prefers-color-scheme: light) {
+    .surface-marketing {
+      --bg: #FFFFFF;
+      --surface: #F8FAFC;
+      --surface-2: #F1F5F9;
+      --border: #CBD5E1;
+      --fg: #0F172A;
+      --fg-muted: #475569;
+      --accent: #15803D;
+      --warn: #B45309;
+      --danger: #B91C1C;
+      color-scheme: light;
+    }
+  }
+
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    background-color: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans);
+  }
+
+  /* A focus ring is never removed, only restyled. */
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+/* --- END phase-5a tokens --- */
+
+/* --- BEGIN phase-5b keyframes --- */
+@layer utilities {
+  @keyframes nexus-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+  .animate-nexus-pulse { animation: nexus-pulse 1.6s ease-in-out infinite; }
+  @keyframes nexus-caret { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+  .animate-nexus-caret { animation: nexus-caret 1s step-end infinite; }
+}
+/* --- END phase-5b keyframes --- */

@@ -16,7 +16,7 @@ export function InterruptNotice({ events }: { events: NexusEvent[] }): JSX.Eleme
   if (latest === undefined) return null;
 
   return (
-    <p role="status" className="text-xs font-medium text-rose-700">
+    <p role="status" className="text-xs font-medium text-danger">
       {latest.displayName} stopped the agent.
     </p>
   );

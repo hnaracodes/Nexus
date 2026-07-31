@@ -1,3 +1,4 @@
+import { Wifi, WifiOff } from 'lucide-react';
 import type { Status } from '../ws.js';
 
 const LABEL: Record<Status, string> = {
@@ -8,12 +9,42 @@ const LABEL: Record<Status, string> = {
 };
 
 const TONE: Record<Status, string> = {
-  connecting: 'bg-amber-100 text-amber-900',
-  open: 'bg-emerald-100 text-emerald-900',
-  reconnecting: 'bg-amber-100 text-amber-900',
-  closed: 'bg-rose-100 text-rose-900',
+  connecting: 'border-warn text-warn',
+  open: 'border-accent text-accent',
+  reconnecting: 'border-warn text-warn',
+  closed: 'border-danger text-danger',
 };
 
-export function ConnectionStatus({ status }: { status: Status }): JSX.Element {
-  return <span className={`rounded px-2 py-1 text-xs ${TONE[status]}`}>{LABEL[status]}</span>;
+/**
+ * A token-coloured connection pill. Colour never carries the meaning alone —
+ * the icon (Wifi live, WifiOff otherwise) and the text label both restate it.
+ */
+export function ConnectionStatus({
+  status,
+  retrySecondsLeft,
+}: {
+  status: Status;
+  /**
+   * Seconds until the next reconnect attempt (backoff table at ws.ts:31).
+   * Optional and additive — existing callers passing only `status` keep
+   * working; the integration pass wires this once `connect()` exposes it.
+   */
+  retrySecondsLeft?: number;
+}): JSX.Element {
+  const Icon = status === 'open' || status === 'connecting' ? Wifi : WifiOff;
+  const suffix =
+    status === 'reconnecting' && retrySecondsLeft !== undefined && retrySecondsLeft > 0
+      ? ` · retrying in ${retrySecondsLeft}s`
+      : '';
+
+  return (
+    <span
+      role="status"
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${TONE[status]}`}
+    >
+      <Icon size={16} aria-hidden="true" />
+      {LABEL[status]}
+      {suffix}
+    </span>
+  );
 }
