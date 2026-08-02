@@ -38,6 +38,36 @@ hot-reload dev server on `:5173` — but its Vite proxy is hardcoded to
 `http://localhost:8080` (see `client/vite.config.ts`), so that workflow needs
 the backend on the default port, not `8099`.
 
+## GitHub App — private repositories (optional)
+
+Without this, a room clones a public repo over plain HTTPS or none at all. With
+it, a room can clone a **private** repo and the agent can open a pull request —
+which reaches it as an MCP tool, so publishing goes through the same four-eyes
+approval gate as any other risky action.
+
+The point is that you authorize **once**: only
+`{installationId, owner, repo, defaultBranch}` is persisted, none of it secret,
+and every token is minted server-side and lives an hour. A restart does not ask
+you for a GitHub credential again.
+
+Three environment variables enable it, all required together:
+
+```
+GITHUB_APP_CLIENT_ID
+GITHUB_APP_CLIENT_SECRET
+GITHUB_APP_PRIVATE_KEY_B64
+```
+
+Check whether they took with `curl localhost:8099/healthz` — it reports
+`githubConnectEnabled`. There is **no** numeric App ID variable; the App JWT is
+issued with the Client ID.
+
+**Full procedure: [`docs/github-app-setup.md`](docs/github-app-setup.md)** —
+registering the App, running locally, the live verification bars, and
+troubleshooting. Note that the App private key is a deployment-wide secret that
+mints tokens for every installation; read that document's security section
+before deploying it anywhere real.
+
 ## Security model — read this before sharing a link
 
 **A shared room is a shared security boundary.** Whatever the room can do,

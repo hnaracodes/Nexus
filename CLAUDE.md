@@ -39,6 +39,7 @@ Nothing from the old "still missing" list remains open as of the user's report a
 | `project_goal.md` | You need the long-horizon architecture (§4), the 6-phase plan (§7), or the reasoning behind a constraint. Appendix A separates verified research from unvalidated opinion — check it before treating a claim as fact. |
 | `market_research.md` | You need competitive or demand context. Background; rarely needed while coding. |
 | `docs/plans/` | You are implementing anything. One plan per dispatch unit, in the format `superpowers:subagent-driven-development` consumes. `README.md` there is the manifest. |
+| `docs/github-app-setup.md` | You are setting up, debugging or live-verifying phase 6. Code-verified: the three env vars, why there is no App ID, the click path, the five live bars, and a symptom→cause table. |
 
 `BUILD_SPEC.md` line 9 suggests copying itself to `CLAUDE.md`. We deliberately did not — this file is the concise orientation layer and the specs remain the single source of truth. Keep it that way: add pointers here, add depth there.
 
