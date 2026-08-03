@@ -1,5 +1,9 @@
 import { useState } from 'react';
-import { Check, Command, Link2 } from 'lucide-react';
+// No `Github` icon: lucide removed brand marks upstream and this project is on
+// lucide-react 1.x. `GitPullRequest` is the better signifier anyway — the chip
+// says where a publish lands, not which vendor hosts it.
+import { Check, Command, GitPullRequest, Link2 } from 'lucide-react';
+import type { GithubRepoRef } from '../../../src/protocol/events.js';
 import type { PresenceEntry } from '../../../src/protocol/wire.js';
 // Sibling of Task 1 (docs/plans/phase-5b-room-ui-redesign.md). Not present on
 // disk at the time this file was written under parallel dispatch — imported
@@ -19,6 +23,15 @@ export interface RoomHeaderProps {
   selfId: string | null;
   agentStatus: AgentStatus;
   now: number;
+  /**
+   * The repository a publish would open a pull request against, derived from
+   * `room_created` (see `deriveGithubBinding`). Null for a room with no GitHub
+   * binding — which is also a room with no publish tool at all, since
+   * `createGithubMcpServer` returns null in that case. Showing it makes "this
+   * room can publish, and where" visible rather than something the agent
+   * discovers by trying.
+   */
+  github: GithubRepoRef | null;
   onRequestControl: () => void;
   onReleaseControl: () => void;
   onGrantControl: (participantId: string) => void;
@@ -42,6 +55,7 @@ export function RoomHeader({
   selfId,
   agentStatus,
   now,
+  github,
   onRequestControl,
   onReleaseControl,
   onGrantControl,
@@ -80,6 +94,21 @@ export function RoomHeader({
             <Link2 size={16} aria-hidden="true" />
           )}
         </button>
+        {github !== null && (
+          <a
+            href={`https://github.com/${github.owner}/${github.repo}`}
+            target="_blank"
+            // noreferrer is load-bearing, not boilerplate: the room token is in
+            // this page's query string and would otherwise reach GitHub in the
+            // Referer header. Mirrors the server's Referrer-Policy.
+            rel="noopener noreferrer"
+            title={`Publishing opens a pull request on ${github.owner}/${github.repo} (${github.defaultBranch})`}
+            className="flex min-h-[44px] shrink-0 items-center gap-1.5 rounded border border-border px-2 text-xs text-fg-muted hover:text-fg focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+          >
+            <GitPullRequest size={14} aria-hidden="true" />
+            <span className="truncate">{`${github.owner}/${github.repo}`}</span>
+          </a>
+        )}
       </div>
 
       <div className="flex min-w-0 items-center gap-3">

@@ -15,6 +15,9 @@ import { MalformedLink } from './pages/MalformedLink.js';
 import { useHotkeys } from './hooks/useHotkeys.js';
 import type { Hotkey } from './hooks/useHotkeys.js';
 import { RoomHeader } from './components/RoomHeader.js';
+import { deriveGithubBinding } from './githubBinding.js';
+import { PublishedPrCard } from './components/PublishedPr.js';
+import { deriveLatestPublishedPr } from './publishedPr.js';
 import { SideRail } from './components/SideRail.js';
 import { MessageList } from './components/MessageList.js';
 import { derivePending } from './components/PendingPrompts.js';
@@ -426,6 +429,7 @@ function RoomShell({
         selfId={view.selfId}
         agentStatus={agentStatus}
         now={now}
+        github={deriveGithubBinding(view.events)}
         onRequestControl={() => connection?.send({ kind: 'request_control' })}
         onReleaseControl={() => connection?.send({ kind: 'release_control' })}
         onGrantControl={(toParticipantId) => connection?.send({ kind: 'grant_control', toParticipantId })}
@@ -442,6 +446,12 @@ function RoomShell({
           {/* --- BEGIN phase-3d error banner slot: render <ErrorBanner/> here. --- */}
           <ErrorBanner message={bannerMessage} onDismiss={() => setDismissedCount(view.errorCount)} />
           {/* --- END phase-3d error banner slot --- */}
+
+          <PublishedPrCard
+            pr={deriveLatestPublishedPr(view.events)}
+            selfId={view.selfId}
+            replaying={view.replaying}
+          />
 
           <DriverRequestNotice
             events={view.events}
