@@ -50,6 +50,20 @@ everything on `sonnet`** to conserve credits, including the rows that say
 | 7 | `phase-5a-marketing-site.md` *(post-MVP)* | parallel | `sonnet` | `client/src/pages/**`, `client/src/router.tsx`, `client/src/design/**`, `client/index.html`, `client/tailwind.config.js`, `phase-5a` regions of `client/src/index.css` and `client/src/App.tsx`, static-route block of `src/server/index.ts`, `tests/server/static-routes.test.ts` |
 | 7 | `phase-5b-room-ui-redesign.md` *(post-MVP)* | parallel | `sonnet` | `client/src/components/**`, `client/src/hooks/**`, `client/src/{agentStatus,identity,rooms,store}.ts`, `phase-5b` regions of `client/src/App.tsx` and `client/src/index.css`, `client/package.json` (`lucide-react` only) |
 | 8 | `phase-6-github-app-auth.md` *(post-MVP)* | **solo** | `sonnet` | `src/server/{github,publish,publishTool,create,recovery,rooms}.ts`, phase-6 route block + `POST /api/rooms` body of `src/server/index.ts`, `mcpServers` wiring in `src/server/agent.ts`, `commit`/`room_created` in `src/server/ws.ts`, `src/protocol/events.ts`, `src/log/redact.ts`, `client/src/pages/CreateRoom.tsx`, `client/src/store.ts` (`github_published` case), `Dockerfile`, `fly.toml` |
+| 9 | `phase-7-workspace-ide.md` *(post-MVP, **not dispatch-ready**)* | see below | `sonnet` | Three sub-plans, each with its own **Files owned** block in the plan. 7a: `src/server/{workspace,watcher,gitStatus}.ts` + protocol + `agent.ts`/`ws.ts` + phase-7 route block of `src/server/index.ts`. 7b: `client/src/{derive,workspace}/**` + workspace components + `shiki`. 7c: `client/src/components/{PromptDock,ModelSelector,VoiceInputButton,RepoBranchBar,ContextWindowBar}.tsx` |
+
+**Order 9 is a design plan, not a dispatch unit — do not issue it as written.**
+`phase-7-workspace-ide.md` carries no `### Task N:` headings, so
+`scripts/task-brief` cannot extract a task from it and
+`superpowers:subagent-driven-development` cannot consume it. Decompose it into
+numbered tasks first, and compile every code fragment against the real
+signatures while you do — Phase 3's lesson applies with full force here, since
+this plan spans three new server modules and eleven new client modules. A
+refinement pass was handed to Ultraplan and had not returned when the plan was
+committed; reconcile that before decomposing. 7a and 7c are genuinely parallel;
+7b consumes 7a's protocol changes; the `client/src/App.tsx` integration is a
+single owner, last, behind `phase-7` marker regions that must be placed on the
+default branch **before** dispatch.
 
 **Order 7 is a UI phase, not an MVP phase.** Both plans consume
 `design-system/nexus/MASTER.md`, which is the single source of colour, type,
