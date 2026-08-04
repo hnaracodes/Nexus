@@ -16,7 +16,7 @@ export function CountdownRing({
 }): JSX.Element {
   const clampedTotal = Math.max(totalSeconds, 1);
   const fraction = Math.min(1, Math.max(0, secondsLeft / clampedTotal));
-  const color = fraction > 0.5 ? 'var(--accent)' : fraction > 0.2 ? 'var(--warn)' : 'var(--danger)';
+  const color = fraction > 0.5 ? 'rgb(var(--accent))' : fraction > 0.2 ? 'rgb(var(--warn))' : 'rgb(var(--danger))';
   const radius = 16;
   const circumference = 2 * Math.PI * radius;
   const dashOffset = circumference * (1 - fraction);
@@ -33,7 +33,7 @@ export function CountdownRing({
         height={size}
         className="absolute inset-0 -rotate-90 transition-[stroke-dashoffset] duration-150 motion-reduce:transition-none"
       >
-        <circle cx={20} cy={20} r={radius} fill="none" stroke="var(--border)" strokeWidth={3} />
+        <circle cx={20} cy={20} r={radius} fill="none" stroke="rgb(var(--border))" strokeWidth={3} />
         <circle
           cx={20}
           cy={20}

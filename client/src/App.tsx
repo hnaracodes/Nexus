@@ -16,6 +16,8 @@ import { WorkspacePane } from './components/WorkspacePane.js';
 import { createWorkspaceApi } from './workspace/workspaceApi.js';
 // phase-7c import anchor
 import { PromptDock } from './components/PromptDock.js';
+import { JoinGate, readStoredName, storeName } from './components/JoinGate.js';
+import { JoinToasts } from './components/JoinToasts.js';
 // phase-5b import anchor
 import { useHotkeys } from './hooks/useHotkeys.js';
 import type { Hotkey } from './hooks/useHotkeys.js';
@@ -42,7 +44,12 @@ function readParams(): { roomId: string; token: string; displayName: string } {
   return {
     roomId: params.get('room') ?? '',
     token: params.get('token') ?? '',
-    displayName: params.get('name') ?? 'anonymous',
+    // No default. "anonymous" used to be filled in here, which meant a room
+    // with three unnamed people showed three identical roster rows and every
+    // prompt in the transcript was attributed to nobody — in a product built
+    // on attributed collaboration, that defeats the feature. An empty name now
+    // routes to <JoinGate/> instead.
+    displayName: params.get('name') ?? '',
   };
 }
 
@@ -208,7 +215,19 @@ function GrantControlPicker({
 }
 
 export default function App(): JSX.Element {
-  const params = useMemo(readParams, []);
+  const linkParams = useMemo(readParams, []);
+  // A name from the link wins; otherwise one this browser already chose for
+  // this room; otherwise nothing, and the gate asks. Persisting matters beyond
+  // convenience — ws.ts keys stored identity on (roomId, displayName), so a
+  // name that changed on every reload would orphan the participant id and the
+  // driver token with it.
+  const [chosenName, setChosenName] = useState<string | null>(
+    () => (linkParams.displayName !== '' ? linkParams.displayName : readStoredName(linkParams.roomId)),
+  );
+  const params = useMemo(
+    () => ({ ...linkParams, displayName: chosenName ?? '' }),
+    [linkParams, chosenName],
+  );
   const [view, setView] = useState<RoomView>(EMPTY_VIEW);
   const [status, setStatus] = useState<Status>('connecting');
   const [connection, setConnection] = useState<Connection | null>(null);
@@ -223,7 +242,10 @@ export default function App(): JSX.Element {
   const [reKeyOpen, setReKeyOpen] = useState(false);
 
   useEffect(() => {
-    if (params.roomId === '' || params.token === '') return undefined;
+    // Nothing connects until there is a name. Joining and then renaming would
+    // mean a participant_joined already sat in the durable log under the wrong
+    // identity, and I3 forbids rewriting it.
+    if (params.roomId === '' || params.token === '' || params.displayName === '') return undefined;
     const active = connect({
       ...params,
       onView: setView,
@@ -244,8 +266,20 @@ export default function App(): JSX.Element {
   // Under the phase-5a router, "/" with no room/token is now the marketing
   // landing page — Router never mounts <App/> for that case. If App IS
   // reached without both halves of a link, that link is genuinely broken.
-  if (params.roomId === '' || params.token === '') {
+  if (linkParams.roomId === '' || linkParams.token === '') {
     return <MalformedLink />;
+  }
+
+  if (chosenName === null) {
+    return (
+      <JoinGate
+        roomLabel={deriveRoomLabel([], linkParams.roomId)}
+        onJoin={(name) => {
+          storeName(linkParams.roomId, name);
+          setChosenName(name);
+        }}
+      />
+    );
   }
 
   // --- BEGIN phase-5b layout ---
@@ -581,6 +615,8 @@ function RoomShell({
         )}
       </div>
       {/* --- END phase-7 mobile workspace sheet --- */}
+
+      <JoinToasts events={view.events} selfId={view.selfId} />
 
       <GrantControlPicker
         open={grantPickerOpen}

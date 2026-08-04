@@ -27,20 +27,70 @@ Tailwind via `tailwind.config.js` `theme.extend.colors` so utilities read
 
 | Token | Hex | Tailwind key | Use |
 |---|---|---|---|
-| `--bg` | `#0F172A` | `bg` | page background |
-| `--surface` | `#1E293B` | `surface` | cards, panels, message rows |
-| `--surface-2` | `#334155` | `surface-2` | raised, hover, active |
-| `--muted` | `#272F42` | `muted` | inert fills, disabled |
-| `--border` | `#475569` | `border` | dividers, card edges |
-| `--fg` | `#F8FAFC` | `fg` | primary text |
-| `--fg-muted` | `#94A3B8` | `fg-muted` | secondary text |
-| `--accent` | `#22C55E` | `accent` | driver token, agent running, primary CTA |
-| `--accent-dim` | `#166534` | `accent-dim` | accent backgrounds, rings at low emphasis |
-| `--accent-2` | `#6366F1` | `accent-2` | gradient partner, ambient mesh — marketing only |
-| `--accent-3` | `#22D3EE` | `accent-3` | gradient partner, ambient mesh — marketing only |
-| `--warn` | `#F59E0B` | `warn` | permission requests, security callouts |
-| `--danger` | `#EF4444` | `danger` | denials, errors, destructive tools |
-| `--info` | `#38BDF8` | `info` | neutral notices |
+| `--bg` | `#131316` | `bg` | page background |
+| `--surface` | `#1A1A1E` | `surface` | cards, panels, message rows |
+| `--surface-2` | `#24242A` | `surface-2` | raised, hover, active |
+| `--muted` | `#1E1E23` | `muted` | inert fills, disabled |
+| `--border` | `#2E2E36` | `border` | dividers, card edges — decorative only |
+| `--border-strong` | `#6A6A75` | `border-strong` | **operable** boundaries: inputs, secondary buttons |
+| `--fg` | `#E8E8EC` | `fg` | primary text |
+| `--fg-muted` | `#9B9BA6` | `fg-muted` | secondary text |
+| `--accent` | `#F0883E` | `accent` | brand + interactive: CTA, links, driver token, focus ring |
+| `--accent-dim` | `#3A2113` | `accent-dim` | accent backgrounds at low emphasis |
+| `--on-accent` | `#14100B` | `on-accent` | label colour on a solid `--accent` fill |
+| `--success` | `#46C46A` | `success` | **approved**, agent running |
+| `--warn` | `#E3B341` | `warn` | permission requests, security callouts |
+| `--danger` | `#FB7185` | `danger` | denials, errors, destructive tools |
+| `--info` | `#58B8F0` | `info` | neutral notices |
+| `--accent-2` | `#E879F9` | `accent-2` | landing spectrum — marketing only |
+| `--accent-3` | `#A78BFA` | `accent-3` | landing spectrum — marketing only |
+| `--lime` | `#A3E635` | `lime` | landing spectrum — marketing only |
+| `--nexus` | `#5AA9FF` | `nexus` | the blob character, and only him |
+
+### Why the accent is not green
+
+Green previously did four jobs at once — driver token, agent running, primary
+CTA, **and approved-state** — so "this is a button" and "this was approved"
+rendered identically. In a product whose whole premise is that people can see
+what the agent is about to do, that is a correctness problem, not a taste one.
+
+Ember now owns interactive/identity. `--success` owns approved/running and
+nothing else. Approve / deny / pending finally read as one set.
+
+### Why the danger colour is rose, not red
+
+**Contrast between accents matters as much as contrast against the background,
+and almost nobody checks it.** A conventional red (`#F0655C`, hue 4) sits at
+**1.23:1** against ember (hue 25). Both pass AA against `--bg` individually and
+are nearly indistinguishable from each other — so "primary action" and
+"destructive action" would have looked alike. `#FB7185` (hue 351) is the fix.
+
+### The character is deliberately off-palette
+
+`--nexus` is the only blue in a warm system. He is a *character in* the product,
+not a piece of its chrome; the cool blue is what makes him read as someone
+rather than as a UI element. Never use `--nexus` for interface state.
+
+### Tokens are CHANNEL TRIPLETS, and that is load-bearing
+
+`index.css` defines every colour as raw channels — `--accent: 240 136 62;` — and
+`tailwind.config.js` consumes them as `rgb(var(--accent) / <alpha-value>)`.
+
+This is not a style preference. **Tailwind can only honour an opacity modifier
+(`bg-danger/70`, `border-accent/45`, `bg-surface/60`) when the colour is in that
+form.** While the tokens held hex strings, every such class compiled to *nothing*
+and the build stayed green — buttons shipped with no border and no hover state,
+card borders vanished, and a window-chrome detail was simply invisible. Several
+of the dead classes predated the repalette by two phases.
+
+Consequences to remember:
+
+- In plain CSS or an inline style, write `rgb(var(--accent))`, never
+  `var(--accent)` — the bare value is `240 136 62`, which is not a colour.
+- The same applies inside SVG presentation attributes.
+- `client/src/design/tokens.ts` keeps the **hex** copies. That duplication is
+  deliberate: Shiki needs real hex for its theme, and humans need something
+  readable. If you change a colour, change both.
 
 ### Rules that are not negotiable
 
@@ -57,47 +107,31 @@ Tailwind via `tailwind.config.js` `theme.extend.colors` so utilities read
 
 ### Measured contrast (WCAG 2.1 AA)
 
-Verify with a contrast checker at build review, not by eye:
+Computed, not eyeballed — every pair below was run through a relative-luminance
+calculator on 2026-08-03.
 
 | Pair | Ratio | Verdict |
 |---|---|---|
-| `--fg` on `--bg` | 16.9:1 | AAA |
-| `--fg` on `--surface` | 13.6:1 | AAA |
-| `--fg-muted` on `--bg` | 7.5:1 | AAA |
-| `--fg-muted` on `--surface` | 6.0:1 | AA+ |
-| `--accent` on `--bg` | 8.3:1 | AAA |
-| `--accent-2` on `--bg` | 4.4:1 | AA — large text and decoration only |
-| `--accent-3` on `--bg` | 9.0:1 | AAA |
-| `--accent` on `--accent-dim` | 3.1:1 | **FAILS body text** — use `--fg` for the label, accent on the icon |
-| `--warn` on `--bg` | 8.9:1 | AAA |
-| `--danger` on `--bg` | 4.9:1 | AA (body-size OK) |
+| `--fg` on `--bg` | 15.18:1 | AAA |
+| `--fg-muted` on `--bg` | 6.74:1 | AA |
+| `--fg-muted` on `--surface-2` | 5.61:1 | AA |
+| `--accent` on `--bg` | 7.33:1 | AAA |
+| `--accent` on `--surface-2` | 6.10:1 | AA |
+| `--on-accent` on `--accent` (primary button) | 7.48:1 | AAA |
+| `--success` on `--bg` | 8.27:1 | AAA |
+| `--warn` on `--bg` | 9.53:1 | AAA |
+| `--danger` on `--bg` | 5.94:1 | AA |
+| `--info` on `--bg` | 8.42:1 | AAA |
+| `--accent-2` on `--bg` | 7.54:1 | AAA |
+| `--accent-3` on `--bg` | 6.81:1 | AA |
+| `--lime` on `--bg` | 12.30:1 | AAA |
+| `--nexus` on `--bg` | 7.55:1 | AAA |
+| `--border-strong` on `--bg` | 3.47:1 | passes **1.4.11** (UI boundary, not text) |
+| `--border` on `--bg` | 1.38:1 | decorative divider only — never a control edge |
 
-`--danger` is the tightest pair. Do not use it below 14px, and do not use it on
-`--surface-2` (drops to ~3.5:1) — on raised surfaces use `--danger` for the
-border and `--fg` for the text.
-
-### Light mode
-
-Marketing pages only, via `prefers-color-scheme: light`. The room is dark-only,
-deliberately — it sits beside a terminal and an editor.
-
-| Token | Light value |
-|---|---|
-| `--bg` | `#FFFFFF` |
-| `--surface` | `#F8FAFC` |
-| `--surface-2` | `#F1F5F9` |
-| `--border` | `#CBD5E1` |
-| `--fg` | `#0F172A` |
-| `--fg-muted` | `#475569` |
-| `--accent` | `#15803D` (darkened — `#22C55E` on white is 1.8:1 and fails) |
-| `--warn` | `#B45309` |
-| `--danger` | `#B91C1C` |
-
-The accent, warn and danger tokens **must** darken in light mode. Reusing the
-dark-mode values on a white background fails contrast badly enough to be
-unreadable, and it is the single most common way a dark-first palette breaks.
-
----
+Marketing light mode, all against `#FFFFFF`: `--fg` 18.54, `--fg-muted` 7.16,
+`--accent` (`#B4530F`) 5.02, `--accent-2` 6.32, `--accent-3` 7.10, `--success`
+5.02, `--danger` 5.63, `--warn` 5.93. White on light `--accent` is 5.02:1.
 
 ## 2. Typography
 

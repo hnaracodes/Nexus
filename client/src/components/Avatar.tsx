@@ -30,7 +30,7 @@ export function Avatar({
         height: dimensions.box,
         backgroundColor: `hsl(${hue} 55% 45%)`,
         opacity: connected ? 1 : 0.4,
-        outline: isDriver ? '2px solid var(--accent)' : undefined,
+        outline: isDriver ? '2px solid rgb(var(--accent))' : undefined,
         outlineOffset: isDriver ? 1 : undefined,
       }}
       title={displayName}

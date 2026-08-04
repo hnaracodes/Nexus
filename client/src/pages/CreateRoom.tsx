@@ -229,8 +229,9 @@ export function CreateRoom({ onCreated }: { onCreated: (link: string) => void })
   if (link !== null) {
     return (
       <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center p-8">
-        <div className="rounded-lg border border-border bg-surface p-6">
-          <h1 className="mb-2 text-2xl font-semibold text-fg">Your room is ready</h1>
+        <div className="rounded-xl border border-border bg-surface p-6">
+          <p className="mb-3 font-mono text-xs text-success">✓ room provisioned</p>
+          <h1 className="mb-2 text-2xl font-semibold tracking-tight text-fg">Your room is ready</h1>
           <p className="mb-4 text-fg-muted">
             Copy this link now — it will not be shown again on this page.
           </p>
@@ -244,14 +245,14 @@ export function CreateRoom({ onCreated }: { onCreated: (link: string) => void })
                 value={link}
                 aria-label="Room link"
                 onFocus={(event) => event.currentTarget.select()}
-                className="min-w-0 flex-1 rounded border border-border bg-muted px-3 py-2 font-mono text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+                className="min-h-11 min-w-0 flex-1 rounded-[10px] border border-border-strong bg-bg px-3 font-mono text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
               />
               <button
                 type="button"
                 onClick={handleCopy}
                 aria-label={copied ? 'Link copied' : 'Copy link'}
                 title={copied ? 'Copied' : 'Copy link'}
-                className="flex min-h-11 min-w-11 items-center justify-center gap-2 rounded border border-border bg-surface-2 px-3 text-sm font-medium text-fg transition-colors duration-150 ease-out hover:bg-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+                className="flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-[10px] border border-border-strong bg-surface-2 px-3 text-sm font-medium text-fg transition-colors duration-150 ease-out hover:bg-muted hover:border-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
               >
                 {copied ? (
                   <Check size={16} strokeWidth={2} className="text-accent" aria-hidden="true" />
@@ -273,7 +274,7 @@ export function CreateRoom({ onCreated }: { onCreated: (link: string) => void })
 
           <a
             href={link}
-            className="flex min-h-11 items-center justify-center rounded bg-accent px-4 py-2 text-center font-medium text-bg transition-colors duration-150 ease-out hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+            className="flex min-h-11 items-center justify-center rounded-[10px] bg-accent px-4 text-center font-medium text-on-accent shadow-[inset_0_1px_0_rgba(255,255,255,0.22)] transition-[filter,transform] duration-150 ease-out hover:brightness-110 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
           >
             Enter the room
           </a>
@@ -283,13 +284,20 @@ export function CreateRoom({ onCreated }: { onCreated: (link: string) => void })
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center p-8">
-      <h1 className="mb-2 text-2xl font-semibold text-fg">Open a Nexus room</h1>
+    <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center p-6 sm:p-8">
+      {/* The eyebrow reads as a command because this IS the command — you are
+          provisioning a machine, and the page should feel like the tool it is
+          rather than a marketing form wearing a dark theme. */}
+      <p className="mb-3 font-mono text-xs text-fg-muted">
+        <span className="text-accent">$</span> nexus create-room
+        <span className="animate-nexus-caret text-accent"> ▍</span>
+      </p>
+      <h1 className="mb-2 text-2xl font-semibold tracking-tight text-fg">Open a Nexus room</h1>
       <p className="mb-6 text-fg-muted">
         One agent, one context window, everyone in the room watching the same thing.
       </p>
 
-      <div className="mb-6 flex items-start gap-3 rounded-md border border-warn bg-muted p-4 text-sm">
+      <div className="mb-6 flex items-start gap-3 rounded-xl border border-border border-l-[3px] border-l-warn bg-surface p-4 text-sm">
         <ShieldAlert size={20} strokeWidth={2} className="mt-0.5 shrink-0 text-warn" aria-hidden="true" />
         <div className="text-fg">
           <p className="mb-2 font-semibold">A shared room is a shared security boundary.</p>
@@ -306,8 +314,14 @@ export function CreateRoom({ onCreated }: { onCreated: (link: string) => void })
         </div>
       </div>
 
-      <div className="rounded-lg border border-border bg-surface p-6">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <div className="overflow-hidden rounded-xl border border-border bg-surface">
+        <div className="flex items-center gap-2 border-b border-border bg-surface-2/60 px-4 py-2.5">
+          <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-danger/70" />
+          <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-warn/70" />
+          <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-success/70" />
+          <span className="ml-2 font-mono text-xs text-fg-muted">room.config</span>
+        </div>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-5 sm:p-6">
           <label className="flex flex-col gap-1 text-sm">
             <span className="text-fg">Anthropic Console API key</span>
             <div className="flex gap-2">
@@ -321,14 +335,14 @@ export function CreateRoom({ onCreated }: { onCreated: (link: string) => void })
                   if (error !== null) setError(null);
                 }}
                 placeholder="sk-ant-…"
-                className="min-w-0 flex-1 rounded border border-border bg-muted px-3 py-2 font-mono text-sm text-fg placeholder:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+                className="min-h-11 min-w-0 flex-1 rounded-[10px] border border-border-strong bg-bg px-3 font-mono text-sm text-fg placeholder:text-fg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
               />
               <button
                 type="button"
                 onClick={() => setShowKey((value) => !value)}
                 aria-label={showKey ? 'Hide key value' : 'Show key value'}
                 title={showKey ? 'Hide key value' : 'Show key value'}
-                className="flex min-h-11 min-w-11 items-center justify-center rounded border border-border bg-surface-2 text-fg-muted transition-colors duration-150 ease-out hover:bg-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+                className="flex min-h-11 min-w-11 items-center justify-center rounded-[10px] border border-border-strong bg-surface-2 text-fg-muted transition-colors duration-150 ease-out hover:bg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
               >
                 {showKey ? (
                   <EyeOff size={16} strokeWidth={2} aria-hidden="true" />

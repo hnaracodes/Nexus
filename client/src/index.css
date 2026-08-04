@@ -5,58 +5,93 @@
 /* --- BEGIN phase-5a tokens --- */
 @layer base {
   :root {
-    --bg: #0F172A;
-    --surface: #1E293B;
-    --surface-2: #334155;
-    --muted: #272F42;
-    --border: #475569;
-    --fg: #F8FAFC;
-    --fg-muted: #94A3B8;
-    --accent: #22C55E;
-    --accent-dim: #166534;
-    --accent-2: #6366F1;
-    --accent-3: #22D3EE;
-    --warn: #F59E0B;
-    --danger: #EF4444;
-    --info: #38BDF8;
+    /*
+      "Graphite". A near-neutral dark shell so the room sits beside an editor
+      without competing with it, and so syntax highlighting in the workspace
+      pane is the most saturated thing on screen.
+
+      --accent is EMBER, and splitting it from green is a semantic decision
+      rather than a taste one. Green previously did four jobs at once — driver
+      token, agent running, primary CTA, and approved-state — so "this is a
+      button" and "this was approved" rendered identically. In a product whose
+      premise is that people can see what the agent is about to do, that
+      collision is a correctness problem. Ember owns interactive/identity;
+      --success owns approved/running only.
+
+      --danger is ROSE, not the obvious red. A red at hue ~4 sits 1.2:1 from
+      ember and the two are individually legible but nearly indistinguishable
+      FROM EACH OTHER — "primary action" and "destructive action" reading alike
+      is the worst possible confusion here. Contrast between accents matters as
+      much as contrast against the background.
+
+      --nexus is the blob character's blue. Deliberately outside the brand
+      spectrum: he is a character in the product, not a piece of its chrome,
+      and the cool blue is what makes him pop against a warm page.
+    */
+    /* CHANNEL TRIPLETS, not hex — and this is load-bearing. Tailwind can only
+       honour an opacity modifier (`bg-danger/70`, `border-accent/45`) when the
+       colour is `rgb(var(--x) / <alpha-value>)`, which needs raw channels. With
+       hex values here, every such class compiled to NOTHING and the build
+       stayed green: buttons lost their borders and hover states, card borders
+       vanished. Use `rgb(var(--token))` anywhere you need one of these in plain
+       CSS. tokens.ts keeps the hex copies, for Shiki and for humans. */
+    --bg: 19 19 22;  /* #131316 */
+    --surface: 26 26 30;  /* #1A1A1E */
+    --surface-2: 36 36 42;  /* #24242A */
+    --muted: 30 30 35;  /* #1E1E23 */
+    --border: 46 46 54;  /* #2E2E36 */
+    /* Interactive boundaries (inputs, secondary buttons) need 3:1 per WCAG
+       1.4.11. --border is a divider and deliberately near-invisible; anything
+       a person can operate uses this instead. */
+    --border-strong: 106 106 117;  /* #6A6A75 */
+    --fg: 232 232 236;  /* #E8E8EC */
+    --fg-muted: 155 155 166;  /* #9B9BA6 */
+    --accent: 240 136 62;  /* #F0883E */
+    --accent-dim: 58 33 19;  /* #3A2113 */
+    /* Landing spectrum. The room uses --accent alone; the marketing surface
+       opens out into all four so it reads rich rather than tinted. */
+    --accent-2: 232 121 249;  /* #E879F9 */
+    --accent-3: 167 139 250;  /* #A78BFA */
+    --lime: 163 230 53;  /* #A3E635 */
+    --nexus: 90 169 255;  /* #5AA9FF */
+    --success: 70 196 106;  /* #46C46A */
+    --warn: 227 179 65;  /* #E3B341 */
+    --danger: 251 113 133;  /* #FB7185 */
+    --info: 88 184 240;  /* #58B8F0 */
+    /* Label colour for a solid --accent fill. Near-black, not white: white on
+       #F0883E is 2.2:1 and unreadable. */
+    --on-accent: 20 16 11;  /* #14100B */
     --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
     --font-mono: ui-monospace, 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
     color-scheme: dark;
   }
 
   /*
-    Marketing pages only. The room is dark-only by design — it sits beside a
-    terminal. `.surface-marketing` is set on the <body> by the router for the
-    landing and legal routes, never for the room.
-    Accent, warn and danger MUST darken here: #22C55E on white is 1.8:1.
+    The whole product is dark, marketing included.
+
+    There used to be a light-mode override here for the marketing surface. It
+    was removed deliberately: it fired on OS preference, which meant roughly
+    half of all visitors never saw the design the product is actually built
+    around, and the landing page's entire visual argument — a warm spectrum
+    glowing out of a near-black shell — does not survive inversion. A dark-first
+    palette flipped naively is also where contrast bugs breed (#F0883E on white
+    is 2.0:1).
+
+    `.surface-marketing` is still set on <body> by the router for the landing
+    and legal routes. It is now a hook for marketing-only treatments — the
+    spectrum, the ambient mesh — rather than a second theme.
   */
-  @media (prefers-color-scheme: light) {
-    .surface-marketing {
-      --bg: #FFFFFF;
-      --surface: #F8FAFC;
-      --surface-2: #F1F5F9;
-      --border: #CBD5E1;
-      --fg: #0F172A;
-      --fg-muted: #475569;
-      --accent: #15803D;
-      --accent-2: #4F46E5;
-      --accent-3: #0E7490;
-      --warn: #B45309;
-      --danger: #B91C1C;
-      color-scheme: light;
-    }
-  }
 
   html { -webkit-text-size-adjust: 100%; }
   body {
-    background-color: var(--bg);
-    color: var(--fg);
+    background-color: rgb(var(--bg));
+    color: rgb(var(--fg));
     font-family: var(--font-sans);
   }
 
   /* A focus ring is never removed, only restyled. */
   :focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid rgb(var(--accent));
     outline-offset: 2px;
   }
 
@@ -117,19 +152,21 @@
 
   /* Headline gradient. Falls back to --fg where background-clip is unsupported. */
   .text-gradient {
-    background-image: linear-gradient(110deg, var(--fg) 25%, var(--accent) 55%, var(--accent-3) 85%);
+    background-image: linear-gradient(110deg, rgb(var(--fg)) 25%, rgb(var(--accent)) 55%, rgb(var(--accent-3)) 85%);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
     -webkit-text-fill-color: transparent;
   }
   @supports not ((background-clip: text) or (-webkit-background-clip: text)) {
-    .text-gradient { color: var(--fg); -webkit-text-fill-color: var(--fg); }
+    .text-gradient { color: rgb(var(--fg)); -webkit-text-fill-color: rgb(var(--fg)); }
   }
 
-  /* Accent glow for the primary CTA and live indicators. */
-  .glow-accent { box-shadow: 0 0 0 0 rgb(34 197 94 / 0.45); transition: box-shadow 250ms ease-out, transform 250ms cubic-bezier(0.16, 1, 0.3, 1); }
-  .glow-accent:hover { box-shadow: 0 8px 32px -6px rgb(34 197 94 / 0.55); transform: translateY(-2px); }
+  /* Accent glow for the primary CTA and live indicators. Tracks --accent
+     rather than a hardcoded rgb() — the old value was green and would have
+     survived the repalette invisibly. */
+  .glow-accent { box-shadow: 0 0 0 0 rgb(var(--accent) / 0.45); transition: box-shadow 250ms ease-out, transform 250ms cubic-bezier(0.16, 1, 0.3, 1); }
+  .glow-accent:hover { box-shadow: 0 8px 32px -6px rgb(var(--accent) / 0.55); transform: translateY(-2px); }
 
   /* Card lift — the DB's Bento hover preset (scale 1.02 + shadow expansion). */
   .card-lift { transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), border-color 200ms ease-out, box-shadow 200ms ease-out; }
@@ -138,9 +175,221 @@
   /* Slow sheen across the section rule under each heading. */
   @keyframes nexus-sheen { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
   .rule-sheen {
-    background-image: linear-gradient(90deg, var(--border) 0%, var(--accent) 30%, var(--accent-3) 50%, var(--border) 80%);
+    background-image: linear-gradient(90deg, rgb(var(--border)) 0%, rgb(var(--accent)) 30%, rgb(var(--accent-3)) 50%, rgb(var(--border)) 80%);
     background-size: 200% 100%;
     animation: nexus-sheen 6s linear infinite;
   }
 }
 /* --- END phase-5c marketing motion --- */
+
+/* --- BEGIN nexus cinematic intro --- */
+@layer utilities {
+  /*
+    The opening film. Black stage, white line art, one green check, then the
+    camera punches through into the page.
+
+    Everything here is decorative: the landing page renders underneath at full
+    fidelity and this sits on top of it. The component refuses to mount at all
+    under prefers-reduced-motion, which is why these rules do not bother with a
+    reduced-motion variant — there is nothing to reduce.
+  */
+  .intro-root {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    display: grid;
+    place-items: center;
+    background: #000;
+    overflow: hidden;
+    animation: intro-out 700ms cubic-bezier(0.7, 0, 0.84, 0) 5.9s forwards;
+  }
+  @keyframes intro-out {
+    to { opacity: 0; visibility: hidden; }
+  }
+
+  .intro-stage {
+    position: relative;
+    width: min(92vw, 1100px);
+    transform-origin: 50% 28%;
+  }
+  /* The punch-through. Origin sits between the two hands, so the camera flies
+     through the high-five rather than through the middle of nothing. */
+  .intro-root.is-portal .intro-stage {
+    animation: intro-punch 1200ms cubic-bezier(0.66, 0, 0.34, 1) forwards;
+  }
+  @keyframes intro-punch {
+    0%   { transform: scale(1); filter: blur(0); }
+    55%  { transform: scale(4.2); filter: blur(1px); }
+    100% { transform: scale(26); filter: blur(7px); opacity: 0; }
+  }
+
+  .intro-svg { width: 100%; height: auto; display: block; }
+
+  /* Line-drawing. Each stroke carries its own --len so the dash cycle matches
+     its real length; a single shared value makes short strokes finish early and
+     long ones never finish at all. */
+  .intro-stroke {
+    fill: none;
+    stroke: #fff;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: var(--len, 200);
+    stroke-dashoffset: var(--len, 200);
+    animation: intro-draw 900ms cubic-bezier(0.16, 1, 0.3, 1) var(--figure-delay, 0ms) forwards;
+  }
+  .intro-figure .intro-stroke { animation-delay: var(--figure-delay, 0ms); }
+  @keyframes intro-draw { to { stroke-dashoffset: 0; } }
+
+  /* The arm swing. The transform is on a group, so the hand rides with it. */
+  .intro-arm { transition: all 520ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+  .intro-screen { transition: opacity 400ms ease-out; }
+  .intro-screen.is-off { opacity: 0; }
+  .intro-screen.is-on { opacity: 1; }
+  .intro-screen-fill { fill: rgb(255 255 255 / 0.06); }
+
+  /* Agent output scrolling on both screens at once. */
+  .intro-line {
+    stroke: rgb(255 255 255 / 0.75);
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-dasharray: 90;
+    stroke-dashoffset: 90;
+    animation: intro-draw 520ms ease-out forwards;
+  }
+  .intro-line-2 { animation-delay: 160ms; }
+  .intro-line-3 { animation-delay: 320ms; }
+
+  /* The green check. The ONE piece of colour in the film, which is what makes
+     it land — six seconds of white line art and then approval, in green. */
+  .intro-check {
+    fill: none;
+    stroke: #46C46A;
+    stroke-width: 6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 74;
+    stroke-dashoffset: 74;
+    animation: intro-draw 420ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    filter: drop-shadow(0 0 10px rgb(70 196 106 / 0.55));
+  }
+
+  /* The arc between the machines: one agent, two screens. */
+  .intro-link {
+    fill: none;
+    stroke: rgb(255 255 255 / 0.28);
+    stroke-width: 1.5;
+    stroke-dasharray: 5 7;
+    transition: opacity 500ms ease-out;
+  }
+  .intro-link.is-hidden { opacity: 0; }
+  .intro-pulse { fill: #5AA9FF; filter: drop-shadow(0 0 6px rgb(90 169 255 / 0.9)); }
+
+  /* Rotation and scale have to live in the SAME transform, because a CSS
+     transform replaces the SVG transform attribute rather than composing with
+     it. Keeping the angle in --angle is what lets one keyframe serve all six. */
+  .intro-burst-ray {
+    stroke: rgb(255 255 255 / 0.9);
+    stroke-width: 2;
+    stroke-linecap: round;
+    transform-origin: 380px 112px;
+    /* Delayed to land WITH the hands, not with the start of the swing. The arm
+       transition is 520ms; firing at t=0 detonated the burst in empty air above
+       two hands that were still travelling. */
+    animation: intro-burst 420ms cubic-bezier(0.16, 1, 0.3, 1) 380ms forwards;
+    opacity: 0;
+  }
+  @keyframes intro-burst {
+    0%   { opacity: 0; transform: rotate(var(--angle)) scale(0.3); }
+    30%  { opacity: 1; }
+    100% { opacity: 0; transform: rotate(var(--angle)) scale(1.25); }
+  }
+
+  /* Portal streaks. Each line is rotated to its own angle and flies outward
+     from the centre, which reads as speed without needing a 3D context. */
+  .intro-speed { position: absolute; inset: 0; pointer-events: none; }
+  .intro-speed-line {
+    position: absolute;
+    left: 50%;
+    top: 26%;
+    width: 2px;
+    height: 46vh;
+    background: linear-gradient(to bottom, transparent, rgb(255 255 255 / 0.85), transparent);
+    transform-origin: 50% 0;
+    transform: rotate(var(--angle)) scaleY(0);
+    animation: intro-streak 900ms cubic-bezier(0.66, 0, 0.34, 1) var(--delay, 0ms) forwards;
+  }
+  @keyframes intro-streak {
+    0%   { transform: rotate(var(--angle)) translateY(0) scaleY(0); opacity: 0; }
+    30%  { opacity: 1; }
+    100% { transform: rotate(var(--angle)) translateY(64vh) scaleY(3.4); opacity: 0; }
+  }
+
+  .intro-skip {
+    position: absolute;
+    right: clamp(1rem, 4vw, 3rem);
+    bottom: clamp(1rem, 4vw, 3rem);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    padding: 0 1rem;
+    border-radius: 999px;
+    border: 1px solid rgb(255 255 255 / 0.28);
+    background: rgb(255 255 255 / 0.06);
+    color: rgb(255 255 255 / 0.8);
+    font-size: 0.8125rem;
+    letter-spacing: 0.02em;
+    transition: background-color 150ms ease-out, color 150ms ease-out;
+  }
+  .intro-skip:hover { background: rgb(255 255 255 / 0.14); color: #fff; }
+  .intro-skip:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+  .intro-skip-key {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    padding: 0.05rem 0.35rem;
+    border-radius: 4px;
+    border: 1px solid rgb(255 255 255 / 0.25);
+  }
+}
+/* --- END nexus cinematic intro --- */
+
+/* --- BEGIN nexus character --- */
+@layer utilities {
+  /*
+    Nexus himself. He wanders the landing page: drifts to a waypoint, squashes
+    when he lands, blinks on his own clock. Purely decorative and always
+    pointer-events:none — he must never eat a click meant for a real control.
+  */
+  .nexus-char { transition: transform 2.4s cubic-bezier(0.37, 0, 0.63, 1); will-change: transform; }
+  .nexus-char.is-hop { transition-timing-function: cubic-bezier(0.34, 1.3, 0.64, 1); }
+
+  @keyframes nexus-breathe {
+    0%, 100% { transform: scale(1, 1); }
+    50%      { transform: scale(1.045, 0.955); }
+  }
+  .nexus-body { animation: nexus-breathe 2.8s ease-in-out infinite; transform-origin: 50% 100%; }
+
+  @keyframes nexus-blink {
+    0%, 92%, 100% { transform: scaleY(1); }
+    96%           { transform: scaleY(0.1); }
+  }
+  .nexus-eyes { animation: nexus-blink 5.2s ease-in-out infinite; transform-origin: 50% 50%; }
+
+  @keyframes nexus-welcome-in {
+    0%   { opacity: 0; transform: translateY(14px) scale(0.9); }
+    60%  { opacity: 1; transform: translateY(-3px) scale(1.02); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .nexus-welcome { animation: nexus-welcome-in 420ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+  @keyframes nexus-wave {
+    0%, 100% { transform: rotate(-8deg); }
+    50%      { transform: rotate(26deg); }
+  }
+  /* The pivot is the shoulder, in the SVG's own user units — transform-origin
+     on a <g> does NOT resolve against the group's local coordinates. */
+  .nexus-arm-wave { animation: nexus-wave 620ms ease-in-out 4; transform-origin: 49px 37px; }
+}
+/* --- END nexus character --- */

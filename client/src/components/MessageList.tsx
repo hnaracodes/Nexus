@@ -3,6 +3,7 @@ import { Crown } from 'lucide-react';
 import type { NexusEvent } from '../../../src/protocol/events.js';
 import { ScrollAnchor } from './ScrollAnchor.js';
 import { ToolCallRow } from './ToolCallRow.js';
+import { Markdown } from '../markdown.js';
 
 export interface UserRow {
   kind: 'user';
@@ -213,7 +214,7 @@ export function MessageList({
               <li
                 key={row.id}
                 style={{ borderLeftColor: `hsl(${hue} 55% 45%)` }}
-                className="flex gap-3 rounded border-l-4 bg-surface px-3 py-2"
+                className="flex gap-3 rounded-[10px] border-l-[3px] bg-surface px-3.5 py-2.5"
               >
                 <span
                   aria-hidden="true"
@@ -234,7 +235,7 @@ export function MessageList({
                       />
                     )}
                   </div>
-                  <div className="whitespace-pre-wrap text-[14px] text-fg">{row.text}</div>
+                  <Markdown text={row.text} />
                 </div>
               </li>
             );
@@ -242,8 +243,8 @@ export function MessageList({
 
           if (row.kind === 'assistant') {
             return (
-              <li key={row.id} className="rounded bg-surface px-3 py-2">
-                <div className="whitespace-pre-wrap text-[14px] text-fg">{row.text}</div>
+              <li key={row.id} className="rounded-[10px] border border-border/70 bg-surface px-3.5 py-2.5">
+                <Markdown text={row.text} />
               </li>
             );
           }
@@ -269,13 +270,14 @@ export function MessageList({
         })}
 
         {streaming.map(([id, text]) => (
-          <li key={id} className="rounded bg-surface px-3 py-2 opacity-90">
-            <div className="whitespace-pre-wrap text-[14px] text-fg">
-              {text}
-              <span aria-hidden="true" className="animate-nexus-caret">
-                ▍
-              </span>
-            </div>
+          <li key={id} className="rounded-[10px] border border-border/70 bg-surface px-3.5 py-2.5">
+            {/* Rendered as Markdown mid-stream too. A half-arrived fenced block
+                still renders as code (see markdown.tsx), so the text does not
+                reflow jarringly the moment the closing fence lands. */}
+            <Markdown text={text} />
+            <span aria-hidden="true" className="animate-nexus-caret text-accent">
+              ▍
+            </span>
           </li>
         ))}
       </ol>
