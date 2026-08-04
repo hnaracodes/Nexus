@@ -19,16 +19,33 @@ problem.
 
 ## Fan-out groups and models
 
-**Status: orders 1 through 6 are done and merged.** Orders 1–5 are also
-acceptance-tested; **order 6 is suite-green but has had neither its browser pass
-nor a live acceptance run.** Remaining MVP work is a deploy, a hardening pass on
-`POST /api/rooms`, two named test gaps, and the Day 5 demo — see the newest
-`sessions/` folder, not this manifest. Order 6 was a post-MVP feature request
-built early at the user's request, ahead of that MVP work rather than after it.
-The
-`Model` column below is superseded by `CLAUDE.md`'s policy — **dispatch
+**Status: orders 1 through 8 are done, merged, and live-verified.** The MVP work
+this manifest used to list as outstanding — the deploy, the `POST /api/rooms`
+hardening, two named test gaps, the Day 5 demo — is closed. Order 6 (open-floor
+prompts) has had its live two-browser pass; order 7 (UI) has had its browser
+pass; order 8 (GitHub App) passed all five live bars against a real GitHub App
+on **2026-08-03**. All of that is reported by the user directly, not re-run by an
+agent in this repo — see `CLAUDE.md`'s "Current repo state" for the canonical
+wording and the provenance caveat. **Order 9 (phase 7) is the current work.**
+
+Two verifications remain genuinely open, both from order 7: a **keyboard-only
+pass** and a **measured contrast audit**
+(`sessions/2026-07-30-010325e-phase-5-ui/issues.md` §6).
+
+The `Model` column below is superseded by `CLAUDE.md`'s policy — **dispatch
 everything on `sonnet`** to conserve credits, including the rows that say
 `opus`.
+
+**Two things this manifest references do not exist on disk.** Verified
+2026-08-03, so nobody plans a dispatch around them:
+
+- **`scripts/task-brief`** — `scripts/` contains only `smoke-ws.mjs`. Extract a
+  task by reading the plan file directly, or write the script.
+- **The `nexus-fanout-dispatch`, `nexus-verification` and `nexus-session-ledger`
+  skills**, referenced by `phase-7-workspace-ide.md`. There is no `.claude/skills/`
+  in this repo and none in `~/.claude/skills/`. The *content* those skills would
+  carry is in `CLAUDE.md` ("Dispatching a fan-out", "Verification — three
+  mechanisms", "Session ledger") — use that.
 
 | Order | Plan | Mode | Model | Owns |
 |---|---|---|---|---|
@@ -82,11 +99,14 @@ exist on `phase-5b`'s branch. That is expected and the plan says so — the clas
 names resolve at merge. Merge `phase-5a` first, then `phase-5b`, then run the
 client build before doing anything else.
 
-**Neither plan may be deployed publicly until `POST /api/rooms` is hardened**
-(newest `sessions/` `issues.md` §B). A landing page that invites strangers to
-click "Open a room" turns an unauthenticated outbound-request primitive from a
-latent issue into an exposed one. *(That hardening has since landed — host
-guard, per-IP rate limit, room ceiling, body cap.)*
+~~**Neither plan may be deployed publicly until `POST /api/rooms` is hardened**~~
+— **that hardening landed** (host guard via `node:net.BlockList` checked at
+validation *and* at clone time, per-IP rate limit, room ceiling, body cap), and
+the site is live. The original reasoning is still worth knowing: a landing page
+that invites strangers to click "Open a room" turns an unauthenticated
+outbound-request primitive from a latent issue into an exposed one. That
+endpoint still needs no credential, so treat any change to it as
+security-relevant.
 
 **Order 8 was dispatched as a hybrid, not a pure fan-out.** The two properties
 everything else depends on — the broadcast-redaction fix and `src/server/github.ts`
@@ -97,11 +117,13 @@ it.* The parallel agents were also told **not to commit**, since the orchestrato
 was editing other files in the same working tree at the same time; a subagent
 commit would have swept up unrelated in-flight work.
 
-Order 8 is **unit- and integration-verified only**. Every GitHub interaction is
-tested with an injected `fetch` and an injected `git`; none of it has met a real
-GitHub App, because registering one needs an account no agent here has. The live
-bars are listed at the end of `phase-6-github-app-auth.md` and are the user's to
-run.
+Order 8 is unit-, integration- **and live-verified**. Every GitHub interaction is
+tested with an injected `fetch` and an injected `git` — and on top of that the
+user ran the five live bars against a real GitHub App on 2026-08-03 and all five
+pass, including a restart that clones and publishes with zero human GitHub
+interaction. The bars are listed at the end of `phase-6-github-app-auth.md` and
+in `docs/github-app-setup.md`; they are now the **regression checklist** for any
+change to `github.ts`, `create.ts`, `publish.ts` or `publishTool.ts`.
 
 **Order 4 pre-work landed on `master` first** (commits `369f495`..`1fbd316`):
 stable participant identity with resume tokens, `restoreRoom`/`attachApiKey`/
