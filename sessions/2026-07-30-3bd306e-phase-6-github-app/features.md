@@ -79,11 +79,27 @@ server restart.* Everything below exists to make that true.
 **Adversarial review**: 6 agents (3 implement, 3 falsify), 21 confirmed
 findings. One HIGH and five MEDIUM were fixed before commit; see `issues.md`.
 
-## NOT verified — needs the user
+## Live verification — DONE, 2026-08-03
 
-Every GitHub interaction is exercised with an **injected `fetch` and an injected
-`git`**. None of it has met a real GitHub App, because registering one requires
-an account no agent here has. Unit-green is not the same as working.
+**Update, 2026-08-03, reported by the user directly:** the setup checklist below
+was run, a real GitHub App was registered, and **all five live bars pass**. The
+GitHub App works end to end — private clone, publish-as-PR through the four-eyes
+gate, and a restart requiring **zero** human GitHub interaction, which was the
+hard requirement this phase existed to satisfy. Verified by the user as human
+tester, with Claude Code and Cursor, in an earlier run.
+
+**Provenance, stated plainly:** this is the user's report, not a rerun by an
+agent in this repo. No agent here has executed the click path or seen the PR.
+The checklist and bars are left below as the record of *what was verified*, with
+the bars checked. If you want first-hand evidence, run them yourself — that is
+what they are for.
+
+The original framing of this section is preserved for the record: every GitHub
+interaction is exercised with an **injected `fetch` and an injected `git`**, and
+at the time this was written none of it had met a real GitHub App, because
+registering one requires an account no agent here has. Unit-green is not the
+same as working — which is exactly why the bars below existed, and why they have
+now been run rather than argued away.
 
 ### Setup checklist
 
@@ -107,24 +123,32 @@ an account no agent here has. Unit-green is not the same as working.
    eviction.
 4. `fly deploy`, then check `GET /healthz` reports `githubConnectEnabled: true`.
 
-### Live bars still open
+### Live bars — all five PASS (user-reported, 2026-08-03)
 
-- [ ] Full click path against a real **private** repo; the agent can `Read`/`Grep` it.
-- [ ] Publish live: a **non-driver** approves the permission request, a PR appears
+- [x] Full click path against a real **private** repo; the agent can `Read`/`Grep` it.
+- [x] Publish live: a **non-driver** approves the permission request, a PR appears
       with the right diff **including one binary file**.
-- [ ] A **second** publish updates the same PR rather than opening a second.
-- [ ] `fly apps restart`, then confirm the room still clones and publishes with
+- [x] A **second** publish updates the same PR rather than opening a second.
+- [x] `fly apps restart`, then confirm the room still clones and publishes with
       **zero human GitHub interaction**. This is the test of the hard requirement.
-- [ ] Two browsers, one GitHub-backed room — the phase-5 UI redesign landed this
+- [x] Two browsers, one GitHub-backed room — the phase-5 UI redesign landed this
       session too and the connect UI has not been seen in a real browser.
 
 ## Concrete next steps
 
-1. Run the setup checklist and the five live bars above.
+1. ~~Run the setup checklist and the five live bars above.~~ **Done, 2026-08-03.**
+   What remains on phase 6 is refinement, not verification.
 2. Two `create-room` test files now exist (`client/tests/` and
    `client/src/pages/__tests__/`) with overlapping coverage and different
    `location` stubbing strategies. Pick one home and delete the other.
 3. Low-severity findings deliberately left open are listed in `issues.md` §B.
+   Now that the live path is proven, **B3 is the one worth promoting**:
+   `prepareWorkspace`'s failure detail is swallowed by a bare `catch {}`, so
+   every private-clone failure in production is indistinguishable from a typo'd
+   URL. That mattered less when nobody was cloning private repos for real.
+4. Re-audit `/privacy` and `/security` against phase 6 — flagged in the phase-5
+   ledger (`issues.md` §9) and still open. The site describes a product that
+   predates GitHub App support.
 
 *(An earlier revision of this file listed `tests/server/static-routes.test.ts`
 as outstanding. The concurrent phase-5 session committed it in `010325e`.)*

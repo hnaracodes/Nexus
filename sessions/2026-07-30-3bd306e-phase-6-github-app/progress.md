@@ -1,5 +1,14 @@
 # Progress — after phase 6
 
+> **Update, 2026-08-03 — phase 6 is 100%, not 75%.** The user has run the setup
+> checklist and all five live bars against a real GitHub App and reports it
+> working end to end. The 25% this ledger withheld was one thing and one thing
+> only — *none of this has ever talked to GitHub* — and that is no longer true.
+> Recorded on the user's word (human tester, with Claude Code and Cursor, in an
+> earlier run), not re-run by an agent in this repo. The original reasoning is
+> left intact below because it is still the correct reasoning; only its premise
+> has changed.
+
 ## Status
 
 The MVP was already complete and deployed before this session. Phase 6 is
@@ -11,7 +20,10 @@ hardened, demoed, browser-passed. Phase 6 did not add MVP scope; it fixed one
 to the agent subprocess) and one **high-severity live one** (the unredacted
 broadcast), so if anything the MVP is slightly more solid than it was.
 
-**Phase 6 (GitHub App): 75%.**
+**Phase 6 (GitHub App): ~~75%~~ → 100% as of 2026-08-03** (see the update note
+at the top of this file). The figure below and everything under "Reasoning
+behind 75%" is this session's own number as of 2026-07-30 and was not
+recomputed; it is left as the historical record.
 
 ## Per-area breakdown
 
@@ -25,7 +37,7 @@ broadcast), so if anything the MVP is slightly more solid than it was.
 | Publish → PR | Done, 23 tests, one HIGH bug caught and fixed | **Medium** |
 | Routes + connect UI | Done, 21 client tests | Medium |
 | Deploy config | Done (`NEXUS_WORKDIR` on the volume) | Untested live |
-| **Live GitHub verification** | **Not started** | — |
+| **Live GitHub verification** | **Done 2026-08-03 — all five bars pass** | User-reported |
 
 ## Reasoning behind 75%
 
@@ -57,11 +69,11 @@ existing gate untouched. What remains is largely *confirmation*, not *design*.
 
 ## What the next session should do first
 
-1. **Run the setup checklist in `features.md`** and then the five live bars. Until
-   that happens, treat phase 6 as "written" rather than "working", and do not put
-   it in `CLAUDE.md` as verified.
+1. ~~**Run the setup checklist in `features.md`** and then the five live bars.~~
+   **Done 2026-08-03; `CLAUDE.md` now records phase 6 as live-verified.**
 2. Resize the Fly volume before anyone clones a real private repo into it. 1 GB,
-   no eviction.
+   no eviction. **Still open, and now more urgent** — real private clones are
+   landing on that volume and there is no eviction path.
 3. Read `issues.md` §B before touching the clone or publish paths — seven known,
    deliberately-deferred issues are recorded there with reasoning.
 4. Note `issues.md` §C: subagent dispatches in this session ran on Opus by

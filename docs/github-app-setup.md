@@ -1,8 +1,12 @@
 # GitHub App setup — private repositories and publish-as-PR
 
 This is the setup and live-verification procedure for **phase 6**. Everything it
-describes is built and unit-tested; none of it has met a real GitHub App. Working
-through this document is what converts phase 6 from *written* to *working*.
+describes is built, unit-tested, and — as of **2026-08-03** — **live-verified
+against a real GitHub App**: all five bars in Step 5 pass, reported by the user
+directly. This document is no longer the thing that converts phase 6 from
+*written* to *working*; that has happened. It is now the setup procedure for a
+**new** deployment or a fresh local environment, and the regression checklist to
+re-run after touching `github.ts`, `create.ts`, `publish.ts` or `publishTool.ts`.
 
 Do it **locally first**, then repeat for the deployed app. A mistake locally
 costs a restart; the same mistake on Fly costs a deploy cycle.
@@ -247,8 +251,12 @@ spoofed `installation_id`; this is the defence.
 
 ## Step 5 — The five live verification bars
 
-These are the open bars from the phase-6 ledger. Until they pass, treat phase 6
-as written, not working.
+**All five passed on 2026-08-03** against a real GitHub App (user-reported). They
+are kept here as the **regression checklist**: re-run them after any change to
+`github.ts`, `create.ts`, `publish.ts` or `publishTool.ts`, and run them once
+against any new deployment. A green unit suite has never been sufficient
+evidence for this path — every GitHub interaction in the suite is an injected
+`fetch` and an injected `git`.
 
 ### Bar 1 — Private clone
 

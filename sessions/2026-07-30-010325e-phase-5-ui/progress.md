@@ -1,5 +1,16 @@
 # Progress — after phase 5 (UI)
 
+> **Update, 2026-08-03 — the browser pass happened; phase 5 goes 80% → 90%, and
+> phase 6 goes 75% → 100%.** Both reported by the user directly (human tester,
+> with Claude Code and Cursor, in an earlier run), not re-run by an agent in this
+> repo. The missing 20% below was described as "one thing: nobody has looked at
+> it" — that is now two-thirds retired. The **keyboard-only pass** and the
+> **measured contrast audit** are still owed, which is why this is 90 and not
+> 100; `CLAUDE.md`'s rule that unverified work recorded as done is worse than not
+> recording it cuts both ways, and rounding two genuinely-unrun verifications up
+> to complete would be the same error in the other direction. Original numbers
+> and reasoning left intact below.
+
 ## Status
 
 The MVP was complete, deployed and demoed before this session. Phase 5 is
@@ -10,11 +21,13 @@ demoed, browser-passed. This session did not add MVP scope. It did materially
 improve the MVP's *presentation* — the room it ships is no longer nine unstyled
 components — but presentation was never in the MVP's definition of done.
 
-**Phase 6 (GitHub App): 75%.** Untouched by this session. Carried forward
-verbatim from `sessions/2026-07-30-3bd306e-phase-6-github-app/progress.md`; the
-missing 25% is still that none of it has talked to real GitHub.
+**Phase 6 (GitHub App): ~~75%~~ → 100%** as of 2026-08-03 — the five live bars
+pass against a real GitHub App. Carried forward from
+`sessions/2026-07-30-3bd306e-phase-6-github-app/progress.md`, which now records
+the same.
 
-**Phase 5 (UI): 80%.**
+**Phase 5 (UI): ~~80%~~ → 90%** as of 2026-08-03. The figures and reasoning
+below are this session's own, as of 2026-07-30, and were not recomputed.
 
 ## Per-area breakdown — phase 5 only
 
@@ -30,7 +43,8 @@ missing 25% is still that none of it has talked to real GitHub.
 | Room: switcher | localStorage, forget controls, shared-device warning | 90 |
 | Room: approval cards | Fail-safe classification, plain-language summaries | 90 |
 | Room: notices + transcript | Severity types, recovery actions, scroll-respecting anchor | 85 |
-| **Browser / keyboard / contrast verification** | **Not started** | **0** |
+| **Browser verification** | **Done 2026-08-03, two tabs one room (user-reported)** | **100** |
+| **Keyboard-only / measured contrast** | **Still not started** | **0** |
 
 ## Reasoning behind 80%
 
@@ -81,7 +95,9 @@ re-read against it (`issues.md` §9).
   accessibility/design-system reviewer and a legal-copy fact auditor). Six
   findings, five repaired. Caught a `role="dialog"` with no focus management on
   a recovery path.
-- **A real browser** — **not done.** This is the entire missing 20%.
+- **A real browser** — **not done at the time of writing; done 2026-08-03** by
+  the user. This was the entire missing 20%; what is left of it is the
+  keyboard-only pass and the measured contrast audit.
 
 Mutation testing was not run this session. Most of the new code is presentational
 and mutation testing pays poorly there, but the pure derivations named above
@@ -89,10 +105,9 @@ would repay it and are the obvious candidates if someone wants a fourth signal.
 
 ## What the next session should do first
 
-1. **The browser pass.** Two tabs, one room, `PORT=8099`. Everything else on
-   this list is smaller than whatever it finds.
+1. ~~**The browser pass.**~~ **Done 2026-08-03.**
 2. **Keyboard-only pass and measured contrast audit** — the other two named
-   gaps.
+   gaps, **still open**.
 3. **Re-audit `/privacy` and `/security` against phase 6** (`issues.md` §9).
    The site currently describes a product that no longer matches the code.
 4. Fix `StopButton`'s 44px touch target, and settle the `accent`/`accent-dim`

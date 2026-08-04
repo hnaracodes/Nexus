@@ -7,14 +7,17 @@ holding one context window**. Nobody screen-shares. Nobody re-explains context.
 
 Collaboration is the mechanism. Governance is the product.
 
-**Status:** Runs locally. Nothing has ever been deployed — there is no `fly`
-CLI or Fly credentials on the machines this has been built on, and `fly.toml`
-has never been applied. There is no live URL to link to yet.
+**Status:** Deployed and live at
+[`https://nexus-mvp.fly.dev/`](https://nexus-mvp.fly.dev/). The core loop, the
+driver token, the four-eyes permission gate, restart recovery, open-floor
+prompts, the redesigned UI, and GitHub App support for private repositories are
+all built and live-verified. Still a preview: read the security model below
+before you share a room link.
 
 ## What it does
 
 - **One room, one agent.** A room owns exactly one Claude Agent SDK session. Joining never forks or restarts it.
-- **One driver at a time**, enforced at the server. A non-driver's input is rejected by the server, not just greyed out in the UI. Control can be requested, granted, and released; if the driver disconnects, the token frees after 30 seconds.
+- **An open floor with a driver who has precedence**, arbitrated at the server. Anyone may type; every prompt is admitted, ordered, attributed and batched by turn, and a prompt arriving mid-turn waits rather than interleaving. When two instructions conflict, the driver's win — the agent is told the rule and reconciles them. A client cannot forge attribution or forge driver status; that is enforced at the server, not by a greyed-out input box. Control can be requested, granted, and released; if the driver disconnects, the token frees after 30 seconds.
 - **Collective approval on risky actions.** File writes, `Bash`, and anything outside the read-only allow-list suspend the agent and prompt the whole room. Anyone can approve or deny; the first response wins and the decider's name goes in the log. Nobody responding within two minutes means denied — never hung.
 - **Everything is logged.** Every prompt, message, tool call, handoff, decision, join, and leave is appended to a per-room JSONL file with a monotonic sequence number. Reconnect, rejoin, and restart all reconstruct from that log.
 - **Anyone can stop it.** The stop button is not gated on the driver token.
@@ -104,7 +107,7 @@ on a user's behalf.
 
 - **No isolation between rooms** (above).
 - **Recovery restores history, not memory.** After a restart the room and its full transcript come back, but the key was never persisted, so the room refuses new connections (close code `4409`) until its creator re-supplies one — and only then does the history replay. The agent's context window does not come back either way: it starts fresh and does not remember the earlier conversation.
-- **Two people can contradict each other.** Prompts are attributed by name so the agent can reason about competing instructions, but nothing arbitrates them. This is a real limitation, not a bug.
+- **Conflicting instructions are arbitrated by the model, not by code.** Prompts are attributed by name and tagged with who was driving, and the agent is told to follow the driver when instructions conflict and to say what it set aside. Nothing in the server *detects* a conflict — the reconciliation is the model's judgement, and a model can get it wrong.
 - **Streaming text is not replayed.** Only completed assistant messages are logged. A late joiner sees an in-flight message once it finishes, not as it types.
 - **No accounts.** The link is the credential. Anyone with the link is in the room.
 - **Identity survives a reconnect, but only in the same browser.** A refresh or a dropped connection keeps your roster row and the driver token, because the browser stores an identity for the room. A different browser, a private window, or cleared storage is a new person.

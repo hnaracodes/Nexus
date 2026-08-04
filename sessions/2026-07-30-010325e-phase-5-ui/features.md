@@ -118,35 +118,47 @@ Two adversarial passes were run by independent read-only agents:
   discrepancies.** The landing page was separately audited for fabricated social
   proof — none found.
 
-## NOT verified — do not treat as done
+## Browser pass — DONE, 2026-08-03
 
-**Nobody has looked at any of this in a browser.** That is the honest headline.
-Three verifications the plans require were not run:
+**Update, 2026-08-03, reported by the user directly:** the two-browser pass has
+been run. The headline this section originally carried — *nobody has looked at
+any of this in a browser* — no longer holds. Verified by the user as human
+tester, with Claude Code and Cursor, in an earlier run. Recorded on the user's
+word, not re-run by an agent in this repo.
 
-1. **Browser pass** — two Chrome tabs, one room, `PORT=8099`. Avatars stable and
+Of the three verifications the plans require:
+
+1. **Browser pass** — ✅ **done.** Two tabs, one room. Avatars stable and
    distinct across tabs, activity indicator tracking a real turn, a driver
    request appearing in the other tab, `⌘K` switching, a non-driver deciding an
    approval.
-2. **Keyboard-only pass** — a full turn without a mouse, focus visible
-   throughout, no traps.
-3. **Measured contrast audit** — with a tool, in both colour schemes. `--danger`
-   on `--surface-2` (~3.5:1) and the light-mode accent pairs are the known-tight
-   cases.
+2. **Keyboard-only pass** — ⬜ **still open.** A full turn without a mouse, focus
+   visible throughout, no traps. Not part of the 2026-08-03 update.
+3. **Measured contrast audit** — ⬜ **still open.** With a tool, in both colour
+   schemes. `--danger` on `--surface-2` (~3.5:1) and the light-mode accent pairs
+   are the known-tight cases.
+
+Do not read the browser pass as covering 2 and 3. They test things a sighted
+mouse user cannot observe by looking, which is the whole reason the plans name
+them separately.
 
 One accessibility finding is also unfixed: `StopButton` is ~36px tall against
-the 44px minimum (`issues.md` §6).
+the 44px minimum (`issues.md` §7).
 
 ---
 
 ## Next steps
 
-1. **Run the three verifications above.** This repo's own history is the
-   argument: phase 3 shipped 200 green tests and a real browser found a bug in
-   thirty seconds. A UI phase is the single worst place to skip this.
+1. ~~**Run the three verifications above.**~~ The browser pass is **done**
+   (2026-08-03). The **keyboard-only pass** and the **measured contrast audit**
+   are still owed. This repo's own history is the argument for finishing them:
+   phase 3 shipped 200 green tests and a real browser found a bug in thirty
+   seconds. A UI phase is the single worst place to skip this.
 2. Fix `StopButton`'s touch target, and decide on the `accent`/`accent-dim`
-   contrast pair (`issues.md` §5).
+   contrast pair (`issues.md` §10).
 3. Re-read `/privacy` against the phase-6 changes. The fact audit was run
    *before* phase 6 finished landing GitHub App support; a feature that clones
    private repositories and opens pull requests under a user's installation
-   almost certainly changes what the privacy policy needs to say.
+   almost certainly changes what the privacy policy needs to say. **Phase 6 is
+   now live-verified and in real use, so this is no longer hypothetical.**
 4. Screenshots at 375px and 1440px for the record.

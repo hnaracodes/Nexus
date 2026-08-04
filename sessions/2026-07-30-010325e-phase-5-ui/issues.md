@@ -96,13 +96,25 @@ they all survived a green suite:
 
 ## Unresolved — carry these forward
 
-### 6. Three required verifications were never run
+### 6. Three required verifications — one is now done, two remain
 
-The plans' `Report notes` sections require a **two-tab browser pass**, a
-**keyboard-only pass**, and a **measured contrast audit**. None happened. This
-is a UI phase; these are not formalities, and `CLAUDE.md` records that a real
-browser found a bug in thirty seconds that 200 tests had missed. Everything in
-`features.md` is code-verified and **eyes-unverified**.
+**Update, 2026-08-03:** the **two-tab browser pass is done**, reported by the
+user directly (human tester, with Claude Code and Cursor, in an earlier run).
+Everything in `features.md` is no longer "eyes-unverified."
+
+Still owed, and **not** covered by the browser pass:
+
+- **Keyboard-only pass** — a full turn without a mouse, focus visible
+  throughout, no traps. This is the one that would have caught §5's
+  `ReKeyDialog` defect (`role="dialog" aria-modal` with no focus management at
+  all) had the adversarial review not found it first — which is the argument for
+  running it rather than assuming the fix was complete.
+- **Measured contrast audit** — with a tool, in both colour schemes.
+
+Original text, for the record: the plans' `Report notes` sections require a
+two-tab browser pass, a keyboard-only pass, and a measured contrast audit. None
+happened. This is a UI phase; these are not formalities, and `CLAUDE.md` records
+that a real browser found a bug in thirty seconds that 200 tests had missed.
 
 ### 7. `StopButton` is under the minimum touch target
 
