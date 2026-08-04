@@ -1,17 +1,40 @@
 # Phase 7 — Workspace IDE
 
-> **Status: design plan, NOT dispatch-ready.** This file does not yet carry
-> `### Task N:` headings with checkbox steps, so `scripts/task-brief` cannot
-> extract a task from it and `superpowers:subagent-driven-development` cannot
-> consume it. It is the architecture and the decisions behind it. **Decompose it
-> into numbered tasks, and compile every code fragment against the real
-> signatures, before any dispatch** — `CLAUDE.md`: *a plan is not a specification
-> until someone has tried to compile it.* Phase 3 shipped three plans containing
-> literal code that could not work.
+> **Status: DECOMPOSED, 2026-08-03. This file is now the architecture record —
+> dispatch the three sub-plans, not this.**
 >
-> A refinement pass on this plan was handed to Ultraplan
-> (`claude.ai/code/session_0149PK2RrVi3A7KhfmMTSkr6`) and had not returned when
-> this file was committed. Reconcile before decomposing.
+> - `phase-7a-workspace-server.md` — 6 tasks
+> - `phase-7b-workspace-pane.md` — 7 tasks
+> - `phase-7c-prompt-dock.md` — 5 tasks
+>
+> The Ultraplan refinement pass referenced below **never returned**; per the user
+> (2026-08-03) it was abandoned rather than waited on. The decomposition was done
+> against the real tree instead, and every code fragment was compiled against
+> real signatures — `CLAUDE.md`: *a plan is not a specification until someone has
+> tried to compile it.*
+>
+> **Six defects in this design plan were found that way. They are corrected in
+> the sub-plans; this file is left as written, so do not code from it:**
+>
+> | # | Defect in this file | Reality |
+> |---|---|---|
+> | 1 | 7a adds the `set_model` message branch to `src/server/ws.ts` | `ws.on('message')` and the whole `parseClientFrame` switch are in **`src/server/index.ts:422`**. `ws.ts` has no message handling. As written an agent hits BLOCKED. |
+> | 2 | "`null` maps cleanly" to `setModel` | `setModel(model?: string)` takes `string \| **undefined**`. Passing `null` is a type error; bridge with `model ?? undefined`. |
+> | 3 | "exporting `GitRunner`, `defaultGit`, `runGit` (currently module-private)" | `GitRunner` is **already exported** (`publish.ts:60`). Only `defaultGit` (:172) and `runGit` (:196) are private. |
+> | 4 | "`RoomShell`'s current `main` + `SideRail` split (`App.tsx:438`)" | `<main>` is at `:441`, and **`SideRail` renders twice** — `:517` desktop and `:551` in the `lg:hidden` sheet. Both call sites must go. |
+> | 5 | Marker regions "must be placed before dispatch" — but none existed | Now placed on `main`: `phase-7 workspace slot`, `phase-7 mobile workspace sheet`, `phase-7 prompt dock`, `phase-7 workspace routes`, `phase-7 set_model branch`, plus `// phase-7b` and `// phase-7c` import anchors. |
+> | 6 | 7b and 7c regions were assumed disjoint | They **nest**: the prompt row sits inside the layout 7b replaces. Resolved by contract — 7b moves the `phase-7 prompt dock` block verbatim as an opaque unit and never edits inside it. |
+>
+> Two tools this file references **do not exist**: `scripts/task-brief`, and the
+> `nexus-fanout-dispatch` / `nexus-verification` / `nexus-session-ledger` skills.
+> Use `CLAUDE.md`'s own "Dispatching a fan-out", "Verification" and "Session
+> ledger" sections instead.
+>
+> Verified correct in this file and carried into the sub-plans unchanged: every
+> SDK citation. `runtimeTypes.d.ts:111` `setModel`, `:135` `supportedModels`,
+> `coreTypes.d.ts:15` `contextWindow`, `:510-512` `compact_metadata.pre_tokens`
+> all land exactly where claimed, and `modelUsage` is present on **both** result
+> subtypes (`:451`, `:467`).
 
 ## Context
 

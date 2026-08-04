@@ -11,6 +11,8 @@ import type { Connection, Status, WebSocketLike } from './ws.js';
 import type { NexusEvent } from '../../src/protocol/events.js';
 // phase-5a import anchor
 import { MalformedLink } from './pages/MalformedLink.js';
+// phase-7b import anchor
+// phase-7c import anchor
 // phase-5b import anchor
 import { useHotkeys } from './hooks/useHotkeys.js';
 import type { Hotkey } from './hooks/useHotkeys.js';
@@ -437,6 +439,12 @@ function RoomShell({
         onOpenCheatsheet={() => setCheatsheetOpen(true)}
       />
 
+      {/* --- BEGIN phase-7 workspace slot --- */}
+      {/* phase-7b owns this region: replace the `main` + SideRail split below
+          with a chat column plus <WorkspacePane/>, and delete SideRail (it is
+          rendered TWICE — here and again in the lg:hidden sheet further down,
+          which carries its own marker). The nested `phase-7 prompt dock` region
+          belongs to phase-7c: move it, never edit inside it. */}
       <div className="flex min-h-0 flex-1">
         <main className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-4">
           <div className="flex justify-end">
@@ -494,6 +502,12 @@ function RoomShell({
             and batches, and the agent resolves genuine conflicts in the driver's
             favour. Adding a driver check here would undo the feature.
           */}
+          {/* --- BEGIN phase-7 prompt dock --- */}
+          {/* phase-7c owns everything between these two markers and nothing else.
+              phase-7b, when it restructures the layout around this, must MOVE this
+              block verbatim as an opaque unit and never edit inside it — the two
+              plans are dispatched concurrently and this is the one place their
+              regions nest. */}
           {/* --- BEGIN phase-3b stop-button slot: wrap in a flex row, add <StopButton/> beside it. --- */}
           <InterruptNotice events={view.events} />
           <div className="flex items-center gap-2">
@@ -511,6 +525,7 @@ function RoomShell({
             <StopButton busy={false} onStop={() => connection?.send({ kind: 'interrupt' })} />
           </div>
           {/* --- END phase-3b stop-button slot --- */}
+          {/* --- END phase-7 prompt dock --- */}
         </main>
 
         <div className="hidden lg:flex">
@@ -526,7 +541,12 @@ function RoomShell({
           />
         </div>
       </div>
+      {/* --- END phase-7 workspace slot --- */}
 
+      {/* --- BEGIN phase-7 mobile workspace sheet --- */}
+      {/* phase-7b: this whole block retires with SideRail. Replace it with the
+          full-screen (`fixed inset-0`) Workspace sheet — NOT 70vh; a code viewer
+          in a 70vh sheet is unusable. The railBadgeCount mechanism goes too. */}
       {/* Below `lg` the rail collapses to a bottom sheet with a badge count. */}
       <div className="lg:hidden">
         <button
@@ -561,6 +581,7 @@ function RoomShell({
           </div>
         )}
       </div>
+      {/* --- END phase-7 mobile workspace sheet --- */}
 
       <GrantControlPicker
         open={grantPickerOpen}

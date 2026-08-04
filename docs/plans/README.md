@@ -69,7 +69,19 @@ everything on `sonnet`** to conserve credits, including the rows that say
 | 8 | `phase-6-github-app-auth.md` *(post-MVP)* | **solo** | `sonnet` | `src/server/{github,publish,publishTool,create,recovery,rooms}.ts`, phase-6 route block + `POST /api/rooms` body of `src/server/index.ts`, `mcpServers` wiring in `src/server/agent.ts`, `commit`/`room_created` in `src/server/ws.ts`, `src/protocol/events.ts`, `src/log/redact.ts`, `client/src/pages/CreateRoom.tsx`, `client/src/store.ts` (`github_published` case), `Dockerfile`, `fly.toml` |
 | 9 | `phase-7-workspace-ide.md` *(post-MVP, **not dispatch-ready**)* | see below | `sonnet` | Three sub-plans, each with its own **Files owned** block in the plan. 7a: `src/server/{workspace,watcher,gitStatus}.ts` + protocol + `agent.ts`/`ws.ts` + phase-7 route block of `src/server/index.ts`. 7b: `client/src/{derive,workspace}/**` + workspace components + `shiki`. 7c: `client/src/components/{PromptDock,ModelSelector,VoiceInputButton,RepoBranchBar,ContextWindowBar}.tsx` |
 
-**Order 9 is a design plan, not a dispatch unit — do not issue it as written.**
+**Order 9 was decomposed on 2026-08-03.** Dispatch
+`phase-7a-workspace-server.md` (6 tasks), `phase-7b-workspace-pane.md` (7 tasks)
+and `phase-7c-prompt-dock.md` (5 tasks). `phase-7-workspace-ide.md` is now the
+**architecture record only** — it contains six defects found by compiling it
+against the real tree, listed in its own header and corrected in the sub-plans.
+All five marker regions and both import anchors are placed on `main`. 7a and 7c
+are genuinely parallel; 7b consumes 7a's protocol and merges after it; the 7b/7c
+regions **nest** in `App.tsx`, resolved by contract (7b moves the
+`phase-7 prompt dock` block verbatim, never edits inside it).
+
+The paragraph below is the pre-decomposition warning, kept for the record:
+
+**~~Order 9 is a design plan, not a dispatch unit — do not issue it as written.~~**
 `phase-7-workspace-ide.md` carries no `### Task N:` headings, so
 `scripts/task-brief` cannot extract a task from it and
 `superpowers:subagent-driven-development` cannot consume it. Decompose it into

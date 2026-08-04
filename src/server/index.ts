@@ -295,6 +295,21 @@ export function createServer(
     return c.json(room.toJSON());
   });
 
+  // --- BEGIN phase-7 workspace routes ---
+  // phase-7a owns this region. Five GET routes go here:
+  //   /api/rooms/:id/workspace/tree?path=   /api/rooms/:id/workspace/file?path=
+  //   /api/rooms/:id/git/status             /api/rooms/:id/git/diff?path=
+  //   /api/rooms/:id/models
+  // Guard each exactly as GET /api/rooms/:id does above — X-Nexus-Token header
+  // plus authorize(). NO query-param token fallback: only the WS upgrade needs
+  // one, because the browser's WebSocket constructor cannot set headers.
+  // The path is a QUERY PARAM, never a wildcard segment — Hono decodes and
+  // normalizes wildcard segments before the handler sees them, and "someone
+  // else already parsed this" is not what you want on a jail boundary.
+  // PAGE_ROUTES stays untouched; these are API routes, and an unmatched
+  // /api/* must keep 404ing rather than returning index.html.
+  // --- END phase-7 workspace routes ---
+
   // --- BEGIN phase-3c re-entry slot: add POST /api/rooms/:id/key here, so a
   // room recovered without its key (I4) can be re-opened by its creator. ---
   app.post('/api/rooms/:id/key', async (c) => {
@@ -491,6 +506,17 @@ export function createServer(
           }
           return;
         }
+
+        // --- BEGIN phase-7 set_model branch ---
+        // phase-7a owns this region. The `set_model` frame branch goes HERE, in
+        // index.ts — NOT in ws.ts, which has no message handling at all. Reject
+        // a non-driver with an error frame when room.driverId !== null (reuse
+        // isDriver, already imported above); open when the floor is open,
+        // matching request_control's existing semantics. Then fire-and-forget
+        // the promise the way the interrupt branch below already does — do NOT
+        // make this handler async, or one model switch serializes every
+        // subsequent message from that socket.
+        // --- END phase-7 set_model branch ---
 
         // --- BEGIN phase-3b interrupt slot: add the `interrupt` frame branch here. ---
         if (frame.kind === 'interrupt') {
