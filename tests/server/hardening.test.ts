@@ -1,12 +1,12 @@
 import type { AddressInfo } from 'node:net';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createServer } from '../../src/server/index.js';
 import { prepareWorkspace, validateRepoUrl } from '../../src/server/create.js';
 import { __resetRateLimits, consumeRateLimit } from '../../src/server/rate-limit.js';
-import { roomCount } from '../../src/server/rooms.js';
+import { createRoom, roomCount } from '../../src/server/rooms.js';
 
 const KEY = 'sk-ant-api03-TESTONLY-not-a-real-key';
 
@@ -153,5 +153,78 @@ describe('POST /api/rooms is rate-limited, capacity-capped and body-capped', () 
       if (previous === undefined) delete process.env['NEXUS_MAX_ROOMS'];
       else process.env['NEXUS_MAX_ROOMS'] = previous;
     }
+  });
+});
+
+describe('GET /api/rooms/:id/workspace/file is jailed against traversal (phase-7a)', () => {
+  const KEY = 'sk-ant-api03-TESTONLY-not-a-real-key';
+  let port = 0;
+  let started: ReturnType<typeof createServer>;
+
+  beforeAll(async () => {
+    started = createServer();
+    await new Promise<void>((resolve) => {
+      started.server.listen(0, '127.0.0.1', () => {
+        port = (started.server.address() as AddressInfo).port;
+        resolve();
+      });
+    });
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((resolve) => started.server.close(() => resolve()));
+  });
+
+  function room() {
+    const cwd = mkdtempSync(join(tmpdir(), 'nexus-hardening-ws-'));
+    return createRoom({ apiKey: KEY, cwd, repoUrl: null });
+  }
+
+  it('answers a ../ traversal with 400, not 500 or 200', async () => {
+    const r = room();
+    const response = await fetch(
+      `http://127.0.0.1:${port}/api/rooms/${r.id}/workspace/file?path=` +
+        encodeURIComponent('../../../../../../etc/passwd'),
+      { headers: { 'X-Nexus-Token': r.token } },
+    );
+    expect(response.status).toBe(400);
+  });
+
+  it('answers a URL-encoded ../ traversal (double-encoded slash) with 400, not 500 or 200', async () => {
+    const r = room();
+    // The query string itself carries the percent-encoding, so this exercises
+    // Hono's own decoding rather than a value this test decoded by hand.
+    const response = await fetch(
+      `http://127.0.0.1:${port}/api/rooms/${r.id}/workspace/file?path=%2e%2e%2f%2e%2e%2f%2e%2e%2f%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd`,
+      { headers: { 'X-Nexus-Token': r.token } },
+    );
+    expect(response.status).toBe(400);
+  });
+
+  it('serves an ordinary in-workspace file with 200', async () => {
+    const r = room();
+    writeFileSync(join(r.cwd, 'hello.txt'), 'hi');
+    const response = await fetch(
+      `http://127.0.0.1:${port}/api/rooms/${r.id}/workspace/file?path=hello.txt`,
+      { headers: { 'X-Nexus-Token': r.token } },
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ kind: 'text', content: 'hi' });
+  });
+
+  it('requires the room token, same as the other room routes', async () => {
+    const r = room();
+    const response = await fetch(
+      `http://127.0.0.1:${port}/api/rooms/${r.id}/workspace/file?path=.`,
+    );
+    expect(response.status).toBe(401);
+  });
+
+  it('404s for an unknown room', async () => {
+    const response = await fetch(
+      `http://127.0.0.1:${port}/api/rooms/room_doesnotexist/workspace/file?path=.`,
+      { headers: { 'X-Nexus-Token': 'whatever' } },
+    );
+    expect(response.status).toBe(404);
   });
 });

@@ -1,5 +1,5 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
-import type { CanUseTool, PermissionResult } from '@anthropic-ai/claude-agent-sdk';
+import type { CanUseTool, ModelInfo, PermissionResult } from '@anthropic-ai/claude-agent-sdk';
 import type { NexusEvent, UnsequencedEvent } from '../protocol/events.js';
 import type { Room } from './rooms.js';
 import { createGithubMcpServer } from './publishTool.js';
@@ -28,6 +28,14 @@ export interface AgentHandle {
   submit(prompt: PendingPrompt): void;
   interrupt(by: Interrupter): Promise<void>;
   stop(): void;
+  /**
+   * Switch the room's model. `null` means "the account default" — the SDK's
+   * own `setModel(model?: string)` wants `undefined` for that, so this bridges
+   * the two rather than passing `null` straight through, which is a type
+   * error. Mutates the existing session; never calls `query()` again (I1).
+   */
+  setModel(model: string | null): Promise<void>;
+  listModels(): Promise<ModelInfo[]>;
   gate: PermissionGate;
 }
 
@@ -235,6 +243,15 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
       clearWatchdog();
       prompts.close();
     },
+    async setModel(model: string | null): Promise<void> {
+      // `session.setModel` is "Only available in streaming input mode"
+      // (runtimeTypes.d.ts:111) — Nexus qualifies, since it feeds an
+      // async-iterable prompt (the `prompts` queue above), never a bare string.
+      await session.setModel(model ?? undefined);
+    },
+    listModels(): Promise<ModelInfo[]> {
+      return session.supportedModels();
+    },
     gate,
   };
 }
@@ -283,7 +300,50 @@ export function translate(message: unknown): UnsequencedEvent[] {
   }
 
   if (m['type'] === 'result') {
+    // `modelUsage` is present on both result subtypes (coreTypes.d.ts:451
+    // success, :467 error), so this single check covers both — but it is read
+    // through a runtime guard regardless, since `translate` takes `unknown`
+    // and must never throw on a shape a future SDK version narrows away.
+    const modelUsage = m['modelUsage'];
+    if (typeof modelUsage === 'object' && modelUsage !== null) {
+      for (const [model, usage] of Object.entries(modelUsage as Record<string, unknown>)) {
+        if (typeof usage !== 'object' || usage === null) continue;
+        const u = usage as Record<string, unknown>;
+        events.push({
+          type: 'context_usage',
+          model,
+          inputTokens: typeof u['inputTokens'] === 'number' ? u['inputTokens'] : 0,
+          outputTokens: typeof u['outputTokens'] === 'number' ? u['outputTokens'] : 0,
+          cacheReadInputTokens:
+            typeof u['cacheReadInputTokens'] === 'number' ? u['cacheReadInputTokens'] : 0,
+          cacheCreationInputTokens:
+            typeof u['cacheCreationInputTokens'] === 'number' ? u['cacheCreationInputTokens'] : 0,
+          contextWindow: typeof u['contextWindow'] === 'number' ? u['contextWindow'] : 0,
+          compactedFromTokens: null,
+        });
+      }
+    }
+    // agent_idle is pushed AFTER the usage events, so a client that treats
+    // agent_idle as "the turn is fully described" never observes a partial
+    // picture of the turn it just ended.
     events.push({ type: 'agent_idle' });
+  }
+
+  if (m['type'] === 'system' && m['subtype'] === 'compact_boundary') {
+    const meta = m['compact_metadata'];
+    if (typeof meta === 'object' && meta !== null) {
+      const cm = meta as Record<string, unknown>;
+      events.push({
+        type: 'context_usage',
+        model: null,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        contextWindow: 0,
+        compactedFromTokens: typeof cm['pre_tokens'] === 'number' ? cm['pre_tokens'] : 0,
+      });
+    }
   }
 
   return events;

@@ -7,6 +7,8 @@ import { redactEvent } from '../log/redact.js';
 import type { AgentDeps, AgentHandle } from './agent.js';
 import { startAgent } from './agent.js';
 import type { Room } from './rooms.js';
+import type { WorkspaceWatcherHandle } from './watcher.js';
+import { startWorkspaceWatcher } from './watcher.js';
 
 /** Implemented durably by `src/log/` (plan phase-1a). */
 export interface EventSink {
@@ -32,6 +34,13 @@ export class MemorySink implements EventSink {
 export interface RoomRuntime {
   room: Room;
   agent: AgentHandle;
+  /**
+   * Stored so a future teardown path has something to close. There is no
+   * room-teardown mechanism in this codebase today (`runtimes` only grows;
+   * `__resetRuntimes()` is test-only) — this does not invent one, it just
+   * avoids leaving the handle stranded nowhere if one is ever added.
+   */
+  workspaceWatcher: WorkspaceWatcherHandle;
   sink: EventSink;
   broadcast(frame: ServerFrame): void;
   /** Seal an unsequenced event: assign seq + ts, append to the sink, broadcast. */
@@ -63,6 +72,7 @@ export function attachRoom(
     room,
     sink,
     agent: undefined as unknown as AgentHandle,
+    workspaceWatcher: undefined as unknown as WorkspaceWatcherHandle,
     broadcast(frame: ServerFrame): void {
       const payload = JSON.stringify(frame);
       for (const socket of sockets.keys()) {
@@ -116,6 +126,15 @@ export function attachRoom(
   runtime.agent = startAgent(room, (event) => runtime.commit(event), {
     readEvents: () => sink.read(),
     ...deps,
+  });
+  // Lives inside this memoized gate for the same reason the agent does: the
+  // `existing !== undefined` early return above is what guarantees a room
+  // cannot accumulate N watchers (I1's one-resource discipline, applied to a
+  // second resource). `workspace_changed` is transient and unlogged — see the
+  // comment on `ServerFrame` in `src/protocol/wire.ts` — so it goes straight
+  // to broadcast() and nowhere near commit().
+  runtime.workspaceWatcher = startWorkspaceWatcher(room, (paths, truncated) => {
+    runtime.broadcast({ kind: 'workspace_changed', paths, truncated });
   });
   runtimes.set(room.id, runtime);
   // A room recovered from disk (plan phase-3a) already has `room_created` in

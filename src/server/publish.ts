@@ -169,7 +169,7 @@ function readPullRequest(value: unknown): { prUrl: string; prNumber: number } {
 
 const execFileAsync = promisify(execFile);
 
-const defaultGit: GitRunner = async (args, opts) => {
+export const defaultGit: GitRunner = async (args, opts) => {
   if (opts?.encoding === 'buffer') {
     const { stdout } = await execFileAsync('git', args, {
       encoding: 'buffer',
@@ -193,7 +193,7 @@ const defaultGit: GitRunner = async (args, opts) => {
  * error path is broadcast. stderr is separately run through the log's own
  * redactor as a second line of defence.
  */
-async function runGit(
+export async function runGit(
   git: GitRunner,
   args: string[],
   what: string,

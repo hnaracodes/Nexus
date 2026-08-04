@@ -1,4 +1,7 @@
 import type { AddressInfo } from 'node:net';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 import { createServer } from '../../src/server/index.js';
@@ -25,19 +28,27 @@ afterAll(async () => {
   await new Promise<void>((resolve) => started.server.close(() => resolve()));
 });
 
+// attachRoom now also starts a real recursive fs.watch (phase-7a) on the
+// room's cwd. Pointing every stubbed room at process.cwd() — the whole Nexus
+// repo, node_modules included — would make each test in this file open a
+// heavy recursive watch on a huge tree instead of a small, disposable one.
+const stubCwd = mkdtempSync(join(tmpdir(), 'nexus-ws-test-'));
+
 /**
  * A room whose agent never reaches the network. attachRoom is called up front
  * with a stubbed runQuery; the upgrade handler then finds this runtime instead
  * of starting a real one (Invariant I1 — one agent per room).
  */
 function stubbedRoom() {
-  const room = createRoom({ apiKey: KEY, cwd: process.cwd(), repoUrl: null });
+  const room = createRoom({ apiKey: KEY, cwd: stubCwd, repoUrl: null });
   attachRoom(room, undefined, {
     runQuery: (() => ({
       async *[Symbol.asyncIterator]() {
         /* the stub agent never emits */
       },
       interrupt: async () => undefined,
+      setModel: async () => undefined,
+      supportedModels: async () => [],
     })) as never,
   });
   return room;
@@ -199,6 +210,68 @@ describe('websocket attach', () => {
 
     a.socket.close();
     b.socket.close();
+  });
+});
+
+describe('set_model (phase-7a)', () => {
+  it("accepts the driver's set_model and logs model_changed", async () => {
+    const room = stubbedRoom();
+    const qs = `room=${room.id}&token=${room.token}`;
+    const a = await connect(`${qs}&name=Ada`);
+    await settle();
+
+    a.socket.send(JSON.stringify({ kind: 'request_control' }));
+    await settle();
+    a.socket.send(JSON.stringify({ kind: 'set_model', model: 'claude-opus-4' }));
+    await settle();
+
+    const changed = a.frames.find((f) => f.kind === 'event' && f.event.type === 'model_changed');
+    expect(changed).toBeDefined();
+    expect((changed as { event: { model: string | null } }).event.model).toBe('claude-opus-4');
+    expect(a.frames.some((f) => f.kind === 'error')).toBe(false);
+
+    a.socket.close();
+  });
+
+  it('rejects a non-driver set_model with an error frame while a driver exists', async () => {
+    const room = stubbedRoom();
+    const qs = `room=${room.id}&token=${room.token}`;
+    const a = await connect(`${qs}&name=Ada`);
+    await settle();
+    const b = await connect(`${qs}&name=Grace`);
+    await settle();
+
+    a.socket.send(JSON.stringify({ kind: 'request_control' })); // Ada becomes driver
+    await settle();
+    b.socket.send(JSON.stringify({ kind: 'set_model', model: 'claude-opus-4' }));
+    await settle();
+
+    expect(b.frames.some((f) => f.kind === 'error')).toBe(true);
+    expect(b.frames.some((f) => f.kind === 'event' && f.event.type === 'model_changed')).toBe(
+      false,
+    );
+
+    a.socket.close();
+    b.socket.close();
+  });
+
+  it('accepts anyone\'s set_model while the floor is open (no driver yet)', async () => {
+    const room = stubbedRoom();
+    const qs = `room=${room.id}&token=${room.token}`;
+    const a = await connect(`${qs}&name=Ada`);
+    await settle();
+
+    // No request_control sent: room.driverId stays null, the same floor-open
+    // semantics request_control itself relies on.
+    a.socket.send(JSON.stringify({ kind: 'set_model', model: null }));
+    await settle();
+
+    const changed = a.frames.find((f) => f.kind === 'event' && f.event.type === 'model_changed');
+    expect(changed).toBeDefined();
+    expect((changed as { event: { model: string | null } }).event.model).toBeNull();
+    expect(a.frames.some((f) => f.kind === 'error')).toBe(false);
+
+    a.socket.close();
   });
 });
 

@@ -52,6 +52,14 @@ import {
   requestControl,
   scheduleAutoRelease,
 } from './driver.js';
+// phase-7a additions. These live here, not inside the phase-7 marker regions
+// below, because ES module `import` statements must sit at module top level —
+// neither marker region is at that level (one is inside createServer(), the
+// other inside the WS message handler), so there is nowhere else for them to
+// go. Nothing here is used outside the two marker regions.
+import type { Room } from './rooms.js';
+import { getGitDiff, getGitStatus } from './gitStatus.js';
+import { WorkspacePathError, listTree, readWorkspaceFile } from './workspace.js';
 
 // {apiKey, repoUrl} never needs more than a few hundred bytes. This is not
 // about legitimate payloads — it stops an anonymous caller from streaming an
@@ -308,6 +316,86 @@ export function createServer(
   // else already parsed this" is not what you want on a jail boundary.
   // PAGE_ROUTES stays untouched; these are API routes, and an unmatched
   // /api/* must keep 404ing rather than returning index.html.
+
+  /** Same guard as GET /api/rooms/:id above, factored out for five call sites. */
+  function requireRoom(c: Context): { room: Room } | Response {
+    const room = getRoom(c.req.param('id') ?? '');
+    if (room === undefined) return c.json({ error: 'No such room.' }, 404);
+    const token = c.req.header('X-Nexus-Token');
+    if (token === undefined || authorize(room.id, token) === undefined) {
+      return c.json({ error: 'Invalid room token.' }, 401);
+    }
+    return { room };
+  }
+
+  /** WorkspacePathError carries its own 400-vs-404 distinction; anything else
+   *  is an unexpected failure, reported as a plain 500 rather than echoing a
+   *  raw error (the same "never surface the raw error" discipline used
+   *  elsewhere in this file). */
+  function workspaceErrorResponse(c: Context, error: unknown): Response {
+    if (error instanceof WorkspacePathError) {
+      return c.json({ error: error.message }, error.code === 'not_found' ? 404 : 400);
+    }
+    return c.json({ error: 'Could not read the workspace.' }, 500);
+  }
+
+  app.get('/api/rooms/:id/workspace/tree', (c) => {
+    const guarded = requireRoom(c);
+    if (guarded instanceof Response) return guarded;
+    try {
+      return c.json({ entries: listTree(guarded.room, c.req.query('path') ?? '') });
+    } catch (error) {
+      return workspaceErrorResponse(c, error);
+    }
+  });
+
+  app.get('/api/rooms/:id/workspace/file', (c) => {
+    const guarded = requireRoom(c);
+    if (guarded instanceof Response) return guarded;
+    try {
+      return c.json(readWorkspaceFile(guarded.room, c.req.query('path') ?? ''));
+    } catch (error) {
+      return workspaceErrorResponse(c, error);
+    }
+  });
+
+  app.get('/api/rooms/:id/git/status', async (c) => {
+    const guarded = requireRoom(c);
+    if (guarded instanceof Response) return guarded;
+    try {
+      return c.json(await getGitStatus(guarded.room));
+    } catch {
+      return c.json({ error: 'Could not read git status for this room.' }, 500);
+    }
+  });
+
+  app.get('/api/rooms/:id/git/diff', async (c) => {
+    const guarded = requireRoom(c);
+    if (guarded instanceof Response) return guarded;
+    const path = c.req.query('path');
+    if (path === undefined || path === '') {
+      return c.json({ error: 'A path query parameter is required.' }, 400);
+    }
+    try {
+      return c.json({ diff: await getGitDiff(guarded.room, path) });
+    } catch {
+      return c.json({ error: 'Could not read a diff for that path.' }, 500);
+    }
+  });
+
+  app.get('/api/rooms/:id/models', async (c) => {
+    const guarded = requireRoom(c);
+    if (guarded instanceof Response) return guarded;
+    const runtime = getRuntime(guarded.room.id);
+    if (runtime === undefined) {
+      return c.json({ error: 'This room has no running agent yet.' }, 503);
+    }
+    try {
+      return c.json({ models: await runtime.agent.listModels() });
+    } catch {
+      return c.json({ error: 'Could not list available models.' }, 500);
+    }
+  });
   // --- END phase-7 workspace routes ---
 
   // --- BEGIN phase-3c re-entry slot: add POST /api/rooms/:id/key here, so a
@@ -516,6 +604,28 @@ export function createServer(
         // the promise the way the interrupt branch below already does — do NOT
         // make this handler async, or one model switch serializes every
         // subsequent message from that socket.
+        if (frame.kind === 'set_model') {
+          if (room.driverId !== null && !isDriver(room, participantId)) {
+            ws.send(
+              JSON.stringify({ kind: 'error', message: 'Only the driver can switch the model.' }),
+            );
+            return;
+          }
+          void runtime.agent
+            .setModel(frame.model)
+            .then(() => {
+              runtime.commit({ type: 'model_changed', participantId, displayName, model: frame.model });
+            })
+            .catch(() => {
+              // Never interpolate the raw error: it can carry the API key, and
+              // this text is committed to the durable log (I4).
+              runtime.commit({
+                type: 'agent_error',
+                message: 'Could not switch the model — the session may have already ended.',
+              });
+            });
+          return;
+        }
         // --- END phase-7 set_model branch ---
 
         // --- BEGIN phase-3b interrupt slot: add the `interrupt` frame branch here. ---
