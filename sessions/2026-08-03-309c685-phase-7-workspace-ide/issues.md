@@ -116,7 +116,39 @@ run against a room whose log contains `model_changed` and `context_usage`. Both
 are in `LOGGED_TYPES` and unit-tested for it, but the end-to-end reconstruction
 has not been exercised.
 
-### 11. Carried from phase 5, now two phases old
+### 11. The jail's 400-vs-404 split is a filesystem existence oracle (LOW)
+
+Found by probing a **live** server, not by any unit test. Against a real room:
+
+```
+?path=../../../../../../etc/passwd        -> 400   (resolves, exists, outside the jail)
+?path=%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2f…  -> 404   (does not resolve)
+?path=../../package.json                  -> 400
+?path=  (empty)  /  ?path=.               -> 400
+tree at root, valid token                 -> 200
+wrong token / no token, real room         -> 401
+```
+
+Nothing leaks contents and nothing returns 200 — the jail holds. But
+`resolveWorkspacePath` calls `realpathSync` **before** the containment check, so
+a path that exists outside the root reports `invalid` (400) while one that does
+not exist reports `not_found` (404). That difference is an existence oracle for
+arbitrary absolute paths, available to any holder of a room token.
+
+**Deliberately not fixed this session**, for two reasons. First, severity is
+genuinely low here: `Read` is in `permissions.ts`'s `AUTO_APPROVE`, so a room
+participant can already obtain any file's *contents* through the agent with no
+vote — this discloses strictly less than what the room already grants, and the
+security model says plainly that whatever the room can do, every participant can
+do. Second, the fix (realpath the *parent*, check containment, then test
+existence) is a change to the most security-sensitive function in the phase, and
+making it unreviewed at the end of a session — after the mutation pass that
+validated the current shape — is how this repo has previously shipped holes.
+
+Worth doing next session, with its own test asserting that a non-existent path
+outside the root and an existing one outside the root return the **same** code.
+
+### 12. Carried from phase 5, now two phases old
 
 Keyboard-only pass and measured contrast audit. The contrast one has grown: diff
 add/remove backgrounds are new tinted surfaces that nobody has measured.

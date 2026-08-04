@@ -123,8 +123,10 @@ wasm as a separate 232 kB gzip chunk fetched only when a grammar is used.
 ## NOT verified — do not treat as done
 
 **Nobody has opened any of this in a browser, and no live agent has driven it.**
-The plan names eight manual verifications; **one** is done (Shiki chunk
-splitting, from build output). The other seven are open:
+The plan names eight manual verifications; **two and a half** are done — Shiki
+chunk splitting (from a real build), the path jail over HTTP (live, partial), and
+a boot check confirming the five new routes serve and `/api/*` still 404s. The
+rest are open:
 
 1. **Two browsers, one room** — independent file selection, both panes
    auto-following the agent to a third file, pinning stopping the follow.
@@ -132,9 +134,13 @@ splitting, from build output). The other seven are open:
    confirm the approval card renders a real diff with real line numbers, then
    have a **non-driver** approve it and confirm the write lands. If it only works
    for the driver, I2′ regressed.
-3. **The path jail by hand** — `curl` with `../`, a URL-encoded variant, and a
-   symlink committed into a test repo. Unit-green is not evidence on the one
-   surface where being wrong is worst.
+3. **The path jail by hand** — ~~`curl` with `../` and a URL-encoded variant~~
+   **done**, against a live server on `PORT=8099` with a real room: traversal
+   400s, the encoded variant refuses, a valid token gets 200 at the root, and a
+   wrong or absent token gets 401. **Still open:** a symlink committed *into* a
+   test repo, which is the case a lexical check cannot see and the one the unit
+   tests cover with a synthetic `fs.symlinkSync`. The live probe also surfaced a
+   low-severity 400-vs-404 existence oracle — `issues.md` §11.
 4. **The watcher on Linux** — run the Docker image, edit a file in a
    *subdirectory*. Top-level-only changes mean the recursive fallback is wrong.
 5. **Truncation** — `npm install` inside a room workspace: one `truncated` frame
