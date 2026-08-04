@@ -38,6 +38,16 @@ export type ServerFrame =
       resumeToken: string;
     }
   | { kind: 'presence'; participants: PresenceEntry[]; driverId: string | null }
+  /**
+   * Transient and deliberately UNLOGGED (phase 7). A raw filesystem-change
+   * stream is not room history: logging it would bloat every room's JSONL with
+   * node_modules churn and tell a replaying client nothing it cannot re-fetch.
+   *
+   * On `truncated`, `paths` is informational — the client discards it and
+   * refetches the tree. The paths that fit are still sent rather than dropped
+   * silently.
+   */
+  | { kind: 'workspace_changed'; paths: string[]; truncated: boolean }
   | { kind: 'error'; message: string };
 
 /** Frames a client may send. Anything else is dropped with an `error` frame. */
@@ -47,7 +57,9 @@ export type ClientFrame =
   | { kind: 'grant_control'; toParticipantId: string }
   | { kind: 'release_control' }
   | { kind: 'permission_decision'; requestId: string; decision: 'allow' | 'deny'; reason?: string }
-  | { kind: 'interrupt' };
+  | { kind: 'interrupt' }
+  /** `null` = use the account default. See the parse case for why not undefined. */
+  | { kind: 'set_model'; model: string | null };
 
 export function parseClientFrame(raw: string): ClientFrame | null {
   let parsed: unknown;
@@ -69,6 +81,14 @@ export function parseClientFrame(raw: string): ClientFrame | null {
       return { kind: 'release_control' };
     case 'interrupt':
       return { kind: 'interrupt' };
+    case 'set_model':
+      // Accept a string or an EXPLICIT null, and nothing else. `undefined` does
+      // not survive JSON.stringify, so a client meaning "use the default" must
+      // send null — an absent key is indistinguishable from a malformed frame
+      // and is rejected rather than guessed at.
+      return typeof frame['model'] === 'string' || frame['model'] === null
+        ? { kind: 'set_model', model: frame['model'] as string | null }
+        : null;
     case 'grant_control':
       return typeof frame['toParticipantId'] === 'string'
         ? { kind: 'grant_control', toParticipantId: frame['toParticipantId'] }

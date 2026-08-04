@@ -198,6 +198,44 @@ export interface GithubPublished extends EventEnvelope {
   created: boolean;
 }
 
+/** Who switched the room's model, and to what. Room history, so it is logged. */
+export interface ModelChanged extends EventEnvelope {
+  type: 'model_changed';
+  participantId: string;
+  displayName: string;
+  /**
+   * `null` means "the account default". The SDK's `setModel(model?: string)`
+   * spells that `undefined`, but `undefined` does not survive JSON.stringify,
+   * so the wire and the log both use `null` and the server bridges the two.
+   */
+  model: string | null;
+}
+
+/**
+ * Context-window telemetry for the bar in the prompt dock.
+ *
+ * Field names deliberately mirror the SDK's own `ModelUsage`
+ * (`coreTypes.d.ts:8-16`) so `translate()` is a near-identity copy rather than
+ * a renaming exercise that can silently drop precision.
+ *
+ * `ModelUsage` also carries `webSearchRequests` and `costUSD`; both are omitted
+ * on purpose. Logging per-turn dollar cost would make room spend part of the
+ * permanent, shareable transcript, and that is a product decision nobody has
+ * taken. Do not add it just because the field exists upstream.
+ */
+export interface ContextUsage extends EventEnvelope {
+  type: 'context_usage';
+  /** Null on a compact_boundary, which carries no model field. */
+  model: string | null;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadInputTokens: number;
+  cacheCreationInputTokens: number;
+  contextWindow: number;
+  /** Set only by a compact_boundary: tokens in play before compaction. */
+  compactedFromTokens: number | null;
+}
+
 export type NexusEvent =
   | RoomCreated
   | ParticipantJoined
@@ -216,7 +254,9 @@ export type NexusEvent =
   | Interrupted
   | PromptBatchDelivered
   | PromptBatchDiscarded
-  | GithubPublished;
+  | GithubPublished
+  | ModelChanged
+  | ContextUsage;
 
 export type NexusEventType = NexusEvent['type'];
 
@@ -248,6 +288,8 @@ const LOGGED_TYPES = new Set<string>([
   'prompt_batch_delivered',
   'prompt_batch_discarded',
   'github_published',
+  'model_changed',
+  'context_usage',
 ]);
 
 export function isLoggedEvent(value: unknown): value is NexusEvent {
