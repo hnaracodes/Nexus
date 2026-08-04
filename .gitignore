@@ -8,5 +8,8 @@ work/
 *.local
 .env
 .DS_Store
-tutorial.md
-tutorial-async-queue.md
+GTM_PLAN.md
+docs/
+sessions/
+*.md
+!README.md
