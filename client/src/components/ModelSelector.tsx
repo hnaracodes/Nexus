@@ -9,11 +9,14 @@ const DEFAULT_OPTION_VALUE = '__default__';
  * Mirrors the SDK's `ModelInfo` (`coreTypes.d.ts:310-317`) rather than
  * importing it: this is a client-side HTTP response shape, not a protocol
  * type, and `src/server/` is out of bounds for this file. `GET
- * /api/rooms/:id/models` (phase-7a, `docs/plans/phase-7a-workspace-server.md`
- * step 3) is still a marker-region TODO in `src/server/index.ts` as of this
- * writing — the envelope assumed here (`{ models: ModelOption[] }`) is a
- * best guess from the sibling routes' conventions and may need reconciling
- * once 7a lands its actual handler.
+ * /api/rooms/:id/models`.
+ *
+ * RECONCILED against the landed handler (`src/server/index.ts`): it returns
+ * `{ models: await runtime.agent.listModels() }`, and `listModels()` passes the
+ * SDK's `ModelInfo` through verbatim — `{value, displayName, description}`
+ * (`coreTypes.d.ts:310-317`). The shape below matches field for field. It is
+ * declared here rather than imported because this is an HTTP response shape,
+ * not a protocol type, and `src/server/` is out of bounds for a client module.
  */
 interface ModelOption {
   value: string;

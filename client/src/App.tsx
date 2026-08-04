@@ -12,7 +12,10 @@ import type { NexusEvent } from '../../src/protocol/events.js';
 // phase-5a import anchor
 import { MalformedLink } from './pages/MalformedLink.js';
 // phase-7b import anchor
+import { WorkspacePane } from './components/WorkspacePane.js';
+import { createWorkspaceApi } from './workspace/workspaceApi.js';
 // phase-7c import anchor
+import { PromptDock } from './components/PromptDock.js';
 // phase-5b import anchor
 import { useHotkeys } from './hooks/useHotkeys.js';
 import type { Hotkey } from './hooks/useHotkeys.js';
@@ -20,12 +23,9 @@ import { RoomHeader } from './components/RoomHeader.js';
 import { deriveGithubBinding } from './githubBinding.js';
 import { PublishedPrCard } from './components/PublishedPr.js';
 import { deriveLatestPublishedPr } from './publishedPr.js';
-import { SideRail } from './components/SideRail.js';
 import { MessageList } from './components/MessageList.js';
-import { derivePending } from './components/PendingPrompts.js';
+import { PendingPrompts } from './components/PendingPrompts.js';
 import { InterruptNotice } from './components/InterruptNotice.js';
-import { StopButton } from './components/StopButton.js';
-import { PromptInput } from './components/PromptInput.js';
 import { deriveAgentStatus } from './agentStatus.js';
 import { Avatar } from './components/Avatar.js';
 import { DriverRequestNotice } from './components/DriverRequestNotice.js';
@@ -254,8 +254,6 @@ export default function App(): JSX.Element {
   const roomLink = `${globalThis.location.origin}/?room=${params.roomId}&token=${params.token}&name=${encodeURIComponent(params.displayName)}`;
   const agentStatus = deriveAgentStatus(view.events, view.pendingDeltas);
   const { pending: pendingApprovals } = deriveApprovals(view.events);
-  const pendingPromptCount = derivePending(view.events).filter((p) => p.status === 'queued').length;
-  const railBadgeCount = pendingApprovals.length + pendingPromptCount;
 
   return (
     <RoomShell
@@ -274,7 +272,6 @@ export default function App(): JSX.Element {
       roomLink={roomLink}
       agentStatus={agentStatus}
       pendingApprovals={pendingApprovals}
-      railBadgeCount={railBadgeCount}
     />
   );
   // --- END phase-5b layout ---
@@ -303,7 +300,6 @@ function RoomShell({
   roomLink,
   agentStatus,
   pendingApprovals,
-  railBadgeCount,
 }: {
   params: { roomId: string; token: string; displayName: string };
   view: RoomView;
@@ -320,17 +316,26 @@ function RoomShell({
   roomLink: string;
   agentStatus: ReturnType<typeof deriveAgentStatus>;
   pendingApprovals: PendingApproval[];
-  railBadgeCount: number;
 }): JSX.Element {
   const [promptText, setPromptText] = useState('');
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [cheatsheetOpen, setCheatsheetOpen] = useState(false);
   const [grantPickerOpen, setGrantPickerOpen] = useState(false);
-  const [mobileRailOpen, setMobileRailOpen] = useState(false);
+  const [mobileWorkspaceOpen, setMobileWorkspaceOpen] = useState(false);
   const [interruptArmed, setInterruptArmed] = useState(false);
   const [dismissedDriverRequests, setDismissedDriverRequests] = useState<Set<string>>(new Set());
   const [recentRooms, setRecentRooms] = useState<RecentRoom[]>(() => readRecentRooms());
   const armTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Deliberately NOT in `store.ts` and NOT on RoomView (I3). File contents are
+  // read from the room's working directory and are not reconstructible from the
+  // event log, so they are fetched over REST and cached inside useWorkspace.
+  // This is the one piece of room-visible state in the app that is not
+  // log-derived, and drawing that boundary explicitly is the point.
+  const workspaceApi = useMemo(
+    () => createWorkspaceApi({ roomId: params.roomId, token: params.token }),
+    [params.roomId, params.token],
+  );
 
   // Persist this room in the local switcher's history once the server has
   // confirmed our identity — never before, so an unreachable or rejected
@@ -440,13 +445,12 @@ function RoomShell({
       />
 
       {/* --- BEGIN phase-7 workspace slot --- */}
-      {/* phase-7b owns this region: replace the `main` + SideRail split below
-          with a chat column plus <WorkspacePane/>, and delete SideRail (it is
-          rendered TWICE — here and again in the lg:hidden sheet further down,
-          which carries its own marker). The nested `phase-7 prompt dock` region
-          belongs to phase-7c: move it, never edit inside it. */}
+      {/* Chat column + workspace pane. The chat column is a fixed proportion so
+          the code viewer gets the majority of a wide screen; below `lg` the
+          workspace does not render here at all and moves to the full-screen
+          sheet below. */}
       <div className="flex min-h-0 flex-1">
-        <main className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-4">
+        <main className="flex min-h-0 w-full flex-col gap-3 overflow-hidden p-4 lg:w-[44%] lg:min-w-[380px] lg:max-w-[680px] lg:shrink-0 lg:border-r lg:border-border">
           <div className="flex justify-end">
             <ConnectionStatus status={status} />
           </div>
@@ -503,81 +507,76 @@ function RoomShell({
             favour. Adding a driver check here would undo the feature.
           */}
           {/* --- BEGIN phase-7 prompt dock --- */}
-          {/* phase-7c owns everything between these two markers and nothing else.
-              phase-7b, when it restructures the layout around this, must MOVE this
-              block verbatim as an opaque unit and never edit inside it — the two
-              plans are dispatched concurrently and this is the one place their
-              regions nest. */}
-          {/* --- BEGIN phase-3b stop-button slot: wrap in a flex row, add <StopButton/> beside it. --- */}
+          {/* --- BEGIN phase-3b stop-button slot --- */}
           <InterruptNotice events={view.events} />
-          <div className="flex items-center gap-2">
-            <div className="flex-1">
-              <PromptInput
-                disabled={status !== 'open'}
-                value={promptText}
-                onChange={setPromptText}
-                onSubmit={(text) => {
-                  connection?.send({ kind: 'prompt', text });
-                  setPromptText('');
-                }}
-              />
-            </div>
-            <StopButton busy={false} onStop={() => connection?.send({ kind: 'interrupt' })} />
-          </div>
+          {/* Rehomed from the retired SideRail. This is about what is ABOUT to
+              be sent, so it belongs next to the input rather than off in a rail. */}
+          <PendingPrompts
+            events={view.events}
+            onResend={(text) => connection?.send({ kind: 'prompt', text })}
+          />
+          <PromptDock
+            roomId={params.roomId}
+            token={params.token}
+            events={view.events}
+            driverId={view.driverId}
+            selfId={view.selfId}
+            promptDisabled={status !== 'open'}
+            promptValue={promptText}
+            onPromptChange={setPromptText}
+            onSubmitPrompt={(text) => {
+              connection?.send({ kind: 'prompt', text });
+              setPromptText('');
+            }}
+            onStop={() => connection?.send({ kind: 'interrupt' })}
+            stopBusy={false}
+            onSetModel={(model) => connection?.send({ kind: 'set_model', model })}
+          />
           {/* --- END phase-3b stop-button slot --- */}
           {/* --- END phase-7 prompt dock --- */}
         </main>
 
-        <div className="hidden lg:flex">
-          <SideRail
-            participants={view.participants}
-            driverId={view.driverId}
-            selfId={view.selfId}
-            events={view.events}
-            onRequestControl={() => connection?.send({ kind: 'request_control' })}
-            onReleaseControl={() => connection?.send({ kind: 'release_control' })}
-            onGrantControl={(toParticipantId) => connection?.send({ kind: 'grant_control', toParticipantId })}
-            onResendPrompt={(text) => connection?.send({ kind: 'prompt', text })}
-          />
+        <div className="hidden min-h-0 flex-1 lg:flex">
+          <WorkspacePane events={view.events} api={workspaceApi} />
         </div>
       </div>
       {/* --- END phase-7 workspace slot --- */}
 
       {/* --- BEGIN phase-7 mobile workspace sheet --- */}
-      {/* phase-7b: this whole block retires with SideRail. Replace it with the
-          full-screen (`fixed inset-0`) Workspace sheet — NOT 70vh; a code viewer
-          in a 70vh sheet is unusable. The railBadgeCount mechanism goes too. */}
-      {/* Below `lg` the rail collapses to a bottom sheet with a badge count. */}
+      {/* Below `lg` the workspace column does not render, so it gets a sheet.
+          FULL-SCREEN (`inset-0`), not the 70vh the retired room-details sheet
+          used — a code viewer in 70vh is unusable. The old railBadgeCount
+          retired with SideRail: pending approvals already render in the main
+          column and pending prompts now sit above the prompt input, so the
+          badge was counting things that are no longer hidden. */}
       <div className="lg:hidden">
         <button
           type="button"
-          onClick={() => setMobileRailOpen((open) => !open)}
-          aria-expanded={mobileRailOpen}
-          aria-controls="mobile-rail-sheet"
+          onClick={() => setMobileWorkspaceOpen((open) => !open)}
+          aria-expanded={mobileWorkspaceOpen}
+          aria-controls="mobile-workspace-sheet"
           className="fixed bottom-20 right-4 z-20 flex min-h-11 items-center gap-2 rounded-full border border-border bg-surface-2 px-4 py-2 text-sm font-medium text-fg shadow-[0_8px_24px_rgba(0,0,0,0.4)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
         >
-          Room details
-          {railBadgeCount > 0 && (
-            <span className="rounded-full bg-warn px-1.5 py-0.5 text-[10px] font-semibold text-bg">
-              {railBadgeCount}
-            </span>
-          )}
+          Workspace
         </button>
-        {mobileRailOpen && (
+        {mobileWorkspaceOpen && (
           <div
-            id="mobile-rail-sheet"
-            className="fixed inset-x-0 bottom-0 z-40 max-h-[70vh] overflow-auto rounded-t-xl border-t border-border bg-surface shadow-[0_8px_24px_rgba(0,0,0,0.4)]"
+            id="mobile-workspace-sheet"
+            className="fixed inset-0 z-40 flex flex-col bg-surface"
           >
-            <SideRail
-              participants={view.participants}
-              driverId={view.driverId}
-              selfId={view.selfId}
-              events={view.events}
-              onRequestControl={() => connection?.send({ kind: 'request_control' })}
-              onReleaseControl={() => connection?.send({ kind: 'release_control' })}
-              onGrantControl={(toParticipantId) => connection?.send({ kind: 'grant_control', toParticipantId })}
-              onResendPrompt={(text) => connection?.send({ kind: 'prompt', text })}
-            />
+            <div className="flex items-center justify-between border-b border-border px-4 py-2">
+              <span className="text-sm font-medium text-fg">Workspace</span>
+              <button
+                type="button"
+                onClick={() => setMobileWorkspaceOpen(false)}
+                className="min-h-11 rounded px-3 text-sm text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+              >
+                Close
+              </button>
+            </div>
+            <div className="flex min-h-0 flex-1">
+              <WorkspacePane events={view.events} api={workspaceApi} />
+            </div>
           </div>
         )}
       </div>

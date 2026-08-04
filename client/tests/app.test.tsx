@@ -170,6 +170,67 @@ describe('App — the live room view', () => {
   });
 });
 
+/**
+ * Phase 7 wiring. Each component is unit-tested on its own; these cover the
+ * wires BETWEEN them and App.tsx, which is exactly the gap that let a phase-3d
+ * mutation survive. The `set_model` case matters most — the round trip from a
+ * control in PromptDock out to a real client frame exists nowhere else.
+ */
+describe('App — phase 7 workspace and prompt dock', () => {
+  beforeEach(() => {
+    // WorkspacePane fetches the tree on mount. Without this the promise
+    // rejects into an unhandled error and the assertions below get noisy.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify([]), { status: 200 })),
+    );
+  });
+
+  it('renders the workspace pane beside the transcript', () => {
+    render(<App />);
+    act(() => FakeSocket.last?.onopen?.());
+    identify();
+    expect(screen.getByRole('tab', { name: /files/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /changes/i })).toBeInTheDocument();
+  });
+
+  it('sends a set_model frame when the model is switched', () => {
+    render(<App />);
+    act(() => FakeSocket.last?.onopen?.());
+    identify();
+
+    const select = screen.getByLabelText(/model/i);
+    // Drive it through the option the user actually sees, and read that
+    // option's own value rather than hardcoding the component's sentinel —
+    // a real <select> can only ever emit a value it owns.
+    const defaultOption = screen.getByRole('option', { name: 'Default' }) as HTMLOptionElement;
+    fireEvent.change(select, { target: { value: defaultOption.value } });
+
+    const frames = FakeSocket.last?.sent.map((raw) => JSON.parse(raw) as { kind: string }) ?? [];
+    const setModel = frames.find((frame) => frame.kind === 'set_model');
+    expect(setModel).toBeDefined();
+    // null, never undefined — undefined does not survive JSON.stringify and
+    // would reach the server as an absent key, i.e. a malformed frame.
+    expect(setModel).toEqual({ kind: 'set_model', model: null });
+  });
+
+  it('reports usage as unavailable rather than inventing a percentage', () => {
+    render(<App />);
+    act(() => FakeSocket.last?.onopen?.());
+    identify();
+    expect(screen.getByText(/usage unavailable/i)).toBeInTheDocument();
+    expect(screen.queryByText('0%')).not.toBeInTheDocument();
+  });
+
+  it('still sends an interrupt through the dock — the stop button survived the move', () => {
+    render(<App />);
+    act(() => FakeSocket.last?.onopen?.());
+    identify();
+    fireEvent.click(screen.getByRole('button', { name: /stop/i }));
+    expect(FakeSocket.last?.sent).toContain(JSON.stringify({ kind: 'interrupt' }));
+  });
+});
+
 describe('App — a malformed link', () => {
   it('renders a malformed-link page when the link carries no room', () => {
     // Under the phase-5a router, "/" with no room/token never reaches App —
