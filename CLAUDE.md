@@ -132,7 +132,7 @@ Immediately upon completing a specific feature, bug fix, or task, stage the rele
 
 Prefer explicit pathspecs over `git add -A` when the working tree holds changes you did not make.
 
-**Never edit inside a dispatched agent's worktree while any of its agents are still alive.** A subagent that later commits can reset the branch out from under your edit — this happened in the Phase 1 fan-out and silently dropped a commit from the branch. Wait for the whole agent tree to go quiet, or merge its branch first and do follow-up work on `master`.
+**Never edit inside a dispatched agent's worktree while any of its agents are still alive.** A subagent that later commits can reset the branch out from under your edit — this happened in the Phase 1 fan-out and silently dropped a commit from the branch. Wait for the whole agent tree to go quiet, or merge its branch first and do follow-up work on `main`.
 
 **Commit before you mutation-test, and revert mutants with a precise edit — never `git checkout --`.** Reverting an uncommitted file restores it from HEAD, which silently discards the real change along with the mutation. This cost a change in the Phase 2 session before it was caught.
 
@@ -140,7 +140,7 @@ Prefer explicit pathspecs over `git add -A` when the working tree holds changes 
 
 From the Phase 2 and Phase 3 fan-outs; `docs/plans/README.md` has the full dispatch protocol.
 
-- **Audit the seams before dispatching, and grep the plans for `BLOCKED`.** File-ownership rules fail at the boundaries *between* partitions, not inside them. A plan that pre-emptively tells an agent to report BLOCKED is a plan whose author already spotted a seam — resolve it on `master` first. Two-for-two: Phase 2 caught two defects; Phase 3 caught twelve, four of which would have failed the phase.
+- **Audit the seams before dispatching, and grep the plans for `BLOCKED`.** File-ownership rules fail at the boundaries *between* partitions, not inside them. A plan that pre-emptively tells an agent to report BLOCKED is a plan whose author already spotted a seam — resolve it on `main` first. Two-for-two: Phase 2 caught two defects; Phase 3 caught twelve, four of which would have failed the phase.
 - **A plan is not a specification until someone has tried to compile it.** Three of the four Phase 3 plans contained literal code that could not work — one that would not typecheck, one that discarded the value it had just computed, one that would have spawned a real SDK subprocess per test. Read every plan's code against the real signatures before dispatch.
 - **When plans share one file by region, put paired marker comments in it before dispatch** (`{/* --- BEGIN phase-3b stop-button slot --- */}` … `END`) and tell each agent to edit only inside its own. Also name a **distinct import-anchor line** per agent, since import blocks have no natural regions. Phase 3 had *three* concurrent agents editing both `src/server/index.ts` and `client/src/App.tsx` and merged with zero conflicts.
 - **Your dispatch prompt is specification, not commentary.** A wrong line in it propagates straight into shipped code, with a faithful report attached explaining that it was deliberate. In Phase 3 an instruction of mine ("guarding by room id matches the link-is-the-credential model" — it does not) produced a critical authorization hole that passed the suite, typecheck and a live acceptance run.

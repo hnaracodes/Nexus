@@ -67,7 +67,10 @@ everything on `sonnet`** to conserve credits, including the rows that say
 | 7 | `phase-5a-marketing-site.md` *(post-MVP)* | parallel | `sonnet` | `client/src/pages/**`, `client/src/router.tsx`, `client/src/design/**`, `client/index.html`, `client/tailwind.config.js`, `phase-5a` regions of `client/src/index.css` and `client/src/App.tsx`, static-route block of `src/server/index.ts`, `tests/server/static-routes.test.ts` |
 | 7 | `phase-5b-room-ui-redesign.md` *(post-MVP)* | parallel | `sonnet` | `client/src/components/**`, `client/src/hooks/**`, `client/src/{agentStatus,identity,rooms,store}.ts`, `phase-5b` regions of `client/src/App.tsx` and `client/src/index.css`, `client/package.json` (`lucide-react` only) |
 | 8 | `phase-6-github-app-auth.md` *(post-MVP)* | **solo** | `sonnet` | `src/server/{github,publish,publishTool,create,recovery,rooms}.ts`, phase-6 route block + `POST /api/rooms` body of `src/server/index.ts`, `mcpServers` wiring in `src/server/agent.ts`, `commit`/`room_created` in `src/server/ws.ts`, `src/protocol/events.ts`, `src/log/redact.ts`, `client/src/pages/CreateRoom.tsx`, `client/src/store.ts` (`github_published` case), `Dockerfile`, `fly.toml` |
-| 9 | `phase-7-workspace-ide.md` *(post-MVP, **not dispatch-ready**)* | see below | `sonnet` | Three sub-plans, each with its own **Files owned** block in the plan. 7a: `src/server/{workspace,watcher,gitStatus}.ts` + protocol + `agent.ts`/`ws.ts` + phase-7 route block of `src/server/index.ts`. 7b: `client/src/{derive,workspace}/**` + workspace components + `shiki`. 7c: `client/src/components/{PromptDock,ModelSelector,VoiceInputButton,RepoBranchBar,ContextWindowBar}.tsx` |
+| 9 | `phase-7a-workspace-server.md` *(post-MVP)* | parallel | `sonnet` | `src/server/{workspace,watcher,gitStatus}.ts` (new), `src/protocol/{events,wire}.ts`, `src/server/{agent,ws}.ts`, `export`s in `publish.ts`, `phase-7 workspace routes` + `phase-7 set_model branch` regions of `src/server/index.ts` |
+| 9 | `phase-7b-workspace-pane.md` *(post-MVP)* | after 7a | `sonnet` | `client/src/{derive,workspace}/**`, `client/src/components/{WorkspacePane,FileTree,CodeViewer,DiffViewer,ChangesTab}.tsx`, deletion of `SideRail.tsx`, `client/package.json` (`shiki` only), `phase-7 workspace slot` + `phase-7 mobile workspace sheet` regions of `App.tsx` |
+| 9 | `phase-7c-prompt-dock.md` *(post-MVP)* | parallel | `sonnet` | `client/src/components/{PromptDock,ModelSelector,VoiceInputButton,RepoBranchBar,ContextWindowBar}.tsx`, `phase-7 prompt dock` region of `App.tsx`, one class change to `StopButton.tsx` |
+| — | `phase-7-workspace-ide.md` — **architecture record, not a dispatch unit** | — | — | Contains six defects found by compiling it against the real tree; see its header. Do not code from it. |
 
 **Order 9 was decomposed on 2026-08-03.** Dispatch
 `phase-7a-workspace-server.md` (6 tasks), `phase-7b-workspace-pane.md` (7 tasks)
@@ -101,7 +104,7 @@ dispatch. They are genuinely parallel: `phase-5a` owns `pages/`, `phase-5b` owns
 `components/`. The seam is `client/src/App.tsx` and `client/src/index.css`, which
 carry paired marker regions (`phase-5a routing` / `phase-5b layout`, `phase-5a
 tokens` / `phase-5b keyframes`) and a distinct import-anchor line per agent.
-**Put those markers in on `master` before dispatching**, per the fan-out
+**Put those markers in on `main` before dispatching**, per the fan-out
 technique in `CLAUDE.md` — Phase 3 merged three concurrent agents editing both
 of these files with zero conflicts by doing exactly this.
 
@@ -122,7 +125,7 @@ security-relevant.
 
 **Order 8 was dispatched as a hybrid, not a pure fan-out.** The two properties
 everything else depends on — the broadcast-redaction fix and `src/server/github.ts`
-— were written and committed on `master` first, precisely so the three parallel
+— were written and committed on `main` first, precisely so the three parallel
 agents coded against real signatures instead of a plan's guesses. Phase 3's
 lesson stands: *a plan is not a specification until someone has tried to compile
 it.* The parallel agents were also told **not to commit**, since the orchestrator
@@ -137,7 +140,7 @@ interaction. The bars are listed at the end of `phase-6-github-app-auth.md` and
 in `docs/github-app-setup.md`; they are now the **regression checklist** for any
 change to `github.ts`, `create.ts`, `publish.ts` or `publishTool.ts`.
 
-**Order 4 pre-work landed on `master` first** (commits `369f495`..`1fbd316`):
+**Order 4 pre-work landed on `main` first** (commits `369f495`..`1fbd316`):
 stable participant identity with resume tokens, `restoreRoom`/`attachApiKey`/
 `hasApiKey`/`mintRoomId`, the `4409` guard for a keyless recovered room,
 `store.ts` surfacing transient `error` frames, and the marker regions the
@@ -204,7 +207,7 @@ build directly on earlier ones and a cracked foundation compounds."
 
 ## Before the first dispatch
 
-- The default branch here is **`master`**, not `main`. The final whole-branch review in `subagent-driven-development` computes `git merge-base main HEAD` — substitute `master`, or rename the branch first.
+- The default branch here is **`main`**. (It was `master` through phase 5; the rename is done, `origin/HEAD` points at `origin/main`, and no `master` branch exists. Older plan files and session ledgers still say "on master" — read that as "on the default branch"; they are historical records and were left alone deliberately.) `subagent-driven-development`'s final whole-branch review computes `git merge-base main HEAD`, which now needs no substitution.
 - `.worktrees/` is gitignored by `phase-0-spine` Task 1. Do not dispatch any worktree-isolated agent before that task lands, or the worktree directory gets committed into the repo.
 - Worktrees require a non-empty history. The repo has an initial commit; keep it that way.
 
