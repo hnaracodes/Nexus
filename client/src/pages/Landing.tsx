@@ -3,6 +3,7 @@ import { SiteFooter } from './components/SiteFooter.js';
 import { Reveal } from './components/Reveal.js';
 import { Hero } from './sections/Hero.js';
 import { Problem } from './sections/Problem.js';
+import { LiveDemo } from './sections/LiveDemo.js';
 import { HowItWorks } from './sections/HowItWorks.js';
 import { Governance } from './sections/Governance.js';
 import { Invariants } from './sections/Invariants.js';
@@ -25,6 +26,12 @@ export function Landing(): JSX.Element {
       <main id="main">
         {/* The hero manages its own reveal so its copy can stagger. */}
         <Hero />
+        {/* The demo sits directly under the hero on purpose: the page's job is
+            to show the product working, and every paragraph below this is
+            easier to believe once you have watched the sequence once. */}
+        <Reveal>
+          <LiveDemo />
+        </Reveal>
         <Reveal>
           <Problem />
         </Reveal>
