@@ -31,8 +31,14 @@ export interface GitDiffResult {
   diff: string;
 }
 
+/**
+ * The shape 7a's `/models` route actually emits, which is the SDK's own
+ * `ModelInfo` passed through verbatim. The identifier field is `value`, not
+ * `model` — `ModelSelector` reads `.value`, and a `model` field here would
+ * have silently produced a dropdown of `undefined` options.
+ */
 export interface ModelInfo {
-  model: string;
+  value: string;
   displayName?: string;
   description?: string;
 }

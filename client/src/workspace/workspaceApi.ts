@@ -44,23 +44,52 @@ async function request<T>(config: WorkspaceApiConfig, path: string): Promise<T> 
   return (await response.json()) as T;
 }
 
-/** Thin `fetch` wrappers over 7a's five routes. */
+
+/**
+ * Thin `fetch` wrappers over 7a's five routes.
+ *
+ * Every one of 7a's list routes wraps its payload in a named envelope
+ * (`{entries}`, `{models}`, `{diff}`) rather than returning a bare top-level
+ * JSON array, and `git/diff` returns only the diff text — the path is
+ * something the caller already knows. Unwrapping happens HERE, once, so the
+ * components stay in terms of the domain types.
+ *
+ * This layer previously returned `response.json()` straight through while
+ * typing it as `TreeEntry[]`. `as T` asserts, it does not verify, so nothing
+ * caught it: `FileTree` stored the envelope object in `DirState.entries`,
+ * `for (const entry of dir.entries)` threw "is not iterable" during render,
+ * and — with no error boundary above it — React unmounted the entire room,
+ * which is the blank screen that reached production. Keep the wire shapes
+ * below matching `src/server/index.ts`; they are a contract between two
+ * separately-tested halves and only an end-to-end check proves they agree.
+ */
 export function createWorkspaceApi(config: WorkspaceApiConfig): WorkspaceApi {
   return {
-    getTree(path: string): Promise<TreeEntry[]> {
-      return request<TreeEntry[]>(config, `/workspace/tree?path=${encodeURIComponent(path)}`);
+    async getTree(path: string): Promise<TreeEntry[]> {
+      const body = await request<{ entries: TreeEntry[] }>(
+        config,
+        `/workspace/tree?path=${encodeURIComponent(path)}`,
+      );
+      return body.entries;
     },
     getFile(path: string): Promise<FileReadResult> {
+      // Not enveloped — 7a returns the discriminated union directly.
       return request<FileReadResult>(config, `/workspace/file?path=${encodeURIComponent(path)}`);
     },
-    getGitStatus(): Promise<GitStatusEntry[]> {
-      return request<GitStatusEntry[]>(config, '/git/status');
+    async getGitStatus(): Promise<GitStatusEntry[]> {
+      const body = await request<{ entries: GitStatusEntry[] }>(config, '/git/status');
+      return body.entries;
     },
-    getGitDiff(path: string): Promise<GitDiffResult> {
-      return request<GitDiffResult>(config, `/git/diff?path=${encodeURIComponent(path)}`);
+    async getGitDiff(path: string): Promise<GitDiffResult> {
+      const body = await request<{ diff: string }>(
+        config,
+        `/git/diff?path=${encodeURIComponent(path)}`,
+      );
+      return { path, diff: body.diff };
     },
-    getModels(): Promise<ModelInfo[]> {
-      return request<ModelInfo[]>(config, '/models');
+    async getModels(): Promise<ModelInfo[]> {
+      const body = await request<{ models: ModelInfo[] }>(config, '/models');
+      return body.models;
     },
   };
 }

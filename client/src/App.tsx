@@ -13,6 +13,7 @@ import type { NexusEvent } from '../../src/protocol/events.js';
 import { MalformedLink } from './pages/MalformedLink.js';
 // phase-7b import anchor
 import { WorkspacePane } from './components/WorkspacePane.js';
+import { PaneErrorBoundary } from './components/PaneErrorBoundary.js';
 import { createWorkspaceApi } from './workspace/workspaceApi.js';
 // phase-7c import anchor
 import { PromptDock } from './components/PromptDock.js';
@@ -571,7 +572,9 @@ function RoomShell({
         </main>
 
         <div className="hidden min-h-0 flex-1 lg:flex">
-          <WorkspacePane events={view.events} api={workspaceApi} />
+          <PaneErrorBoundary label="The workspace panel">
+                <WorkspacePane events={view.events} api={workspaceApi} />
+              </PaneErrorBoundary>
         </div>
       </div>
       {/* --- END phase-7 workspace slot --- */}
@@ -609,7 +612,9 @@ function RoomShell({
               </button>
             </div>
             <div className="flex min-h-0 flex-1">
-              <WorkspacePane events={view.events} api={workspaceApi} />
+              <PaneErrorBoundary label="The workspace panel">
+                <WorkspacePane events={view.events} api={workspaceApi} />
+              </PaneErrorBoundary>
             </div>
           </div>
         )}
