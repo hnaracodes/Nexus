@@ -18,7 +18,15 @@ import { createWorkspaceApi } from '../workspaceApi.js';
  * Skipping-when-absent is deliberate. A live test that fails in CI for want of
  * a server teaches people to ignore it, and an ignored test is worse than none.
  */
-const BASE = process.env.NEXUS_LIVE_BASE;
+// Reached through `globalThis` rather than a bare `process`, deliberately.
+// The client is a browser project with no node types, and `client/`'s build is
+// `tsc -b && vite build` — which typechecks test files. A bare `process.env`
+// here compiles under vitest (esbuild strips types without checking them) and
+// then fails `tsc -b` inside the Docker client stage, breaking the deploy but
+// nothing a local `npm test` would run. That is exactly how this file broke
+// `fly deploy` once already.
+const BASE = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env
+  ?.NEXUS_LIVE_BASE;
 
 async function serverIsUp(): Promise<boolean> {
   if (BASE === undefined) return false;
