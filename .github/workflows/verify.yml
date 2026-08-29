@@ -1,0 +1,38 @@
+# The durable half of a lesson this repo has already paid for twice.
+#
+# Vitest transforms with esbuild, which strips types without checking them, so a
+# fully green suite says nothing about whether the tree compiles. That gap has
+# shipped a `tsc -b` failure behind passing tests twice — the second time
+# breaking a production deploy. `npm run verify` closes it by running typecheck,
+# BOTH builds and BOTH suites; running it here makes it unskippable rather than
+# something a human has to remember.
+name: verify
+
+on:
+  push:
+    branches: [main, v2]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      # One lockfile governs the whole workspace since the protocol extraction.
+      - run: npm ci
+      # typecheck -> server build -> web build -> server suite -> web suite.
+      # The web build is the only command that typechecks TSX.
+      - run: npm run verify
+
+  # Kept separate so a Docker regression is attributable on sight rather than
+  # buried in the verify log. This is the check that could not be run in the
+  # environment where the migration was written.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t nexus:ci .
