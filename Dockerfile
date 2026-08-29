@@ -41,9 +41,12 @@ COPY package.json package-lock.json ./
 COPY packages/protocol/package.json ./packages/protocol/
 COPY apps/server/package.json ./apps/server/
 COPY apps/web/package.json ./apps/web/
-# Installs the full workspace minus devDependencies. That pulls in the web
-# app's runtime deps, which the server never loads — a few MB of image for a
-# correctly linked workspace. Trading size for a symlink that provably exists.
+# Installs the full workspace minus devDependencies. That pulls in the web app's
+# runtime deps, which the server never loads: measured at ~50MB of a 729MB image
+# (lucide-react alone is 41MB) against a 179MB node_modules. Deliberate — a
+# filtered `--workspace=` install risks the @nexus/protocol symlink not being
+# created, and a server that fails at boot on an unresolvable import costs more
+# than 7% of an image. Revisit only with the smoke test in hand.
 RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 
 # The workspace layout is preserved on purpose. The server resolves the web
