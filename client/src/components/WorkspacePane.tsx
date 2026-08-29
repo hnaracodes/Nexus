@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FolderTree, GitCompare, Pin, PinOff, Rows3 } from 'lucide-react';
-import type { NexusEvent } from '../../../src/protocol/events.js';
+import type { NexusEvent } from '@nexus/protocol/events';
 import { deriveCurrentFile, deriveLatestEditSeqByPath, deriveTouchedFiles } from '../derive/workspaceFiles.js';
 import { useWorkspace } from '../workspace/useWorkspace.js';
 import type { WorkspaceApi } from '../workspace/workspaceApi.js';

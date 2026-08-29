@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import type { GithubRepoRef } from '../protocol/events.js';
+import type { GithubRepoRef } from '@nexus/protocol/events';
 
 export interface Participant {
   id: string;

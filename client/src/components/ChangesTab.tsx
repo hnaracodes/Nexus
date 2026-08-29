@@ -1,5 +1,5 @@
 import { CheckCircle2, XCircle } from 'lucide-react';
-import type { NexusEvent } from '../../../src/protocol/events.js';
+import type { NexusEvent } from '@nexus/protocol/events';
 import { deriveApprovals } from '../approvals.js';
 import type { GitStatusEntry } from '../workspace/types.js';
 

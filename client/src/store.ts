@@ -1,5 +1,5 @@
-import type { NexusEvent } from '../../src/protocol/events.js';
-import type { PresenceEntry, ServerFrame } from '../../src/protocol/wire.js';
+import type { NexusEvent } from '@nexus/protocol/events';
+import type { PresenceEntry, ServerFrame } from '@nexus/protocol/wire';
 
 export interface Message {
   id: string;

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { logPathFor, openLog } from '../../src/log/event-log.js';
-import type { NexusEvent } from '../../src/protocol/events.js';
+import type { NexusEvent } from '@nexus/protocol/events';
 
 const KEY = 'sk-ant-api03-TESTONLY-not-a-real-key';
 let dir = '';

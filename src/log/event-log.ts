@@ -1,7 +1,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import type { NexusEvent } from '../protocol/events.js';
-import { isLoggedEvent } from '../protocol/events.js';
+import type { NexusEvent } from '@nexus/protocol/events';
+import { isLoggedEvent } from '@nexus/protocol/events';
 import { redactEvent } from './redact.js';
 
 const DEFAULT_DATA_DIR = process.env['NEXUS_DATA_DIR'] ?? './data';

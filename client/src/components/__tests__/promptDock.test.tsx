@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { NexusEvent } from '../../../../src/protocol/events.js';
+import type { NexusEvent } from '@nexus/protocol/events';
 import { PromptDock } from '../PromptDock.js';
 import type { PromptDockProps } from '../PromptDock.js';
 

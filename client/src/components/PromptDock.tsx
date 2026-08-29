@@ -1,4 +1,4 @@
-import type { NexusEvent } from '../../../src/protocol/events.js';
+import type { NexusEvent } from '@nexus/protocol/events';
 import { ContextWindowBar } from './ContextWindowBar.js';
 import { ModelSelector } from './ModelSelector.js';
 import { PromptInput } from './PromptInput.js';

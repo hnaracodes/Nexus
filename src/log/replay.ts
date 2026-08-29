@@ -1,5 +1,5 @@
-import type { NexusEvent } from '../protocol/events.js';
-import type { PresenceEntry } from '../protocol/wire.js';
+import type { NexusEvent } from '@nexus/protocol/events';
+import type { PresenceEntry } from '@nexus/protocol/wire';
 import { projectPresence } from '../server/presence.js';
 
 export interface ReconstructedRoom {

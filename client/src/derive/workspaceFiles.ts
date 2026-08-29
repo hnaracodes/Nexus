@@ -1,4 +1,4 @@
-import type { NexusEvent } from '../../../src/protocol/events.js';
+import type { NexusEvent } from '@nexus/protocol/events';
 
 /**
  * Pure derivations over the event log for the workspace pane — zero React,

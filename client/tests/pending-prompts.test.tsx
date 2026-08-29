@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { PendingPrompts, derivePending } from '../src/components/PendingPrompts.js';
-import type { NexusEvent } from '../../src/protocol/events.js';
+import type { NexusEvent } from '@nexus/protocol/events';
 
 function log(...partials: Record<string, unknown>[]): NexusEvent[] {
   return partials.map(

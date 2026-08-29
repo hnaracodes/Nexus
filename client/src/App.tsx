@@ -8,7 +8,7 @@ import { EMPTY_VIEW } from './store.js';
 import type { RoomView } from './store.js';
 import { connect } from './ws.js';
 import type { Connection, Status, WebSocketLike } from './ws.js';
-import type { NexusEvent } from '../../src/protocol/events.js';
+import type { NexusEvent } from '@nexus/protocol/events';
 // phase-5a import anchor
 import { MalformedLink } from './pages/MalformedLink.js';
 // phase-7b import anchor

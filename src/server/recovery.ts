@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import type { GithubRepoRef, NexusEvent } from '../protocol/events.js';
+import type { GithubRepoRef, NexusEvent } from '@nexus/protocol/events';
 import { openLog } from '../log/event-log.js';
 import { reconstruct } from '../log/replay.js';
 import { restoreRoom } from './rooms.js';

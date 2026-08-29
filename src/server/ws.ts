@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { WebSocket } from 'ws';
-import type { NexusEvent, UnsequencedEvent } from '../protocol/events.js';
-import type { ServerFrame } from '../protocol/wire.js';
+import type { NexusEvent, UnsequencedEvent } from '@nexus/protocol/events';
+import type { ServerFrame } from '@nexus/protocol/wire';
 import { createSink } from '../log/index.js';
 import { redactEvent } from '../log/redact.js';
 import type { AgentDeps, AgentHandle } from './agent.js';

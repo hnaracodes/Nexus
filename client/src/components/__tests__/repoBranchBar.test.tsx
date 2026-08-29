@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { NexusEvent } from '../../../../src/protocol/events.js';
+import type { NexusEvent } from '@nexus/protocol/events';
 import { RepoBranchBar } from '../RepoBranchBar.js';
 
 const BOUND: NexusEvent = {

@@ -18,7 +18,7 @@
  */
 
 import { createHash, createSign, randomBytes, randomUUID } from 'node:crypto';
-import type { GithubRepoRef } from '../protocol/events.js';
+import type { GithubRepoRef } from '@nexus/protocol/events';
 
 const GITHUB_API = 'https://api.github.com';
 const GITHUB_WEB = 'https://github.com';

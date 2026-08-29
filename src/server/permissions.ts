@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { UnsequencedEvent } from '../protocol/events.js';
+import type { UnsequencedEvent } from '@nexus/protocol/events';
 import type { Room } from './rooms.js';
 
 export const DECISION_TIMEOUT_MS = 120_000;

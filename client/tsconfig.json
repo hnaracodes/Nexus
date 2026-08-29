@@ -12,5 +12,5 @@
     "resolveJsonModule": true,
     "types": ["vitest/globals", "@testing-library/jest-dom"]
   },
-  "include": ["src", "tests", "../src/protocol"]
+  "include": ["src", "tests"]
 }

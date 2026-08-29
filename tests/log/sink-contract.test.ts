@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { logPathFor } from '../../src/log/event-log.js';
 import { createSink } from '../../src/log/index.js';
-import type { NexusEvent } from '../../src/protocol/events.js';
+import type { NexusEvent } from '@nexus/protocol/events';
 
 const KEY = 'sk-ant-api03-TESTONLY-not-a-real-key';
 

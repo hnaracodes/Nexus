@@ -2,8 +2,8 @@
 import { describe, expect, it } from 'vitest';
 import fixture from '../src/__fixtures__/events.json';
 import { EMPTY_VIEW, project, reduce } from '../src/store.js';
-import type { NexusEvent } from '../../src/protocol/events.js';
-import type { ServerFrame } from '../../src/protocol/wire.js';
+import type { NexusEvent } from '@nexus/protocol/events';
+import type { ServerFrame } from '@nexus/protocol/wire';
 
 const events = fixture as unknown as NexusEvent[];
 const frames: ServerFrame[] = events.map((event) => ({ kind: 'event', event }));

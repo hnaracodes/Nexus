@@ -1,4 +1,4 @@
-import type { NexusEvent, UserPrompt } from '../../../src/protocol/events.js';
+import type { NexusEvent, UserPrompt } from '@nexus/protocol/events';
 
 export interface PendingPrompt {
   seq: number;

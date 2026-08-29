@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { NexusEvent } from '../../../../src/protocol/events.js';
+import type { NexusEvent } from '@nexus/protocol/events';
 import {
   deriveCurrentFile,
   deriveFileEdits,

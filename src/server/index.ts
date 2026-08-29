@@ -6,9 +6,9 @@ import type { Context } from 'hono';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { WebSocketServer } from 'ws';
-import type { GithubRepoRef } from '../protocol/events.js';
-import { PROTOCOL_VERSION } from '../protocol/events.js';
-import { parseClientFrame } from '../protocol/wire.js';
+import type { GithubRepoRef } from '@nexus/protocol/events';
+import { PROTOCOL_VERSION } from '@nexus/protocol/events';
+import { parseClientFrame } from '@nexus/protocol/wire';
 // STATIC import, deliberately. Evaluating github.ts is what reads the App
 // secrets and DELETES them from process.env, and that has to happen before any
 // room can attach an agent — startAgent spawns the SDK subprocess with

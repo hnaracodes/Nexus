@@ -1,4 +1,4 @@
-import type { GithubRepoRef, NexusEvent } from '../../src/protocol/events.js';
+import type { GithubRepoRef, NexusEvent } from '@nexus/protocol/events';
 
 /**
  * The room's GitHub repository, derived from the log rather than held in state

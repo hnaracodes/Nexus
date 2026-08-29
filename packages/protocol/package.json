@@ -1,0 +1,17 @@
+{
+  "name": "@nexus/protocol",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+    "./events": { "types": "./dist/events.d.ts", "default": "./dist/events.js" },
+    "./wire": { "types": "./dist/wire.d.ts", "default": "./dist/wire.js" }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "watch": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}

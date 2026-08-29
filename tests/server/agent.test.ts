@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { UnsequencedEvent } from '../../src/protocol/events.js';
+import type { UnsequencedEvent } from '@nexus/protocol/events';
 import { startAgent, translate } from '../../src/server/agent.js';
 import { __resetRooms, createRoom } from '../../src/server/rooms.js';
 

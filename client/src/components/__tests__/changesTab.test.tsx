@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { NexusEvent } from '../../../../src/protocol/events.js';
+import type { NexusEvent } from '@nexus/protocol/events';
 import { ChangesTab } from '../ChangesTab.js';
 
 const ROOM = 'room_fixture';

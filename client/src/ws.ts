@@ -1,4 +1,4 @@
-import type { ClientFrame, ServerFrame } from '../../src/protocol/wire.js';
+import type { ClientFrame, ServerFrame } from '@nexus/protocol/wire';
 import { EMPTY_VIEW, reduce } from './store.js';
 import type { RoomView } from './store.js';
 

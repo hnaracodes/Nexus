@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { NexusEvent } from '../../../../src/protocol/events.js';
+import type { NexusEvent } from '@nexus/protocol/events';
 import { PUBLISH_TOOL_SUFFIX, deriveLatestPublishedPr } from '../../publishedPr.js';
 
 const ROOM = 'room_fixture';

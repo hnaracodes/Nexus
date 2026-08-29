@@ -1,5 +1,5 @@
 import { Hand } from 'lucide-react';
-import type { PresenceEntry } from '../../../src/protocol/wire.js';
+import type { PresenceEntry } from '@nexus/protocol/wire';
 import { Avatar } from './Avatar.js';
 import type { PendingDriverRequest } from './DriverRequestNotice.js';
 

@@ -1,4 +1,4 @@
-import type { NexusEvent } from '../../src/protocol/events.js';
+import type { NexusEvent } from '@nexus/protocol/events';
 
 export const PUBLISH_TOOL_SUFFIX = 'publish_pull_request';
 

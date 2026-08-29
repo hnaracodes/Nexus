@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Cpu } from 'lucide-react';
-import type { NexusEvent } from '../../../src/protocol/events.js';
+import type { NexusEvent } from '@nexus/protocol/events';
 
 /** The default-model sentinel used by the `<select>`. `null` is not a valid HTML option value. */
 const DEFAULT_OPTION_VALUE = '__default__';
