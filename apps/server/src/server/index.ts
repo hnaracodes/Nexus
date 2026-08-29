@@ -427,7 +427,7 @@ export function createServer(
   });
   // --- END phase-3c re-entry slot ---
 
-  // The Docker image copies the Vite bundle to client/dist, but no Phase 1
+  // The Docker image copies the Vite bundle to apps/web/dist, but no Phase 1
   // plan owned the wiring between the two: phase-1b owns client/**, phase-1c
   // owns the Dockerfile, and this seam belongs to neither. Registered after
   // the API routes so /healthz and /api/* always win.
@@ -443,7 +443,7 @@ export function createServer(
   // serves the shell either way and the client decides which view to mount.
   const PAGE_ROUTES = ['/', '/new', '/privacy', '/terms', '/security', '/room'] as const;
   // Anchored to this module, NOT to process.cwd(). Before the monorepo move
-  // the default was the cwd-relative 'client/dist', which worked only because
+  // the default was the cwd-relative 'apps/web/dist', which worked only because
   // every invocation path happened to run from the repo root. Under workspaces
   // `npm run dev -w @nexus/server` runs with cwd=apps/server, and that
   // coincidence is gone.

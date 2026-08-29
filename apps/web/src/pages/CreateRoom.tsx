@@ -17,7 +17,7 @@ const KEY_PREFIX = 'sk-ant-';
 /**
  * One repository the GitHub App is installed on and the server has verified.
  * Mirrors an entry of `GET /api/github/repos`. Deliberately declared here and
- * not imported from `src/protocol/events.ts`: `GithubRepoRef` is the *binding*
+ * not imported from `packages/protocol/src/events.ts`: `GithubRepoRef` is the *binding*
  * persisted on a room (installation id, no visibility), whereas this is the
  * picker's view of a candidate. Reusing the protocol type would force
  * `private` into it, where it has no business being.

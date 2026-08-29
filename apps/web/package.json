@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "npm run protocol:build --prefix ../..",
     "dev": "vite",
     "prebuild": "npm run protocol:build --prefix ../..",
     "build": "tsc -b && vite build",

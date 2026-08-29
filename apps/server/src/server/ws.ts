@@ -131,7 +131,7 @@ export function attachRoom(
   // `existing !== undefined` early return above is what guarantees a room
   // cannot accumulate N watchers (I1's one-resource discipline, applied to a
   // second resource). `workspace_changed` is transient and unlogged — see the
-  // comment on `ServerFrame` in `src/protocol/wire.ts` — so it goes straight
+  // comment on `ServerFrame` in `packages/protocol/src/wire.ts` — so it goes straight
   // to broadcast() and nowhere near commit().
   runtime.workspaceWatcher = startWorkspaceWatcher(room, (paths, truncated) => {
     runtime.broadcast({ kind: 'workspace_changed', paths, truncated });

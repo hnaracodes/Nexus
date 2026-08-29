@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createServer } from '../../src/server/index.js';
 
 /**
- * The Dockerfile ships client/dist into the image; this is the only thing that
+ * The Dockerfile ships apps/web/dist into the image; this is the only thing that
  * serves it. Without these tests the deployed site would 404 at "/" while
  * every other test stayed green.
  *

@@ -15,7 +15,7 @@ re-explains context.
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](#license)
 [![Node](https://img.shields.io/badge/node-%3E%3D22-339933?style=for-the-badge&logo=node.js&logoColor=white)](package.json)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](tsconfig.json)
-[![Tests](https://img.shields.io/badge/tests-296%20server%20%7C%20361%20client-brightgreen?style=for-the-badge)](#quick-start)
+[![Tests](https://img.shields.io/badge/tests-298%20server%20%7C%20400%20web-brightgreen?style=for-the-badge)](#quick-start)
 
 **[Try the live demo](https://nexus-mvp.fly.dev/)** ·
 [Quick start](#quick-start) ·
@@ -80,9 +80,8 @@ off before the agent does anything destructive.
 ## Quick start
 
 ```bash
-npm install
-npm --prefix client install
-npm run build:client    # bundles client/dist, which the server serves
+npm install             # one install; the repo is an npm workspace
+npm run build:client    # bundles apps/web/dist, which the server serves
 PORT=8099 npm run dev   # :8080 is occupied by an unrelated server on the primary dev machine
 ```
 
@@ -94,12 +93,18 @@ anyone who has it is in the room.
 <summary><strong>Running the test suites</strong></summary>
 
 ```bash
+npm run verify          # the gate: typecheck + BOTH builds + BOTH suites
 npm test                # server tests (vitest)
-npm run test:client     # client tests
-npm run test:all        # both
-npm run typecheck       # tsc over src + tests — a green suite does not mean it compiles
-npm --prefix client run build   # the only command that type-checks TSX
+npm run test:client     # web tests
+npm run test:all        # both suites
+npm run typecheck       # tsc, noEmit — a green suite does not mean it compiles
+npm run build:client    # the only command that type-checks TSX
 ```
+
+Run `npm run verify` before you commit. The suites and the builds are separate
+commands, and vitest strips types without checking them, so a fully green suite
+has twice hidden a `tsc -b` failure here — the second time breaking a deploy.
+CI runs it too (`.github/workflows/verify.yml`).
 
 </details>
 
@@ -107,12 +112,16 @@ npm --prefix client run build   # the only command that type-checks TSX
 <summary><strong>Hot-reload client development</strong></summary>
 
 ```bash
-npm --prefix client run dev   # :5173, hot reload
+npm run dev -w @nexus/web   # :5173, hot reload
 ```
 
 Its Vite proxy is hardcoded to `http://localhost:8080` (see
-`client/vite.config.ts`), so this workflow needs the backend on the **default**
+`apps/web/vite.config.ts`), so this workflow needs the backend on the **default**
 port, not `8099`.
+
+If you are editing `packages/protocol`, run `npm run protocol:watch` alongside
+it — both apps resolve the protocol out of `node_modules`, so an unbuilt change
+there is invisible to a running dev server.
 
 </details>
 
@@ -211,12 +220,12 @@ interleaved" bugs. It also produces semantically meaningful events to log,
 replay, and attribute, which a byte stream cannot.
 
 ```
-src/protocol/    the frozen event union and wire frames
-src/server/      rooms, the single query() instance, WebSocket transport,
-                 driver token, permission gate
-src/log/         append-only JSONL, redaction, replay
-client/          React projection of the event stream
-docs/plans/      the implementation plans this was built from
+packages/protocol/    the frozen event union and wire frames (@nexus/protocol)
+apps/server/src/server/   rooms, the single query() instance, WebSocket transport,
+                          driver token, permission gate
+apps/server/src/log/      append-only JSONL, redaction, replay
+apps/web/            React projection of the event stream (@nexus/web)
+docs/plans/          the implementation plans this was built from
 ```
 
 ## License

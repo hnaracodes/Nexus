@@ -3,7 +3,7 @@
  * phase-7a). The result feeds a `workspace_changed` frame, which is transient
  * and deliberately UNLOGGED — a raw change stream is not room history (I3's
  * boundary; see the comment on `ServerFrame['workspace_changed']` in
- * `src/protocol/wire.ts`).
+ * `packages/protocol/src/wire.ts`).
  */
 
 import { watch } from 'node:fs';
