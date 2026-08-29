@@ -1,4 +1,5 @@
 import type { Server } from 'node:http';
+import { fileURLToPath } from 'node:url';
 import { createAdaptorServer } from '@hono/node-server';
 import { getConnInfo } from '@hono/node-server/conninfo';
 import { serveStatic } from '@hono/node-server/serve-static';
@@ -441,7 +442,18 @@ export function createServer(
   // A room link is "/?room=…&token=…" (and now also "/room?…"), so "/"
   // serves the shell either way and the client decides which view to mount.
   const PAGE_ROUTES = ['/', '/new', '/privacy', '/terms', '/security', '/room'] as const;
-  const clientDir = process.env['NEXUS_CLIENT_DIR'] ?? 'client/dist';
+  // Anchored to this module, NOT to process.cwd(). Before the monorepo move
+  // the default was the cwd-relative 'client/dist', which worked only because
+  // every invocation path happened to run from the repo root. Under workspaces
+  // `npm run dev -w @nexus/server` runs with cwd=apps/server, and that
+  // coincidence is gone.
+  //
+  // `../../../web/dist` resolves identically from source and from build output
+  // because src/server/ and dist/server/ sit at the same depth under
+  // apps/server/. serveStatic joins this with path.join and stats the result,
+  // so an absolute path is fine — only *relative* ones are cwd-sensitive.
+  const clientDir =
+    process.env['NEXUS_CLIENT_DIR'] ?? fileURLToPath(new URL('../../../web/dist', import.meta.url));
   app.use('/assets/*', serveStatic({ root: clientDir }));
   for (const path of PAGE_ROUTES) {
     app.get(path, serveStatic({ path: `${clientDir}/index.html` }));
@@ -450,7 +462,7 @@ export function createServer(
     app.get(path, (c) =>
       c.text(
         'Nexus server is running, but no client bundle was found. ' +
-          'Run `npm --prefix client run build`, or set NEXUS_CLIENT_DIR.',
+          'Run `npm run build:client`, or set NEXUS_CLIENT_DIR.',
         503,
       ),
     );

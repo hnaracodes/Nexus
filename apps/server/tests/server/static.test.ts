@@ -69,6 +69,6 @@ describe('static client serving', () => {
     const app = freshApp();
     const response = await app.fetch(new Request('http://localhost/'));
     expect(response.status).toBe(503);
-    expect(await response.text()).toContain('npm --prefix client run build');
+    expect(await response.text()).toContain('npm run build:client');
   });
 });

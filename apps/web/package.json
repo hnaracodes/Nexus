@@ -1,14 +1,14 @@
 {
-  "name": "nexus-client",
+  "name": "@nexus/web",
   "version": "0.0.1",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "npm --prefix .. run protocol:build",
+    "prebuild": "npm run protocol:build --prefix ../..",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "pretest": "npm --prefix .. run protocol:build",
+    "pretest": "npm run protocol:build --prefix ../..",
     "test": "vitest run"
   },
   "dependencies": {

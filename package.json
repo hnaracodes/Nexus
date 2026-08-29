@@ -4,44 +4,23 @@
   "private": true,
   "license": "MIT",
   "type": "module",
-  "engines": {
-    "node": ">=22"
-  },
-  "workspaces": [
-    "packages/*",
-    "client"
-  ],
+  "engines": { "node": ">=22" },
+  "workspaces": ["apps/*", "packages/*"],
   "scripts": {
     "protocol:build": "npm run build -w @nexus/protocol",
     "protocol:watch": "npm run watch -w @nexus/protocol",
-    "predev": "npm run protocol:build",
-    "dev": "tsx watch src/server/index.ts",
-    "prebuild": "npm run protocol:build",
-    "build": "tsc -p tsconfig.build.json",
-    "pretypecheck": "npm run protocol:build",
-    "typecheck": "tsc -p tsconfig.json",
-    "start": "node dist/server/index.js",
-    "pretest": "npm run protocol:build",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "build:client": "npm run build -w nexus-client",
-    "test:client": "npm run test -w nexus-client",
+    "dev": "npm run dev -w @nexus/server",
+    "build": "npm run build -w @nexus/server",
+    "typecheck": "npm run typecheck -w @nexus/server",
+    "start": "npm run start -w @nexus/server",
+    "test": "npm run test -w @nexus/server",
+    "test:watch": "npm run test:watch -w @nexus/server",
+    "build:client": "npm run build -w @nexus/web",
+    "test:client": "npm run test -w @nexus/web",
     "test:all": "npm test && npm run test:client",
     "verify": "npm run typecheck && npm run build && npm run build:client && npm run test && npm run test:client"
   },
-  "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.1.0",
-    "@hono/node-server": "^2.0.12",
-    "@nexus/protocol": "*",
-    "hono": "^4.6.0",
-    "ws": "^8.18.0",
-    "zod": "^4.4.3"
-  },
   "devDependencies": {
-    "@types/node": "^22.7.0",
-    "@types/ws": "^8.5.12",
-    "tsx": "^4.19.0",
-    "typescript": "^5.6.0",
-    "vitest": "^4.1.10"
+    "typescript": "^5.6.0"
   }
 }

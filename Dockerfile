@@ -9,15 +9,15 @@ FROM node:22-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY packages/protocol/package.json ./packages/protocol/
-COPY client/package.json ./client/
+COPY apps/server/package.json ./apps/server/
+COPY apps/web/package.json ./apps/web/
 RUN npm ci
 
 FROM deps AS build
 WORKDIR /app
-COPY tsconfig.base.json tsconfig.json tsconfig.build.json ./
+COPY tsconfig.base.json ./
 COPY packages ./packages
-COPY src ./src
-COPY client ./client
+COPY apps ./apps
 # @nexus/protocol first, explicitly. Both the server build and the client build
 # resolve it out of node_modules, and a stale or missing protocol dist is
 # exactly the "green suite that does not compile" failure mode CLAUDE.md
@@ -39,16 +39,20 @@ ENV NEXUS_WORKDIR=/data/work
 
 COPY package.json package-lock.json ./
 COPY packages/protocol/package.json ./packages/protocol/
-COPY client/package.json ./client/
+COPY apps/server/package.json ./apps/server/
+COPY apps/web/package.json ./apps/web/
 # Installs the full workspace minus devDependencies. That pulls in the web
 # app's runtime deps, which the server never loads — a few MB of image for a
 # correctly linked workspace. Trading size for a symlink that provably exists.
 RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 
-COPY --from=build /app/dist ./dist
-# The symlink installed above points here. Without this the link dangles.
+# The workspace layout is preserved on purpose. The server resolves the web
+# bundle as `../../../web/dist` relative to its own module URL, so apps/server
+# and apps/web must sit beside each other here exactly as they do in the repo.
+COPY --from=build /app/apps/server/dist ./apps/server/dist
+COPY --from=build /app/apps/web/dist ./apps/web/dist
+# The @nexus/protocol symlink installed above points here. Without this it dangles.
 COPY --from=build /app/packages/protocol/dist ./packages/protocol/dist
-COPY --from=build /app/client/dist ./client/dist
 
 # git is needed for repo-clone-on-create (plan phase-3c).
 RUN apt-get update \
@@ -56,4 +60,4 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 EXPOSE 8080
-CMD ["node", "dist/server/index.js"]
+CMD ["node", "apps/server/dist/server/index.js"]
