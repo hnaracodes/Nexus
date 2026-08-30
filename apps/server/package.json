@@ -3,7 +3,15 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/server/index.d.ts",
+      "default": "./dist/server/index.js"
+    }
+  },
   "scripts": {
     "predev": "npm run protocol:build --prefix ../..",
     "dev": "tsx watch src/server/index.ts",
