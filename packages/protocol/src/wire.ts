@@ -1,4 +1,4 @@
-import type { NexusEvent } from './events.js';
+import type { AgentId, NexusEvent } from './events.js';
 
 export interface PresenceEntry {
   participantId: string;
@@ -52,14 +52,40 @@ export type ServerFrame =
 
 /** Frames a client may send. Anything else is dropped with an `error` frame. */
 export type ClientFrame =
-  | { kind: 'prompt'; text: string }
+  /**
+   * `agentId` names the agent this prompt is FOR. Omitted means the primary
+   * agent, which is what every pre-phase-8b client sends. It is a routing hint
+   * only — the server still stamps attribution itself, so naming an agent can
+   * never be a way to forge who spoke (I2').
+   */
+  | { kind: 'prompt'; text: string; agentId?: AgentId }
   | { kind: 'request_control' }
   | { kind: 'grant_control'; toParticipantId: string }
   | { kind: 'release_control' }
-  | { kind: 'permission_decision'; requestId: string; decision: 'allow' | 'deny'; reason?: string }
+  | {
+      kind: 'permission_decision';
+      requestId: string;
+      decision: 'allow' | 'deny';
+      reason?: string;
+      /** Which agent's gate holds this request. Absent means the primary agent. */
+      agentId?: AgentId;
+    }
   | { kind: 'interrupt' }
   /** `null` = use the account default. See the parse case for why not undefined. */
   | { kind: 'set_model'; model: string | null };
+
+/**
+ * Three-state on purpose: absent is legitimate (every v1 client), a string is
+ * accepted, and anything else is a REJECT rather than a coercion. Routing a
+ * prompt or an approval to the wrong agent because a malformed id was coerced
+ * would be a steering failure, so the whole frame is refused — the same stance
+ * `set_model` already takes on a malformed model.
+ */
+function readAgentId(value: unknown): { ok: true; agentId?: AgentId } | { ok: false } {
+  if (value === undefined) return { ok: true };
+  if (typeof value === 'string' && value !== '') return { ok: true, agentId: value };
+  return { ok: false };
+}
 
 export function parseClientFrame(raw: string): ClientFrame | null {
   let parsed: unknown;
@@ -71,10 +97,16 @@ export function parseClientFrame(raw: string): ClientFrame | null {
   if (typeof parsed !== 'object' || parsed === null) return null;
   const frame = parsed as Record<string, unknown>;
   switch (frame['kind']) {
-    case 'prompt':
-      return typeof frame['text'] === 'string' && frame['text'].trim().length > 0
-        ? { kind: 'prompt', text: frame['text'] }
-        : null;
+    case 'prompt': {
+      if (typeof frame['text'] !== 'string' || frame['text'].trim().length === 0) return null;
+      const agent = readAgentId(frame['agentId']);
+      if (!agent.ok) return null;
+      return {
+        kind: 'prompt',
+        text: frame['text'],
+        ...(agent.agentId === undefined ? {} : { agentId: agent.agentId }),
+      };
+    }
     case 'request_control':
       return { kind: 'request_control' };
     case 'release_control':
@@ -93,16 +125,23 @@ export function parseClientFrame(raw: string): ClientFrame | null {
       return typeof frame['toParticipantId'] === 'string'
         ? { kind: 'grant_control', toParticipantId: frame['toParticipantId'] }
         : null;
-    case 'permission_decision':
-      return typeof frame['requestId'] === 'string' &&
-        (frame['decision'] === 'allow' || frame['decision'] === 'deny')
-        ? {
-            kind: 'permission_decision',
-            requestId: frame['requestId'],
-            decision: frame['decision'],
-            ...(typeof frame['reason'] === 'string' ? { reason: frame['reason'] } : {}),
-          }
-        : null;
+    case 'permission_decision': {
+      if (
+        typeof frame['requestId'] !== 'string' ||
+        (frame['decision'] !== 'allow' && frame['decision'] !== 'deny')
+      ) {
+        return null;
+      }
+      const agent = readAgentId(frame['agentId']);
+      if (!agent.ok) return null;
+      return {
+        kind: 'permission_decision',
+        requestId: frame['requestId'],
+        decision: frame['decision'],
+        ...(typeof frame['reason'] === 'string' ? { reason: frame['reason'] } : {}),
+        ...(agent.agentId === undefined ? {} : { agentId: agent.agentId }),
+      };
+    }
     default:
       return null;
   }

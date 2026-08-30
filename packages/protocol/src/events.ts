@@ -4,7 +4,56 @@
  * protocol change, not a feature change.
  */
 
-export const PROTOCOL_VERSION = 1;
+/**
+ * 2 since phase 8b, when events learned to name the agent they belong to.
+ *
+ * The change is purely additive — every field is optional and every v1 log on
+ * disk still replays — so this is a signal to future clients, not a
+ * compatibility break. Nothing currently branches on it.
+ */
+export const PROTOCOL_VERSION = 2;
+
+/**
+ * Which agent an event belongs to.
+ *
+ * A room may host more than one agent from phase 8b onward, so an event that
+ * describes agent activity has to say which one. `PRIMARY_AGENT_ID` is the id a
+ * single-agent room uses, and — load-bearing — it is what an event with no
+ * `agentId` MEANS. Every JSONL line written before this field existed is such
+ * an event, including the ones on the production volume, and I3 forbids
+ * rewriting them. So absence is not "unknown"; it is "the primary agent".
+ */
+export type AgentId = string;
+export const PRIMARY_AGENT_ID: AgentId = 'primary';
+
+/**
+ * Mixed into the events that describe an agent doing something, as opposed to
+ * a person doing something (`participant_joined`) or the room itself changing
+ * (`driver_granted`). Deliberately NOT on `EventEnvelope`: an agent id on
+ * `participant_left` would be meaningless, and putting it there would imply
+ * per-agent driver semantics, which is a phase-12 decision nobody has taken.
+ */
+export interface AgentScoped {
+  /**
+   * OPTIONAL is load-bearing, the same way `UserPrompt.wasDriver` is. Logs on
+   * disk predate this field and `src/log/replay.ts` must keep reconstructing
+   * them. Read it through `agentIdOf()` rather than directly, so the default
+   * lives in exactly one place.
+   */
+  agentId?: AgentId;
+}
+
+/**
+ * The agent an event belongs to, defaulting absence to the primary agent.
+ *
+ * Defaulting happens HERE, at the point of use, and never by materialising the
+ * field into the stored object. A materialised default could be written back to
+ * disk, which would quietly rewrite history and make a v1 log indistinguishable
+ * from a v2 one (I3).
+ */
+export function agentIdOf(event: AgentScoped): AgentId {
+  return event.agentId ?? PRIMARY_AGENT_ID;
+}
 
 /** Fields every logged event carries. Assigned once, never mutated (I3). */
 export interface EventEnvelope {
@@ -75,13 +124,13 @@ export interface UserPrompt extends EventEnvelope {
 }
 
 /** A completed assistant message. Deltas are never logged — see wire.ts. */
-export interface AssistantMessage extends EventEnvelope {
+export interface AssistantMessage extends EventEnvelope, AgentScoped {
   type: 'assistant_message';
   messageId: string;
   text: string;
 }
 
-export interface ToolStart extends EventEnvelope {
+export interface ToolStart extends EventEnvelope, AgentScoped {
   type: 'tool_start';
   toolUseId: string;
   toolName: string;
@@ -89,7 +138,7 @@ export interface ToolStart extends EventEnvelope {
   input: unknown;
 }
 
-export interface ToolResult extends EventEnvelope {
+export interface ToolResult extends EventEnvelope, AgentScoped {
   type: 'tool_result';
   toolUseId: string;
   toolName: string;
@@ -98,12 +147,12 @@ export interface ToolResult extends EventEnvelope {
   output: string;
 }
 
-export interface AgentError extends EventEnvelope {
+export interface AgentError extends EventEnvelope, AgentScoped {
   type: 'agent_error';
   message: string;
 }
 
-export interface AgentIdle extends EventEnvelope {
+export interface AgentIdle extends EventEnvelope, AgentScoped {
   type: 'agent_idle';
 }
 
@@ -134,7 +183,7 @@ export interface DriverRequested extends EventEnvelope {
   displayName: string;
 }
 
-export interface PermissionRequested extends EventEnvelope {
+export interface PermissionRequested extends EventEnvelope, AgentScoped {
   type: 'permission_requested';
   requestId: string;
   toolName: string;
@@ -143,7 +192,7 @@ export interface PermissionRequested extends EventEnvelope {
   expiresAt: number;
 }
 
-export interface PermissionDecided extends EventEnvelope {
+export interface PermissionDecided extends EventEnvelope, AgentScoped {
   type: 'permission_decided';
   requestId: string;
   toolName: string;
@@ -156,7 +205,7 @@ export interface PermissionDecided extends EventEnvelope {
   reason: string | null;
 }
 
-export interface Interrupted extends EventEnvelope {
+export interface Interrupted extends EventEnvelope, AgentScoped {
   type: 'interrupted';
   participantId: string;
   displayName: string;
@@ -167,7 +216,7 @@ export interface Interrupted extends EventEnvelope {
  * the `user_prompt` events in this batch, so "what is still queued" is derivable
  * from the log alone (I3) without a second source of truth.
  */
-export interface PromptBatchDelivered extends EventEnvelope {
+export interface PromptBatchDelivered extends EventEnvelope, AgentScoped {
   type: 'prompt_batch_delivered';
   promptSeqs: number[];
   /** Who held the token at flush time — may differ from submit time. */
@@ -175,7 +224,7 @@ export interface PromptBatchDelivered extends EventEnvelope {
 }
 
 /** Prompts dropped because someone interrupted before they were delivered. */
-export interface PromptBatchDiscarded extends EventEnvelope {
+export interface PromptBatchDiscarded extends EventEnvelope, AgentScoped {
   type: 'prompt_batch_discarded';
   promptSeqs: number[];
   byParticipantId: string;
@@ -187,7 +236,7 @@ export interface PromptBatchDiscarded extends EventEnvelope {
  * credential: every field here is public once the PR exists. Logged so "what
  * did this room actually ship" is answerable from the log alone (I3).
  */
-export interface GithubPublished extends EventEnvelope {
+export interface GithubPublished extends EventEnvelope, AgentScoped {
   type: 'github_published';
   prUrl: string;
   prNumber: number;
@@ -199,7 +248,7 @@ export interface GithubPublished extends EventEnvelope {
 }
 
 /** Who switched the room's model, and to what. Room history, so it is logged. */
-export interface ModelChanged extends EventEnvelope {
+export interface ModelChanged extends EventEnvelope, AgentScoped {
   type: 'model_changed';
   participantId: string;
   displayName: string;
@@ -223,7 +272,7 @@ export interface ModelChanged extends EventEnvelope {
  * permanent, shareable transcript, and that is a product decision nobody has
  * taken. Do not add it just because the field exists upstream.
  */
-export interface ContextUsage extends EventEnvelope {
+export interface ContextUsage extends EventEnvelope, AgentScoped {
   type: 'context_usage';
   /** Null on a compact_boundary, which carries no model field. */
   model: string | null;

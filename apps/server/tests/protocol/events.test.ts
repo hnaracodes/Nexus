@@ -5,7 +5,10 @@ import { parseClientFrame } from '@nexus/protocol/wire';
 
 describe('protocol', () => {
   it('pins the protocol version', () => {
-    expect(PROTOCOL_VERSION).toBe(1);
+    // 2 since phase 8b: events can name the agent they belong to. The change is
+    // additive and every v1 log still replays, so this is a signal to future
+    // clients rather than a compatibility break.
+    expect(PROTOCOL_VERSION).toBe(2);
   });
 
   it('accepts a well-formed envelope as a logged event', () => {
