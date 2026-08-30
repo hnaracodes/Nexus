@@ -551,6 +551,15 @@ export function createServer(
           // server is attribution: wasDriver is derived from room.driverId and
           // never read off the client frame, so it cannot be forged.
           const wasDriver = isDriver(room, participantId);
+          // An unknown agent is refused rather than steered to the primary one:
+          // a stale or typo'd id must not quietly drive a different agent.
+          const target = runtime.getAgent(frame.agentId);
+          if (target === undefined) {
+            ws.send(
+              JSON.stringify({ kind: 'error', message: 'That agent is not in this room.' }),
+            );
+            return;
+          }
           const logged = runtime.commit({
             type: 'user_prompt',
             participantId,
@@ -558,7 +567,7 @@ export function createServer(
             text: frame.text,
             wasDriver,
           });
-          runtime.agent.submit({
+          target.submit({
             seq: logged.seq,
             displayName,
             text: frame.text,
@@ -594,13 +603,18 @@ export function createServer(
         }
         if (frame.kind === 'permission_decision') {
           // Any participant may decide — not only the driver.
-          const accepted = runtime.agent.gate.resolve(frame.requestId, {
+          //
+          // Routed through the runtime rather than reaching into one gate:
+          // request ids are minted per gate, so once a room can hold more than
+          // one agent a bare id is ambiguous, and settling the wrong agent's
+          // tool call with this vote would be an unauthorised approval.
+          const accepted = runtime.resolvePermission(frame.requestId, {
             decision: frame.decision,
             participantId,
             displayName,
             via: 'first_response',
             reason: frame.reason ?? null,
-          });
+          }, frame.agentId);
           if (!accepted) {
             ws.send(JSON.stringify({ kind: 'error', message: 'That approval was already decided.' }));
           }
