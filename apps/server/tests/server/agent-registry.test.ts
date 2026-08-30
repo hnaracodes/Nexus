@@ -1,10 +1,10 @@
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { PRIMARY_AGENT_ID, agentIdOf } from '@nexus/protocol/events';
 import { createRoom } from '../../src/server/rooms.js';
-import { MemorySink, attachRoom } from '../../src/server/ws.js';
+import { MemorySink, __resetRuntimes, attachRoom } from '../../src/server/ws.js';
 
 /**
  * Phase 8b, task 3. A room's runtime learns to hold MORE THAN ONE agent.
@@ -27,19 +27,57 @@ const stubQuery = (() => ({
   supportedModels: async () => [],
 })) as never;
 
+/**
+ * Every runtime this file attaches, so teardown can actually tear them down.
+ *
+ * Without this each test leaked three things: a 120s DECISION_TIMEOUT_MS timer
+ * per unresolved permission request (two of the routing tests deliberately never
+ * settle theirs), a live recursive `fs.watch` from attachRoom's workspace
+ * watcher, and the runtime itself in attachRoom's module-level memo. Vitest
+ * force-exits the worker today so the suite is green either way — which is
+ * exactly how this turns into a hanging CI job the day pool or teardown settings
+ * change.
+ */
+const attached: ReturnType<typeof attachRoom>[] = [];
+
 function room() {
   return createRoom({ apiKey: KEY, cwd: stubCwd, repoUrl: null });
 }
 
+/** attachRoom, but tracked for teardown. */
+function attach(sink: MemorySink = new MemorySink()) {
+  const runtime = attachRoom(room(), sink, { runQuery: stubQuery });
+  attached.push(runtime);
+  return runtime;
+}
+
+afterEach(() => {
+  for (const runtime of attached) {
+    // Settling a pending request is what clears its timer; stop() ends the
+    // session loop; the watcher holds an fs handle of its own.
+    for (const handle of runtime.agents.values()) {
+      for (const id of handle.gate.pendingIds()) {
+        handle.gate.resolve(id, {
+          decision: 'deny', participantId: null, displayName: null, via: 'timeout', reason: 'test teardown',
+        });
+      }
+      handle.stop();
+    }
+    runtime.workspaceWatcher.close();
+  }
+  attached.length = 0;
+  __resetRuntimes();
+});
+
 describe('the room runtime holds a map of agents', () => {
   it('starts with exactly the primary agent', () => {
-    const runtime = attachRoom(room(), new MemorySink(), { runQuery: stubQuery });
+    const runtime = attach();
 
     expect([...runtime.agents.keys()]).toEqual([PRIMARY_AGENT_ID]);
   });
 
   it('resolves the primary agent when no id is named, which is every v1 caller', () => {
-    const runtime = attachRoom(room(), new MemorySink(), { runQuery: stubQuery });
+    const runtime = attach();
 
     expect(runtime.getAgent()).toBe(runtime.agents.get(PRIMARY_AGENT_ID));
   });
@@ -48,7 +86,7 @@ describe('the room runtime holds a map of agents', () => {
     // Silently falling back to the primary agent would mean a typo'd or stale
     // agent id steers the WRONG agent. For a prompt that is confusing; for an
     // approval it is a governance failure.
-    const runtime = attachRoom(room(), new MemorySink(), { runQuery: stubQuery });
+    const runtime = attach();
 
     expect(runtime.getAgent('no-such-agent')).toBeUndefined();
   });
@@ -57,7 +95,7 @@ describe('the room runtime holds a map of agents', () => {
     // I1 re-scoped: N agents may coexist, but a given agentId is never
     // re-instantiated. This is the property that stops a second viewer, or a
     // second attach, from forking an agent's context window.
-    const runtime = attachRoom(room(), new MemorySink(), { runQuery: stubQuery });
+    const runtime = attach();
     const first = runtime.getAgent(PRIMARY_AGENT_ID);
 
     const again = runtime.attachAgent(PRIMARY_AGENT_ID, { runQuery: stubQuery });
@@ -74,7 +112,7 @@ describe('agent attribution on emitted events', () => {
     // and would make a v2 log gratuitously different from the v1 logs already
     // on the production volume. Zero log churn until a second agent exists.
     const sink = new MemorySink();
-    const runtime = attachRoom(room(), sink, { runQuery: stubQuery });
+    const runtime = attach(sink);
 
     runtime.commit({ type: 'agent_idle' });
 
@@ -86,7 +124,7 @@ describe('agent attribution on emitted events', () => {
 
   it('stamps a non-primary agent onto the events it emits', () => {
     const sink = new MemorySink();
-    const runtime = attachRoom(room(), sink, { runQuery: stubQuery });
+    const runtime = attach(sink);
     runtime.attachAgent('reviewer', { runQuery: stubQuery });
 
     runtime.commitAs('reviewer', { type: 'agent_idle' });
@@ -112,30 +150,83 @@ describe('routing a permission decision to the right agent', () => {
   const vote = { decision: 'deny', participantId: 'p_1', displayName: 'Ada', via: 'first_response', reason: null } as const;
 
   it('finds the request when the client names no agent, as every v1 client does', () => {
-    const runtime = attachRoom(room(), new MemorySink(), { runQuery: stubQuery });
+    const runtime = attach();
     runtime.attachAgent('reviewer', { runQuery: stubQuery });
     const id = pending(runtime, 'reviewer');
 
-    expect(runtime.resolvePermission(id, vote)).toBe(true);
+    expect(runtime.resolvePermission(id, vote)).toBe('settled');
   });
 
   it('refuses a decision aimed at an agent that does not hold the request', () => {
     // The governance property. Request ids are minted per gate, so without this
     // a vote cast on one agent's approval card could settle a DIFFERENT agent's
     // pending tool call. That is not a bug, it is an unauthorised approval.
-    const runtime = attachRoom(room(), new MemorySink(), { runQuery: stubQuery });
+    const runtime = attach();
     runtime.attachAgent('reviewer', { runQuery: stubQuery });
     const id = pending(runtime, 'reviewer');
 
-    expect(runtime.resolvePermission(id, vote, PRIMARY_AGENT_ID)).toBe(false);
+    expect(runtime.resolvePermission(id, vote, PRIMARY_AGENT_ID)).toBe('not-found');
     // ...and the real request is still open, not collaterally settled.
     expect(runtime.getAgent('reviewer')?.gate.pendingIds()).toContain(id);
   });
 
   it('refuses a decision naming an agent that does not exist', () => {
-    const runtime = attachRoom(room(), new MemorySink(), { runQuery: stubQuery });
+    const runtime = attach();
     const id = pending(runtime, PRIMARY_AGENT_ID);
 
-    expect(runtime.resolvePermission(id, vote, 'ghost')).toBe(false);
+    expect(runtime.resolvePermission(id, vote, 'ghost')).toBe('unknown-agent');
+  });
+});
+
+describe('commitAs cannot be tricked into mis-attributing an event', () => {
+  it('overrides an agentId already present on the event when committing as primary', () => {
+    // Found in review. `{...event, ...(agentId === PRIMARY ? {} : {agentId})}`
+    // spreads NOTHING on the primary branch, so an agentId riding in on the
+    // incoming event survived untouched — meaning the stamp was authoritative
+    // only for non-primary agents, while the method's own doc claimed an agent
+    // id "can no more be forged than wasDriver can". It has to be authoritative
+    // on BOTH branches or it is not a stamp at all.
+    const sink = new MemorySink();
+    const runtime = attach(sink);
+
+    runtime.commit({ type: 'agent_idle', agentId: 'reviewer' } as never);
+
+    expect(agentIdOf(sink.read().at(-1) as { agentId?: string })).toBe(PRIMARY_AGENT_ID);
+  });
+
+  it('overrides a conflicting agentId when committing as a named agent', () => {
+    const sink = new MemorySink();
+    const runtime = attach(sink);
+    runtime.attachAgent('reviewer', { runQuery: stubQuery });
+
+    runtime.commitAs('reviewer', { type: 'agent_idle', agentId: 'somebody-else' } as never);
+
+    expect(agentIdOf(sink.read().at(-1) as { agentId?: string })).toBe('reviewer');
+  });
+});
+
+describe('resolvePermission distinguishes WHY it failed', () => {
+  function pending2(runtime: ReturnType<typeof attachRoom>, agentId: string): string {
+    const gate = runtime.getAgent(agentId)?.gate;
+    if (gate === undefined) throw new Error('no agent');
+    void gate.request('Bash', { command: 'x' });
+    return gate.pendingIds().at(-1) as string;
+  }
+  const vote2 = { decision: 'deny', participantId: 'p_1', displayName: 'Ada', via: 'first_response', reason: null } as const;
+
+  it('reports an unknown agent separately from an already-settled request', () => {
+    // Found in review. All three causes collapsed into one boolean, and index.ts
+    // rendered every false as "That approval was already decided." For a stale
+    // agentId that message is a LIE with teeth: the request is still open, the
+    // person stops watching, and 120s later it auto-denies on timeout — the
+    // opposite of the four-eyes guarantee this routing exists to protect.
+    const runtime = attach();
+    const id = pending2(runtime, PRIMARY_AGENT_ID);
+
+    expect(runtime.resolvePermission(id, vote2, 'ghost')).toBe('unknown-agent');
+    expect(runtime.resolvePermission('req_nonexistent', vote2)).toBe('not-found');
+    expect(runtime.resolvePermission(id, vote2)).toBe('settled');
+    // Settling twice is genuinely "already decided".
+    expect(runtime.resolvePermission(id, vote2)).toBe('not-found');
   });
 });

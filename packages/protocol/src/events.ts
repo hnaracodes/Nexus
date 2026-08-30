@@ -341,6 +341,17 @@ const LOGGED_TYPES = new Set<string>([
   'context_usage',
 ]);
 
+/**
+ * The event types that survive a reload, as data.
+ *
+ * Exported so tests can assert set EQUALITY against it rather than a hard-coded
+ * count — a count silently keeps passing when a member is added, which is the
+ * exact failure this set already warns about one comment above.
+ */
+export function loggedEventTypes(): readonly string[] {
+  return [...LOGGED_TYPES];
+}
+
 export function isLoggedEvent(value: unknown): value is NexusEvent {
   if (typeof value !== 'object' || value === null) return false;
   const e = value as Record<string, unknown>;

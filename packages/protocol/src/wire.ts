@@ -82,7 +82,13 @@ export type ClientFrame =
  * `set_model` already takes on a malformed model.
  */
 function readAgentId(value: unknown): { ok: true; agentId?: AgentId } | { ok: false } {
-  if (value === undefined) return { ok: true };
+  // `null` is accepted as equivalent to absent, deliberately, because that is
+  // already this file's convention: `set_model` documents null as the JSON-safe
+  // spelling of "unspecified" since undefined does not survive JSON.stringify.
+  // Rejecting it here would mean a client building a frame from a nullable
+  // variable loses its prompt to "Unrecognized message." with no hint that
+  // agentId was the problem.
+  if (value === undefined || value === null) return { ok: true };
   if (typeof value === 'string' && value !== '') return { ok: true, agentId: value };
   return { ok: false };
 }

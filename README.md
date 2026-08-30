@@ -15,7 +15,7 @@ re-explains context.
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](#license)
 [![Node](https://img.shields.io/badge/node-%3E%3D22-339933?style=for-the-badge&logo=node.js&logoColor=white)](package.json)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](tsconfig.json)
-[![Tests](https://img.shields.io/badge/tests-298%20server%20%7C%20400%20web-brightgreen?style=for-the-badge)](#quick-start)
+[![Tests](https://img.shields.io/badge/tests-338%20server%20%7C%20400%20web%20%7C%2010%20desktop-brightgreen?style=for-the-badge)](#quick-start)
 
 **[Try the live demo](https://nexus-mvp.fly.dev/)** ·
 [Quick start](#quick-start) ·

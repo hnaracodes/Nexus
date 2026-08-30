@@ -22,8 +22,17 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 const SECRETS = ['GITHUB_APP_CLIENT_SECRET', 'GITHUB_APP_PRIVATE_KEY_B64'] as const;
 
+/**
+ * Snapshotted and restored, but NOT asserted on: the second test deletes
+ * GITHUB_APP_CLIENT_ID to exercise the half-configured path, and leaving it
+ * deleted would silently half-configure every later test in the same vitest
+ * worker — an order-dependent failure that would not reproduce when this file
+ * is run alone.
+ */
+const ALSO_RESTORED = ['GITHUB_APP_CLIENT_ID'] as const;
+
 const ORIGINAL = new Map<string, string | undefined>(
-  SECRETS.map((name) => [name, process.env[name]]),
+  [...SECRETS, ...ALSO_RESTORED].map((name) => [name, process.env[name]]),
 );
 
 beforeEach(() => {

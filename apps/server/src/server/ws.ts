@@ -4,6 +4,7 @@ import type { AgentId, NexusEvent, UnsequencedEvent } from '@nexus/protocol/even
 import { PRIMARY_AGENT_ID } from '@nexus/protocol/events';
 import type { ServerFrame } from '@nexus/protocol/wire';
 import { createSink } from '../log/index.js';
+import { projectAgents } from '../log/replay.js';
 import { redactEvent } from '../log/redact.js';
 import type { AgentDeps, AgentHandle } from './agent.js';
 import type { Decision } from './permissions.js';
@@ -33,6 +34,18 @@ export class MemorySink implements EventSink {
   }
 }
 
+/**
+ * Why a permission decision did or did not land.
+ *
+ * Deliberately not a boolean. The three causes need three different things said
+ * to the person who clicked: 'settled' is done; 'not-found' really is "already
+ * decided"; 'unknown-agent' means the request is STILL OPEN and still counting
+ * down to a timeout-deny, so telling that person it was already decided makes
+ * them stop watching an approval that then auto-denies — the exact opposite of
+ * the guarantee the gate exists to provide.
+ */
+export type ResolveOutcome = 'settled' | 'not-found' | 'unknown-agent';
+
 export interface RoomRuntime {
   room: Room;
   /**
@@ -51,7 +64,9 @@ export interface RoomRuntime {
    * Every agent attached to this room. One entry until phase 12; the map is
    * what lets there be more without reshaping the runtime again.
    */
-  agents: Map<AgentId, AgentHandle>;
+  /** Read-only on purpose: `attachAgent` is I1's per-agent enforcement point,
+   *  and a mutable Map here would let any holder of the runtime bypass it. */
+  agents: ReadonlyMap<AgentId, AgentHandle>;
   /** Undefined for an unknown id — deliberately NOT a fallback to the primary
    *  agent, since silently steering the wrong agent is worse than failing. */
   getAgent(agentId?: AgentId): AgentHandle | undefined;
@@ -87,7 +102,7 @@ export interface RoomRuntime {
    * pre-phase-8b client — the gates are searched, which is safe because ids are
    * random and unique in practice.
    */
-  resolvePermission(requestId: string, decision: Decision, agentId?: AgentId): boolean;
+  resolvePermission(requestId: string, decision: Decision, agentId?: AgentId): ResolveOutcome;
   addSocket(socket: WebSocket, participantId: string): void;
   removeSocket(socket: WebSocket): void;
   socketCount(): number;
@@ -118,7 +133,16 @@ export function attachRoom(
     sink,
     agents,
     get agent(): AgentHandle {
-      return agents.get(PRIMARY_AGENT_ID) as AgentHandle;
+      const primary = agents.get(PRIMARY_AGENT_ID);
+      if (primary === undefined) {
+        // Was `as AgentHandle`, which typed away a genuinely reachable
+        // undefined: attachAgent only sets the map entry AFTER startAgent
+        // returns, so a synchronous throw in startAgent left a runtime whose
+        // primary agent was missing, and the next request died with an opaque
+        // "cannot read properties of undefined" 500. Name the condition instead.
+        throw new Error(`Room ${room.id} has no primary agent attached.`);
+      }
+      return primary;
     },
     getAgent(agentId: AgentId = PRIMARY_AGENT_ID): AgentHandle | undefined {
       return agents.get(agentId);
@@ -162,8 +186,17 @@ export function attachRoom(
       // gain — and would make new logs gratuitously different from the v1 logs
       // already on the production volume. Zero log churn until a room actually
       // has a second agent.
+      // Any agentId riding in on the caller's event is STRIPPED first, then the
+      // server's own is applied. The earlier form conditionally spread
+      // `{...event, ...(primary ? {} : {agentId})}`, which spread nothing on the
+      // primary branch and so let a caller-supplied agentId survive untouched —
+      // the stamp was authoritative only for non-primary agents while this
+      // method claimed it was unforgeable (I2'). Stripping first makes it
+      // authoritative on both branches, and the primary agent still writes no
+      // agentId key at all, so a single-agent log stays byte-identical to v1.
+      const { agentId: _clientSupplied, ...unattributed } = event as { agentId?: AgentId };
       const sealed = redactEvent({
-        ...event,
+        ...unattributed,
         ...(agentId === PRIMARY_AGENT_ID ? {} : { agentId }),
         seq: room.nextSeq(),
         ts: new Date().toISOString(),
@@ -173,14 +206,16 @@ export function attachRoom(
       runtime.broadcast({ kind: 'event', event: sealed });
       return sealed;
     },
-    resolvePermission(requestId: string, decision: Decision, agentId?: AgentId): boolean {
+    resolvePermission(requestId: string, decision: Decision, agentId?: AgentId): ResolveOutcome {
       if (agentId !== undefined) {
-        return agents.get(agentId)?.gate.resolve(requestId, decision) ?? false;
+        const handle = agents.get(agentId);
+        if (handle === undefined) return 'unknown-agent';
+        return handle.gate.resolve(requestId, decision) ? 'settled' : 'not-found';
       }
       for (const handle of agents.values()) {
-        if (handle.gate.resolve(requestId, decision)) return true;
+        if (handle.gate.resolve(requestId, decision)) return 'settled';
       }
-      return false;
+      return 'not-found';
     },
     addSocket(socket: WebSocket, participantId: string): void {
       sockets.set(socket, participantId);
@@ -204,7 +239,14 @@ export function attachRoom(
   // the sink. The publish tool uses it to find the room's own last published
   // commit from the log rather than from memory (I3) — which is what lets a
   // restarted room keep publishing to the same pull request.
-  runtime.attachAgent(PRIMARY_AGENT_ID);
+  // Every agent this room has ever had, derived from the log alone (I3) — not
+  // just the primary one. Today that list is always exactly [primary], because
+  // nothing yet creates a second agent; wiring it now is what makes restart
+  // recovery actually rebuild a roster rather than merely being able to, and
+  // stops `projectAgents` from being a function with a docstring and no caller.
+  for (const agentId of projectAgents(sink.read())) {
+    runtime.attachAgent(agentId);
+  }
   // Lives inside this memoized gate for the same reason the agent does: the
   // `existing !== undefined` early return above is what guarantees a room
   // cannot accumulate N watchers (I1's one-resource discipline, applied to a

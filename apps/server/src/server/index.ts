@@ -541,6 +541,23 @@ export function createServer(
           return;
         }
         if (frame.kind === 'prompt') {
+          // VALIDATE BEFORE ANY SIDE EFFECT. An unknown agent is refused rather
+          // than steered to the primary one — a stale or typo'd id must not
+          // quietly drive a different agent — and that check has to happen
+          // BEFORE claimIfVacant, not after.
+          //
+          // It used to happen after, which meant a prompt naming a nonexistent
+          // agent was rejected *and still granted its sender the driver token*,
+          // appending a `driver_granted` the append-only log can never take back
+          // (I3). Any participant could seize the floor with a deliberately
+          // malformed prompt they knew would be refused.
+          const target = runtime.getAgent(frame.agentId);
+          if (target === undefined) {
+            ws.send(
+              JSON.stringify({ kind: 'error', message: 'That agent is not in this room.' }),
+            );
+            return;
+          }
           // First speaker in an idle room claims the token.
           for (const event of claimIfVacant(room, participantId, displayName)) {
             runtime.commit(event);
@@ -551,15 +568,6 @@ export function createServer(
           // server is attribution: wasDriver is derived from room.driverId and
           // never read off the client frame, so it cannot be forged.
           const wasDriver = isDriver(room, participantId);
-          // An unknown agent is refused rather than steered to the primary one:
-          // a stale or typo'd id must not quietly drive a different agent.
-          const target = runtime.getAgent(frame.agentId);
-          if (target === undefined) {
-            ws.send(
-              JSON.stringify({ kind: 'error', message: 'That agent is not in this room.' }),
-            );
-            return;
-          }
           const logged = runtime.commit({
             type: 'user_prompt',
             participantId,
@@ -608,14 +616,21 @@ export function createServer(
           // request ids are minted per gate, so once a room can hold more than
           // one agent a bare id is ambiguous, and settling the wrong agent's
           // tool call with this vote would be an unauthorised approval.
-          const accepted = runtime.resolvePermission(frame.requestId, {
+          const outcome = runtime.resolvePermission(frame.requestId, {
             decision: frame.decision,
             participantId,
             displayName,
             via: 'first_response',
             reason: frame.reason ?? null,
           }, frame.agentId);
-          if (!accepted) {
+          // Three causes, three messages. Collapsing them into "already decided"
+          // was actively harmful for `unknown-agent`: that request is STILL OPEN
+          // and still counting down to a timeout-deny, so telling the person it
+          // was already settled makes them stop watching an approval that then
+          // auto-denies — the opposite of what the gate exists to guarantee.
+          if (outcome === 'unknown-agent') {
+            ws.send(JSON.stringify({ kind: 'error', message: 'That agent is not in this room.' }));
+          } else if (outcome === 'not-found') {
             ws.send(JSON.stringify({ kind: 'error', message: 'That approval was already decided.' }));
           }
           return;
@@ -661,7 +676,17 @@ export function createServer(
           runtime.commit({ type: 'interrupted', participantId, displayName });
           // phase-4 widened this signature: a discarded batch is logged with
           // the identity of whoever stopped it.
-          void runtime.agent.interrupt({ participantId, displayName }).catch(() => {
+          // Fans out to EVERY attached agent. The `interrupted` event this
+          // commits is room-wide, so interrupting only the primary agent would
+          // make the log claim everything stopped while another agent kept
+          // running with its batch undiscarded. Of all the operations still
+          // addressed per-room, Stop is the one that must not be partial — it
+          // is the safety valve.
+          void Promise.all(
+            [...runtime.agents.values()].map((handle) =>
+              handle.interrupt({ participantId, displayName }),
+            ),
+          ).catch(() => {
             // Never interpolate the raw error: it can carry the API key, and
             // this text is committed to the durable log (I4). The SDK rejecting
             // here almost always just means the session already ended.

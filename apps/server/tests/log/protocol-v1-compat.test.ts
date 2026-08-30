@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { NexusEvent } from '@nexus/protocol/events';
-import { PRIMARY_AGENT_ID, isLoggedEvent } from '@nexus/protocol/events';
+import { PRIMARY_AGENT_ID, isLoggedEvent, loggedEventTypes } from '@nexus/protocol/events';
 import { projectAgents, reconstruct } from '../../src/log/replay.js';
 
 /**
@@ -13,11 +13,24 @@ import { projectAgents, reconstruct } from '../../src/log/replay.js';
  * migration cannot change it silently. The TDD tests for the new behaviour live
  * in `agent-id.test.ts`.
  *
- * The fixture is a real protocol-v1 room log — every one of the 20 members of
- * `LOGGED_TYPES`, captured from a running server before any v2 protocol change
- * existed, with no `agentId` anywhere. It stands in for the logs already on disk
- * on the production volume, which I3 forbids mutating and which must keep
- * replaying forever.
+ * ABOUT THE FIXTURE, stated precisely because an earlier version of this comment
+ * overstated it and a reviewer was right to call that out.
+ *
+ * It is SEEDED from a real protocol-v1 log — a room was created against a
+ * running server before any v2 protocol change existed, and its room id, cwd,
+ * participant id and timestamp format come from that capture. But that real log
+ * contained only two events, so the remaining 22 were HAND-AUTHORED to cover all
+ * 20 members of `LOGGED_TYPES`. The tidy ids (`msg_01`, `req_abc123`) and the
+ * exactly-one-second spacing are the tell.
+ *
+ * What that means for how much this proves: it demonstrates the migration
+ * survives every event SHAPE the protocol declares, which is the property worth
+ * pinning. It does NOT prove the migration survives whatever is actually on the
+ * production volume, because a synthesized fixture can only contain shapes its
+ * author thought of. Replaying a genuine production log remains an open item.
+ *
+ * What it does prove rests on the union being exhaustively covered — hence the
+ * set-equality test below, which fails if a 21st event type is ever added.
  */
 
 const FIXTURE = fileURLToPath(new URL('../fixtures/protocol-v1-room.jsonl', import.meta.url));
@@ -38,8 +51,13 @@ describe('protocol v1 logs on disk', () => {
   });
 
   it('covers every logged event type, so the migration cannot miss one', () => {
-    const seen = new Set(readFixture().map((event) => event.type));
-    expect(seen.size).toBe(20);
+    // Set EQUALITY, not cardinality. Asserting `size === 20` was a property of
+    // the fixture rather than of the protocol: it kept passing if a 21st type
+    // were added to LOGGED_TYPES, and even passed for a fixture that omitted a
+    // real type while including a bogus one. Now adding a type to the union
+    // fails here until the fixture covers it.
+    const seen = [...new Set(readFixture().map((event) => event.type))].sort();
+    expect(seen).toEqual([...loggedEventTypes()].sort());
   });
 
   it('is still accepted in full by isLoggedEvent', () => {
