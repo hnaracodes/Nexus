@@ -1,4 +1,5 @@
-import type { NexusEvent } from '@nexus/protocol/events';
+import type { AgentId, NexusEvent } from '@nexus/protocol/events';
+import { PRIMARY_AGENT_ID, agentIdOf } from '@nexus/protocol/events';
 import type { PresenceEntry } from '@nexus/protocol/wire';
 import { projectPresence } from '../server/presence.js';
 
@@ -43,4 +44,27 @@ export function reconstruct(events: NexusEvent[]): ReconstructedRoom | null {
     driverId,
     pendingApprovalIds: [...open],
   };
+}
+
+/**
+ * Which agents this room has, derived from the log alone (I3).
+ *
+ * Restart recovery needs to rebuild the roster without a second source of
+ * truth, and a room's agents are only ever knowable from what they did. The
+ * primary agent is always first and always present: every event that predates
+ * agent ids means the primary agent, and a room with no agent activity at all
+ * still has one attached.
+ *
+ * Note this reads events through `agentIdOf`, so it treats an absent agentId as
+ * the primary agent rather than as a distinct nameless agent — which is what
+ * every line on the production volume is.
+ */
+export function projectAgents(events: NexusEvent[]): AgentId[] {
+  const seen = new Set<AgentId>([PRIMARY_AGENT_ID]);
+  for (const event of events) {
+    // Only agent-scoped events carry the field; the rest read as primary and
+    // are harmlessly absorbed by the set.
+    seen.add(agentIdOf(event as { agentId?: AgentId }));
+  }
+  return [...seen];
 }

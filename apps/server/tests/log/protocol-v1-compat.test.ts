@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { NexusEvent } from '@nexus/protocol/events';
-import { isLoggedEvent } from '@nexus/protocol/events';
-import { reconstruct } from '../../src/log/replay.js';
+import { PRIMARY_AGENT_ID, isLoggedEvent } from '@nexus/protocol/events';
+import { projectAgents, reconstruct } from '../../src/log/replay.js';
 
 /**
  * The safety net for the phase-8b `agentId` migration.
@@ -75,5 +75,25 @@ describe('protocol v1 logs on disk', () => {
 
     // req_abc123 was requested AND decided, so nothing is left open.
     expect(room?.pendingApprovalIds).toEqual([]);
+  });
+});
+
+describe('the agent roster is derivable from the log alone (I3)', () => {
+  it('reports exactly the primary agent for a log written before agents had ids', () => {
+    // Restart recovery must be able to rebuild "which agents does this room
+    // have" without a second source of truth. For every log on the production
+    // volume the answer is the primary agent, and it has to stay that way.
+    expect(projectAgents(readFixture())).toEqual([PRIMARY_AGENT_ID]);
+  });
+
+  it('reports every distinct agent once, primary first, for a multi-agent log', () => {
+    const events = [
+      ...readFixture(),
+      { type: 'agent_idle', agentId: 'reviewer', seq: 25, ts: '2026-08-30T21:10:00.000Z', roomId: 'room_802c12cbc2704971' },
+      { type: 'agent_idle', agentId: 'reviewer', seq: 26, ts: '2026-08-30T21:10:01.000Z', roomId: 'room_802c12cbc2704971' },
+      { type: 'agent_idle', agentId: 'tester', seq: 27, ts: '2026-08-30T21:10:02.000Z', roomId: 'room_802c12cbc2704971' },
+    ] as NexusEvent[];
+
+    expect(projectAgents(events)).toEqual([PRIMARY_AGENT_ID, 'reviewer', 'tester']);
   });
 });
