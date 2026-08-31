@@ -1,5 +1,5 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
-import type { CanUseTool, ModelInfo, PermissionResult } from '@anthropic-ai/claude-agent-sdk';
+import type { CanUseTool, HookJSONOutput, ModelInfo, PermissionResult } from '@anthropic-ai/claude-agent-sdk';
 import type { NexusEvent, UnsequencedEvent } from '@nexus/protocol/events';
 import type { Room } from './rooms.js';
 import { createGithubMcpServer } from './publishTool.js';
@@ -176,6 +176,57 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
       // The key is read here and nowhere else. It is never stored on anything
       // we serialize, never logged, never sent over the wire (I4).
       env: { ...process.env, ANTHROPIC_API_KEY: room.getApiKey() },
+      /**
+       * THE GATE. Not `canUseTool` — a PreToolUse hook.
+       *
+       * `canUseTool` below is retained, but it is NOT what enforces four-eyes
+       * approval any more, because on the installed SDK it is never called.
+       * Verified live against a real agent on 2026-08-31: with `canUseTool`
+       * wired exactly as it is below and `Bash` absent from AUTO_APPROVE, a
+       * room's agent ran `Bash` to completion and emitted `tool_start` /
+       * `tool_result` with NO `permission_requested` event. The gate was
+       * silently dead, and nothing in the SDK says so — there is no warning, no
+       * stderr line, no flag. Reading the SDK bundle explains it: `canUseTool`
+       * is the LAST step of the permission pipeline and is skipped whenever an
+       * earlier step allows.
+       *
+       * A PreToolUse hook runs BEFORE that pipeline, and its `deny` holds even
+       * under `permissionMode: 'bypassPermissions'` — verified live in the same
+       * session. Hook sources also merge additively, so nothing a user-supplied
+       * agent config can carry removes this one.
+       *
+       * Both paths funnel into the SAME `gate`, so approval semantics, the
+       * event log and the UI are unchanged whichever one the SDK decides to
+       * call. If a future SDK restores `canUseTool`, the gate de-duplicates by
+       * request rather than double-prompting.
+       */
+      hooks: {
+        PreToolUse: [
+          {
+            hooks: [
+              async (hookInput, _toolUseId, hookOptions): Promise<HookJSONOutput> => {
+                const toolName =
+                  typeof (hookInput as { tool_name?: unknown }).tool_name === 'string'
+                    ? ((hookInput as { tool_name: string }).tool_name)
+                    : 'unknown';
+                const toolInput = (hookInput as { tool_input?: unknown }).tool_input;
+                const decision = await gate.request(toolName, toolInput, hookOptions.signal);
+                return {
+                  hookSpecificOutput: {
+                    hookEventName: 'PreToolUse',
+                    permissionDecision: decision.decision === 'allow' ? 'allow' : 'deny',
+                    permissionDecisionReason:
+                      decision.reason ??
+                      (decision.decision === 'allow'
+                        ? 'Approved in the room.'
+                        : `The room denied ${toolName}. Explain what you were trying to do and propose an alternative.`),
+                  },
+                };
+              },
+            ],
+          },
+        ],
+      },
       canUseTool: (async (toolName, input, options): Promise<PermissionResult> => {
         // options: { signal: AbortSignal; suggestions?: PermissionUpdate[];
         //            blockedPath?: string; decisionReason?: string; toolUseID?: string }
