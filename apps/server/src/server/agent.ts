@@ -101,6 +101,22 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
   const idleTimeoutMs = deps.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
   const prompts = new AsyncQueue<PromptMessage>();
   const gate = createPermissionGate(room, emit);
+
+  /**
+   * Bypass detection. The SDK gives Nexus no way to know when it has skipped a
+   * permission check — a bypassed tool call is byte-identical to a gated one —
+   * and that is precisely how the gate came to be dead in production without a
+   * single test, log line or alert noticing. So Nexus keeps its own books: every
+   * tool the gate decides on is recorded here, every tool that reports a result
+   * is checked against it, and a result with no decision behind it is said out
+   * loud in the room and written to the append-only log.
+   *
+   * Both sets are per-session and unbounded in principle; in practice they are
+   * bounded by the tool calls of one room's lifetime, and each entry is a short
+   * id. Trimming them would risk a false alarm, which is worse than the bytes.
+   */
+  const gatedToolUses = new Set<string>();
+  const seenToolUses = new Map<string, string>();
   const turns = createTurnGate();
 
   // Null for a room with no GitHub binding, so a plain room simply has no
@@ -204,12 +220,13 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
         PreToolUse: [
           {
             hooks: [
-              async (hookInput, _toolUseId, hookOptions): Promise<HookJSONOutput> => {
+              async (hookInput, toolUseId, hookOptions): Promise<HookJSONOutput> => {
                 const toolName =
                   typeof (hookInput as { tool_name?: unknown }).tool_name === 'string'
                     ? ((hookInput as { tool_name: string }).tool_name)
                     : 'unknown';
                 const toolInput = (hookInput as { tool_input?: unknown }).tool_input;
+                if (typeof toolUseId === 'string') gatedToolUses.add(toolUseId);
                 const decision = await gate.request(toolName, toolInput, hookOptions.signal);
                 return {
                   hookSpecificOutput: {
@@ -249,7 +266,26 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
     try {
       for await (const message of session) {
         const events = translate(message);
-        for (const event of events) emit(event);
+        for (const event of events) {
+          if (event.type === 'tool_start') seenToolUses.set(event.toolUseId, event.toolName);
+          emit(event);
+          if (event.type !== 'tool_result') continue;
+          // Deferred to the RESULT, not the start: the SDK emits the assistant
+          // message carrying `tool_use` before it runs the hook, so checking at
+          // tool_start would flag every ordinary call. A result whose tool_use
+          // was never seen at all is malformed input, not a bypass — alarming on
+          // that would cry wolf and train people to ignore the alarm that counts.
+          const toolName = seenToolUses.get(event.toolUseId);
+          if (toolName === undefined || gatedToolUses.has(event.toolUseId)) continue;
+          emit({
+            type: 'agent_error',
+            message:
+              `SECURITY: ${toolName} ran without passing the room's approval gate. ` +
+              'The agent SDK executed a tool without consulting Nexus. Treat anything ' +
+              'this room did since as ungoverned, and report this — it means the gate ' +
+              'is not enforcing.',
+          });
+        }
         if (events.some((event) => event.type === 'agent_idle')) {
           clearWatchdog();
           // The turn boundary. Anything typed while that turn ran goes now,
