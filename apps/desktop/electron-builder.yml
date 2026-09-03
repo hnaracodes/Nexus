@@ -1,0 +1,56 @@
+# electron-builder config for @nexus/desktop.
+#
+# Nothing here downloads or packages anything until `npm run package` (i.e.
+# `electron-builder` itself) is invoked — this file is inert on its own, and
+# per the phase-9a scope that command was deliberately NOT run in this
+# session (it pulls large platform-specific helper binaries on first use).
+# This file exists so the packaging pipeline is provably wired up for all
+# three targets, with signing left as an obvious blank rather than skipped
+# silently — certificates are being obtained separately.
+
+appId: com.nexus.desktop
+productName: Nexus
+directories:
+  output: release
+files:
+  - dist/**/*
+  - package.json
+
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - dmg
+  # electron-builder reads signing/notarization credentials from the
+  # environment, not from this file, so nothing secret is committed here.
+  # FILL IN once Apple Developer ID certificates exist, by setting:
+  #   CSC_LINK                    — path or URL to the .p12 signing certificate
+  #   CSC_KEY_PASSWORD            — that certificate's export password
+  #   APPLE_ID                    — Apple ID used for notarization
+  #   APPLE_APP_SPECIFIC_PASSWORD — an app-specific password for that Apple ID
+  #   APPLE_TEAM_ID                — the Apple Developer Team ID
+  # Until those are set, `electron-builder` still produces a .dmg — just an
+  # UNSIGNED, un-notarized one: installable locally after a Gatekeeper
+  # right-click-to-open, but not distributable to other Macs without one of
+  # those warnings.
+  hardenedRuntime: true
+  gatekeeperAssess: false
+
+win:
+  target:
+    - nsis
+  # Same pattern as mac: read from the environment, filled in once a
+  # certificate exists.
+  #   CSC_LINK         — path or URL to the .pfx code-signing certificate
+  #   CSC_KEY_PASSWORD — that certificate's password
+  # Without them the NSIS installer is unsigned and Windows SmartScreen will
+  # warn on first run.
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+
+linux:
+  target:
+    - AppImage
+  category: Development
+  # AppImage has no code-signing step of its own — nothing to fill in here.

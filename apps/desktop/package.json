@@ -1,0 +1,32 @@
+{
+  "name": "@nexus/desktop",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "main": "dist/main.js",
+  "scripts": {
+    "predev": "npm run protocol:build --prefix ../.. && npm run build -w @nexus/server --prefix ../..",
+    "dev": "npm run build && electron .",
+    "prebuild": "npm run protocol:build --prefix ../.. && npm run build -w @nexus/server --prefix ../..",
+    "build": "tsc -p tsconfig.build.json",
+    "pretypecheck": "npm run protocol:build --prefix ../..",
+    "typecheck": "tsc -p tsconfig.json",
+    "prestart": "npm run build",
+    "start": "electron .",
+    "pretest": "npm run protocol:build --prefix ../..",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "package": "npm run build && electron-builder"
+  },
+  "dependencies": {
+    "@nexus/server": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.0",
+    "electron": "^44.0.0",
+    "electron-builder": "^26.15.3",
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.10"
+  }
+}

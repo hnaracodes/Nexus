@@ -1,8 +1,9 @@
-node_modules
-client/node_modules
-dist
-client/dist
+# Slash-free patterns match at any depth; the ** forms below are explicit about
+# it so a new workspace under apps/ or packages/ is covered without an edit.
+**/node_modules
+**/dist
 data
+work
 .git
 .worktrees
 .superpowers

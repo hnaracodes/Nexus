@@ -7,29 +7,28 @@
   "engines": {
     "node": ">=22"
   },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "tsx watch src/server/index.ts",
-    "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc -p tsconfig.json",
-    "start": "node dist/server/index.js",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "build:client": "npm --prefix client run build",
-    "test:client": "npm --prefix client test",
-    "test:all": "npm test && npm run test:client"
-  },
-  "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.1.0",
-    "@hono/node-server": "^2.0.12",
-    "hono": "^4.6.0",
-    "ws": "^8.18.0",
-    "zod": "^4.4.3"
+    "protocol:build": "npm run build -w @nexus/protocol",
+    "protocol:watch": "npm run watch -w @nexus/protocol",
+    "dev": "npm run dev -w @nexus/server",
+    "build": "npm run build -w @nexus/server",
+    "typecheck": "npm run typecheck -w @nexus/server",
+    "start": "npm run start -w @nexus/server",
+    "test": "npm run test -w @nexus/server",
+    "test:watch": "npm run test:watch -w @nexus/server",
+    "build:client": "npm run build -w @nexus/web",
+    "test:client": "npm run test -w @nexus/web",
+    "test:all": "npm test && npm run test:client && npm run test:desktop",
+    "verify": "npm run typecheck && npm run typecheck:desktop && npm run build && npm run build:client && npm run build:desktop && npm test && npm run test:client && npm run test:desktop",
+    "typecheck:desktop": "npm run typecheck -w @nexus/desktop",
+    "build:desktop": "npm run build -w @nexus/desktop",
+    "test:desktop": "npm run test -w @nexus/desktop"
   },
   "devDependencies": {
-    "@types/node": "^22.7.0",
-    "@types/ws": "^8.5.12",
-    "tsx": "^4.19.0",
-    "typescript": "^5.6.0",
-    "vitest": "^4.1.10"
+    "typescript": "^5.6.0"
   }
 }

@@ -1,0 +1,24 @@
+{"type":"room_created","cwd":"/tmp/nexus-fixture/work/room_802c12cbc2704971","repoUrl":null,"github":null,"seq":1,"ts":"2026-08-30T21:09:18.759Z","roomId":"room_802c12cbc2704971"}
+{"type":"participant_joined","participantId":"p_d0643c37cc4c","displayName":"smoke","seq":2,"ts":"2026-08-30T21:09:19.759Z","roomId":"room_802c12cbc2704971"}
+{"type":"driver_granted","participantId":"p_d0643c37cc4c","displayName":"smoke","reason":"creator","seq":3,"ts":"2026-08-30T21:09:20.759Z","roomId":"room_802c12cbc2704971"}
+{"type":"participant_joined","participantId":"p_9f9d2a056281","displayName":"guest","seq":4,"ts":"2026-08-30T21:09:21.759Z","roomId":"room_802c12cbc2704971"}
+{"type":"user_prompt","participantId":"p_d0643c37cc4c","displayName":"smoke","text":"list the files","wasDriver":true,"seq":5,"ts":"2026-08-30T21:09:22.759Z","roomId":"room_802c12cbc2704971"}
+{"type":"user_prompt","participantId":"p_9f9d2a056281","displayName":"guest","text":"also check the readme","seq":6,"ts":"2026-08-30T21:09:23.759Z","roomId":"room_802c12cbc2704971"}
+{"type":"prompt_batch_delivered","promptSeqs":[5,6],"driverId":"p_d0643c37cc4c","seq":7,"ts":"2026-08-30T21:09:24.759Z","roomId":"room_802c12cbc2704971"}
+{"type":"assistant_message","messageId":"msg_01","text":"I'll look at the tree.","seq":8,"ts":"2026-08-30T21:09:25.759Z","roomId":"room_802c12cbc2704971"}
+{"type":"tool_start","toolUseId":"tu_01","toolName":"Read","input":{"file_path":"README.md"},"seq":9,"ts":"2026-08-30T21:09:26.759Z","roomId":"room_802c12cbc2704971"}
+{"type":"tool_result","toolUseId":"tu_01","toolName":"Read","isError":false,"output":"# Nexus","seq":10,"ts":"2026-08-30T21:09:27.759Z","roomId":"room_802c12cbc2704971"}
+{"type":"permission_requested","requestId":"req_abc123","toolName":"Bash","input":{"command":"rm -rf build"},"expiresAt":1788000000000,"seq":11,"ts":"2026-08-30T21:09:28.759Z","roomId":"room_802c12cbc2704971"}
+{"type":"permission_decided","requestId":"req_abc123","toolName":"Bash","decision":"deny","participantId":"p_9f9d2a056281","displayName":"guest","via":"first_response","reason":"not yet","seq":12,"ts":"2026-08-30T21:09:29.759Z","roomId":"room_802c12cbc2704971"}
+{"type":"context_usage","model":"claude-sonnet-5","inputTokens":1200,"outputTokens":340,"cacheReadInputTokens":0,"cacheCreationInputTokens":0,"contextWindow":200000,"compactedFromTokens":null,"seq":13,"ts":"2026-08-30T21:09:30.759Z","roomId":"room_802c12cbc2704971"}
+{"type":"agent_idle","seq":14,"ts":"2026-08-30T21:09:31.759Z","roomId":"room_802c12cbc2704971"}
+{"type":"driver_requested","participantId":"p_9f9d2a056281","displayName":"guest","seq":15,"ts":"2026-08-30T21:09:32.759Z","roomId":"room_802c12cbc2704971"}
+{"type":"driver_released","participantId":"p_d0643c37cc4c","displayName":"smoke","reason":"granted_away","seq":16,"ts":"2026-08-30T21:09:33.759Z","roomId":"room_802c12cbc2704971"}
+{"type":"driver_granted","participantId":"p_9f9d2a056281","displayName":"guest","reason":"granted","seq":17,"ts":"2026-08-30T21:09:34.759Z","roomId":"room_802c12cbc2704971"}
+{"type":"model_changed","participantId":"p_9f9d2a056281","displayName":"guest","model":"claude-opus-5","seq":18,"ts":"2026-08-30T21:09:35.759Z","roomId":"room_802c12cbc2704971"}
+{"type":"user_prompt","participantId":"p_9f9d2a056281","displayName":"guest","text":"never mind","wasDriver":true,"seq":19,"ts":"2026-08-30T21:09:36.759Z","roomId":"room_802c12cbc2704971"}
+{"type":"interrupted","participantId":"p_9f9d2a056281","displayName":"guest","seq":20,"ts":"2026-08-30T21:09:37.759Z","roomId":"room_802c12cbc2704971"}
+{"type":"prompt_batch_discarded","promptSeqs":[19],"byParticipantId":"p_9f9d2a056281","byDisplayName":"guest","seq":21,"ts":"2026-08-30T21:09:38.759Z","roomId":"room_802c12cbc2704971"}
+{"type":"agent_error","message":"No response from the agent within 150s.","seq":22,"ts":"2026-08-30T21:09:39.759Z","roomId":"room_802c12cbc2704971"}
+{"type":"github_published","prUrl":"https://github.com/o/r/pull/7","prNumber":7,"branch":"nexus/room_802c12cbc2704971","commitSha":"deadbeef","filesChanged":3,"created":true,"seq":23,"ts":"2026-08-30T21:09:40.759Z","roomId":"room_802c12cbc2704971"}
+{"type":"participant_left","participantId":"p_d0643c37cc4c","displayName":"smoke","seq":24,"ts":"2026-08-30T21:09:41.759Z","roomId":"room_802c12cbc2704971"}

@@ -1,20 +1,30 @@
 # syntax=docker/dockerfile:1
 
-FROM node:22-slim AS server-build
+# One install for the whole workspace. The protocol extraction unified the two
+# lockfiles into one, so this is the only place dependencies resolve.
+# Every workspace's package.json must be COPYed before `npm ci`, or npm cannot
+# create the node_modules/@nexus/protocol symlink — the install would succeed
+# and the server would then fail at boot on an unresolvable import.
+FROM node:22-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
+COPY packages/protocol/package.json ./packages/protocol/
+COPY apps/server/package.json ./apps/server/
+COPY apps/web/package.json ./apps/web/
 RUN npm ci
-COPY tsconfig.json tsconfig.build.json ./
-COPY src ./src
-RUN npm run build
 
-FROM node:22-slim AS client-build
-WORKDIR /app/client
-COPY client/package.json client/package-lock.json ./
-RUN npm ci
-COPY client ./
-COPY src/protocol /app/src/protocol
-RUN npm run build
+FROM deps AS build
+WORKDIR /app
+COPY tsconfig.base.json ./
+COPY packages ./packages
+COPY apps ./apps
+# @nexus/protocol first, explicitly. Both the server build and the client build
+# resolve it out of node_modules, and a stale or missing protocol dist is
+# exactly the "green suite that does not compile" failure mode CLAUDE.md
+# records as having reached production once already.
+RUN npm run protocol:build \
+  && npm run build \
+  && npm run build:client
 
 FROM node:22-slim AS runtime
 WORKDIR /app
@@ -28,10 +38,24 @@ ENV NEXUS_DATA_DIR=/data
 ENV NEXUS_WORKDIR=/data/work
 
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+COPY packages/protocol/package.json ./packages/protocol/
+COPY apps/server/package.json ./apps/server/
+COPY apps/web/package.json ./apps/web/
+# Installs the full workspace minus devDependencies. That pulls in the web app's
+# runtime deps, which the server never loads: measured at ~50MB of a 729MB image
+# (lucide-react alone is 41MB) against a 179MB node_modules. Deliberate — a
+# filtered `--workspace=` install risks the @nexus/protocol symlink not being
+# created, and a server that fails at boot on an unresolvable import costs more
+# than 7% of an image. Revisit only with the smoke test in hand.
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 
-COPY --from=server-build /app/dist ./dist
-COPY --from=client-build /app/client/dist ./client/dist
+# The workspace layout is preserved on purpose. The server resolves the web
+# bundle as `../../../web/dist` relative to its own module URL, so apps/server
+# and apps/web must sit beside each other here exactly as they do in the repo.
+COPY --from=build /app/apps/server/dist ./apps/server/dist
+COPY --from=build /app/apps/web/dist ./apps/web/dist
+# The @nexus/protocol symlink installed above points here. Without this it dangles.
+COPY --from=build /app/packages/protocol/dist ./packages/protocol/dist
 
 # git is needed for repo-clone-on-create (plan phase-3c).
 RUN apt-get update \
@@ -39,4 +63,4 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 EXPOSE 8080
-CMD ["node", "dist/server/index.js"]
+CMD ["node", "apps/server/dist/server/index.js"]
