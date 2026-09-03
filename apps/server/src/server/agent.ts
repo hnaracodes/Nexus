@@ -5,7 +5,7 @@ import type { Room } from './rooms.js';
 import { createGithubMcpServer } from './publishTool.js';
 import { AsyncQueue } from './queue.js';
 import { createPermissionGate } from './permissions.js';
-import type { PermissionGate } from './permissions.js';
+import type { Decision, PermissionGate } from './permissions.js';
 import { createTurnGate } from './turnGate.js';
 import type { Batch, PendingPrompt } from './turnGate.js';
 import { toUserMessage } from './errors.js';
@@ -117,6 +117,44 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
    */
   const gatedToolUses = new Set<string>();
   const seenToolUses = new Map<string, string>();
+
+  /**
+   * One decision per tool USE, shared by both gate seams.
+   *
+   * Nexus wires the gate into the SDK twice on purpose (see the options below),
+   * and a future SDK may honour both. Redundancy at the seam must not become
+   * redundancy at the human: without this, one tool call mints two requestIds
+   * and puts two approval cards in the room. Under `firstResponseWins` those two
+   * cards are decided INDEPENDENTLY, so the room could allow one and deny the
+   * other for the same call — and which one governs depends on the seam the SDK
+   * happens to read. It also trains people to click through duplicate cards,
+   * which is the habit the whole feature exists to prevent.
+   *
+   * Keyed by the SDK's tool-use id, never by tool name: two `Bash` calls in one
+   * turn are two decisions, and collapsing them would let a single approval
+   * carry a command the room never saw. When the SDK supplies no id there is no
+   * way to prove two calls are the same call, so the room is asked again —
+   * prompting twice is the safe failure, silently reusing an approval is not.
+   */
+  const decisions = new Map<string, Promise<Decision>>();
+
+  function decide(
+    toolUseId: string | undefined,
+    toolName: string,
+    input: unknown,
+    signal: AbortSignal,
+  ): Promise<Decision> {
+    if (typeof toolUseId !== 'string') return gate.request(toolName, input, signal);
+    const existing = decisions.get(toolUseId);
+    if (existing !== undefined) return existing;
+    // Recorded here rather than in the hook, so a call gated through EITHER seam
+    // counts as gated and the bypass detector below stays truthful.
+    gatedToolUses.add(toolUseId);
+    const pending = gate.request(toolName, input, signal);
+    decisions.set(toolUseId, pending);
+    return pending;
+  }
+
   const turns = createTurnGate();
 
   // Null for a room with no GitHub binding, so a plain room simply has no
@@ -211,10 +249,10 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
        * session. Hook sources also merge additively, so nothing a user-supplied
        * agent config can carry removes this one.
        *
-       * Both paths funnel into the SAME `gate`, so approval semantics, the
-       * event log and the UI are unchanged whichever one the SDK decides to
-       * call. If a future SDK restores `canUseTool`, the gate de-duplicates by
-       * request rather than double-prompting.
+       * Both paths funnel into the SAME `gate` through `decide()`, so approval
+       * semantics, the event log and the UI are unchanged whichever one the SDK
+       * decides to call — and if a future SDK honours BOTH, `decide()` shares
+       * one decision per tool-use id so the room is still asked exactly once.
        */
       hooks: {
         PreToolUse: [
@@ -226,8 +264,7 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
                     ? ((hookInput as { tool_name: string }).tool_name)
                     : 'unknown';
                 const toolInput = (hookInput as { tool_input?: unknown }).tool_input;
-                if (typeof toolUseId === 'string') gatedToolUses.add(toolUseId);
-                const decision = await gate.request(toolName, toolInput, hookOptions.signal);
+                const decision = await decide(toolUseId, toolName, toolInput, hookOptions.signal);
                 return {
                   hookSpecificOutput: {
                     hookEventName: 'PreToolUse',
@@ -247,7 +284,14 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
       canUseTool: (async (toolName, input, options): Promise<PermissionResult> => {
         // options: { signal: AbortSignal; suggestions?: PermissionUpdate[];
         //            blockedPath?: string; decisionReason?: string; toolUseID?: string }
-        const decision = await gate.request(toolName, input, options.signal);
+        // Routed through `decide`, not `gate.request`, so that if a future SDK
+        // honours BOTH seams the room is still asked exactly once per call.
+        const decision = await decide(
+          (options as { toolUseID?: string }).toolUseID,
+          toolName,
+          input,
+          options.signal,
+        );
         return decision.decision === 'allow'
           ? { behavior: 'allow', updatedInput: input }
           : {
@@ -276,6 +320,11 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
           // was never seen at all is malformed input, not a bypass — alarming on
           // that would cry wolf and train people to ignore the alarm that counts.
           const toolName = seenToolUses.get(event.toolUseId);
+          // The call is over, so its shared decision can go. `gatedToolUses`
+          // deliberately does NOT get the same treatment: it is the bypass
+          // detector's evidence, and forgetting it would make a late or repeated
+          // result look ungoverned.
+          decisions.delete(event.toolUseId);
           if (toolName === undefined || gatedToolUses.has(event.toolUseId)) continue;
           emit({
             type: 'agent_error',
