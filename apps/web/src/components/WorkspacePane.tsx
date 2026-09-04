@@ -8,7 +8,7 @@ import type { GitStatusEntry } from '../workspace/types.js';
 import { WorkspaceError } from '../workspace/types.js';
 import { ChangesTab } from './ChangesTab.js';
 import type { GitStatusState } from './ChangesTab.js';
-import { CodeViewer } from './CodeViewer.js';
+import { CodeEditor } from './CodeEditor.js';
 import { FileTree } from './FileTree.js';
 
 export interface WorkspacePaneProps {
@@ -135,7 +135,7 @@ export function WorkspacePane({ events, api }: WorkspacePaneProps): JSX.Element 
         {activeTab === 'files' && (
           <>
             <FileTree api={api} selectedPath={selectedPath} touchedPaths={touchedFiles} onSelect={selectFile} />
-            <CodeViewer
+            <CodeEditor
               path={selectedPath}
               cached={selectedPath !== null ? workspace.files.get(selectedPath) : undefined}
               onRefresh={workspace.refetchFile}
