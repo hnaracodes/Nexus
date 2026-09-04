@@ -2,9 +2,10 @@ import { useEffect, useRef } from 'react';
 import { AlertTriangle, Binary, FileWarning, Loader2, RefreshCw } from 'lucide-react';
 import { Compartment, EditorState } from '@codemirror/state';
 import { EditorView, lineNumbers } from '@codemirror/view';
-import { defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language';
+import { syntaxHighlighting } from '@codemirror/language';
 import type { CachedFile } from '../workspace/useWorkspace.js';
 import { loadLanguage } from '../workspace/cmLanguage.js';
+import { nexusEditorTheme, nexusHighlightStyle } from '../workspace/cmTheme.js';
 
 export interface CodeEditorProps {
   path: string | null;
@@ -16,7 +17,8 @@ export interface CodeEditorProps {
 /**
  * The file pane, rendered by CodeMirror 6 (phase 11a).
  *
- * Deliberately a DROP-IN for `CodeViewer`: identical props, identical handling
+ * Deliberately a DROP-IN for the `CodeViewer` it replaced (deleted in the same
+ * phase): identical props, identical handling
  * of every non-text cache state. Only the text rendering changed. Swapping the
  * rendering engine is the largest visible change in phase 11, and doing it while
  * behaviour is otherwise frozen means any regression belongs unambiguously to
@@ -112,15 +114,11 @@ function CodeMirrorSurface({ path, content }: { path: string; content: string })
         doc: initial.current,
         extensions: [
           lineNumbers(),
-          syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+          syntaxHighlighting(nexusHighlightStyle, { fallback: true }),
           EditorState.readOnly.of(true),
           EditorView.editable.of(false),
           language.current.of([]),
-          EditorView.theme({
-            '&': { height: '100%', backgroundColor: 'transparent' },
-            '.cm-scroller': { fontFamily: 'inherit', lineHeight: '20px' },
-            '.cm-gutters': { backgroundColor: 'transparent', border: 'none' },
-          }),
+          nexusEditorTheme,
         ],
       }),
     });
