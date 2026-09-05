@@ -13,3 +13,6 @@ docs/
 sessions/
 *.md
 !README.md
+# Tracked on purpose: the human-facing tour and its progress log. Kept in git so
+# progress is reviewable in a diff rather than living only on one machine.
+!TUTORIAL.md
