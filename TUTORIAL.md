@@ -428,8 +428,16 @@ twenty is the plan's own sequencing logic.
   compile** — that needs a product answer, not an engineering one.
 - Rooms have no isolation from each other. Not multi-tenant. Don't market it as
   such until per-room sandboxes land.
+- **`workspace_changed` reaches no consumer.** The server broadcasts it when the
+  working tree changes outside the agent, but no client code handles it, so a
+  shell command, a `git checkout` or a formatter does not refresh the file pane.
+  Agent edits still refresh, via logged events — which is why this went unnoticed
+  through phase 7.
 - Two pre-existing dependency advisories (`hono` moderate, `nanoid` high) are
-  unaddressed. Neither came from the editor work; one is a cross-user disclosure
+  unaddressed. Neither is exploitable here — `hono/cors`, `hono/proxy` and
+  `hono/language` have **zero** references and `nanoid` is a build-time
+  transitive of `postcss` — but a clean `npm audit` is what keeps a real
+  advisory from being lost in the noise. Neither came from the editor work; one is a cross-user disclosure
   advisory in the server's own framework and deserves its own look.
 
 ---
@@ -440,6 +448,59 @@ Newest first. Each entry is one shippable unit with the evidence that it works,
 so "done" always means *observed*, never *compiled*.
 
 Suite counts are the honest health metric: **server / web / desktop**.
+
+### 2026-09-05 — 11b designed, then attacked; two shipped defects fixed
+
+`351 / 396 / 10` · commits `c43f133`, `7d77a77`
+
+Phase 11b (the Automerge document layer) was **designed and adversarially
+reviewed before any of it was written** — 9 agents, ~875k tokens: five reading
+the real seams, one synthesising, three trying to refute the result. The design
+is not yet implemented, deliberately, because the critics broke it in three
+places that would each have been expensive to discover later:
+
+- **Cross-room data corruption.** The design placed a `docs` map "alongside
+  `agents`" — but `agents` lives *inside* `attachRoom()`'s per-room closure
+  (`ws.ts:129`). As written, every room would have shared one document map.
+- **`doc_sync` had no driver gate.** Every other mutating frame authorises
+  inline (`index.ts:649`, `:570`); this one didn't. Two ordinary members opening
+  one file would corrupt the shared `SyncState` and lose the writer's edits — an
+  I2′ violation.
+- **A crash taking down every room.** `flush()` called `resolveWorkspacePath`,
+  which throws synchronously if a file vanishes, from inside a bare
+  `setTimeout`. An uncaught throw in a timer kills the process — and that is one
+  process serving all rooms (§11 of `CLAUDE.md`).
+
+One finding was *measured* rather than reasoned: `Automerge.save()` grows roughly
+linearly with edit history and never shrinks (246 B → 3413 B over 20 → 600
+edits). Snapshotting a whole document per flush would bloat the log permanently,
+and I3 forbids compaction. `saveIncremental()` exists and the design had missed
+it.
+
+**Two findings landed on code already shipped, and are fixed:**
+
+- **The editor instance survived a file switch.** No `key`, and the view is
+  created in a `useEffect(..., [])`. Harmless while read-only — which is exactly
+  why 11a's browser check passed — but in 11b the surviving instance would still
+  hold the *previous* file's document. Now keyed by path.
+- **`reduce()` swallowed unknown frames.** `default: return view` meant a new
+  `ServerFrame` member would vanish with a green suite and a green typecheck. Now
+  the default branch narrows to `never`, so a new frame kind fails the build,
+  while runtime stays tolerant (an older client meeting a newer server must
+  ignore, not throw).
+
+That guard immediately exposed a real phase-7 gap: `workspace_changed` is
+broadcast by the server and consumed by *nothing*, so external edits never
+refresh the pane.
+
+`★ Why this entry has no feature in it ──────────`
+Nine agents and no shipped feature can look like nothing happened. What it
+bought: three critical defects that never reached the codebase, one measured
+fact that changes the design, and two real bugs fixed in code that was already
+green and browser-verified. This repo's rule — *a plan is not a specification
+until someone has tried to compile it* — cost four defects in phase 3 and just
+earned its keep again.
+`────────────────────────────────────────────────`
 
 ### 2026-09-05 — phase 11a: the file pane became an editor
 
