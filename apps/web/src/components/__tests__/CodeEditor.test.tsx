@@ -59,6 +59,32 @@ describe('CodeEditor', () => {
     expect(text, 'the previous file survived the switch').not.toContain('AAA_CONTENT');
   });
 
+  it('builds a FRESH editor instance per file, not one reused across files', () => {
+    // Not cosmetic, and not really about 11a. The view is created in a
+    // `useEffect(..., [])`, so without a key React reconciles the same instance
+    // across a file switch and the create-once effect never re-runs. Read-only,
+    // that is harmless — the content effect swaps the document and the right
+    // text appears, which is exactly why 11a's browser check passed.
+    //
+    // The moment 11b attaches an Automerge document per file it stops being
+    // harmless: the surviving instance still holds the PREVIOUS file's document,
+    // so keystrokes meant for the new file are spliced into the old file's doc.
+    // A per-path instance is what makes the document's lifecycle match the
+    // file's. Found by an adversarial review of the 11b design, before the
+    // corruption it enables was written.
+    const { container, rerender } = render(
+      <CodeEditor path="a.ts" cached={ready('AAA')} onRefresh={vi.fn()} />,
+    );
+    const first = container.querySelector('.cm-editor');
+
+    rerender(<CodeEditor path="b.ts" cached={ready('BBB')} onRefresh={vi.fn()} />);
+    const second = container.querySelector('.cm-editor');
+
+    expect(first).not.toBeNull();
+    expect(second).not.toBeNull();
+    expect(second, 'the editor instance survived a file switch').not.toBe(first);
+  });
+
   it('still renders a binary file as an explanation, not an empty editor', () => {
     render(
       <CodeEditor

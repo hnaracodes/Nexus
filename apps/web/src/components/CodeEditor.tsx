@@ -81,7 +81,12 @@ export function CodeEditor({ path, cached, onRefresh }: CodeEditorProps): JSX.El
             File is {cached.result.size.toLocaleString()} bytes — too large to preview.
           </div>
         ) : (
-          <CodeMirrorSurface path={path} content={cached.result.content} />
+          // Keyed by path, so each file gets its OWN editor instance and its own
+          // lifecycle. Without this React reuses one instance across a file switch
+          // and the create-once effect never re-runs — harmless while read-only,
+          // but in 11b the surviving instance would still hold the previous file's
+          // Automerge document and splice this file's keystrokes into it.
+          <CodeMirrorSurface key={path} path={path} content={cached.result.content} />
         )}
       </div>
     </div>
@@ -89,10 +94,14 @@ export function CodeEditor({ path, cached, onRefresh }: CodeEditorProps): JSX.El
 }
 
 /**
- * The CodeMirror instance itself. A view is created ONCE and then mutated,
- * which is CodeMirror's intended lifecycle rather than an optimisation:
- * recreating it per render would discard scroll position and selection on every
- * keystroke once 11b lands, and would drop remote participants' cursors in 11c.
+ * The CodeMirror instance itself. A view is created once PER FILE and then
+ * mutated within that file, which is CodeMirror's intended lifecycle rather than
+ * an optimisation: recreating it on every render would discard scroll position
+ * and selection on each keystroke once 11b lands, and would drop remote
+ * participants' cursors in 11c.
+ *
+ * Per file, not per mount, is the important half — see the `key` at the call
+ * site. Content still arrives by transaction while the file stays the same.
  */
 function CodeMirrorSurface({ path, content }: { path: string; content: string }): JSX.Element {
   const host = useRef<HTMLDivElement | null>(null);

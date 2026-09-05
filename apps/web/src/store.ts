@@ -86,8 +86,39 @@ export function reduce(view: RoomView, frame: ServerFrame): RoomView {
       return frame.event.seq <= view.lastSeq
         ? view
         : applyEvent({ ...view, events: [...view.events, frame.event] }, frame.event);
-    default:
+    case 'workspace_changed':
+      // Deliberately not reduced — and this is a KNOWN GAP, not a decision.
+      //
+      // The server broadcasts this whenever the watcher sees the working tree
+      // change outside the agent (`ws.ts:257`), which is how a shell command, a
+      // `git checkout` or a formatter is supposed to reach the UI. Nothing on
+      // the client consumes it: agent edits refresh the pane via logged events
+      // (`deriveTouchedFiles`), so the omission is invisible in ordinary use and
+      // survived phase 7. It means EXTERNAL edits do not refresh the file tree.
+      //
+      // Left unhandled on purpose rather than fixed here: wiring it is a
+      // behaviour change to shipped phase-7 code and belongs in its own commit.
+      // The exhaustiveness check below is what turned it from an invisible
+      // default-branch swallow into something written down.
       return view;
+    default: {
+      // Compile-time exhaustiveness, runtime tolerance — deliberately both.
+      //
+      // Runtime: an older client may meet a newer server, so an unrecognised
+      // frame must be IGNORED, never thrown on. That forward-compatibility is
+      // why this branch returns `view` rather than asserting.
+      //
+      // Compile time: with every kind handled above, `frame` narrows to `never`
+      // here. Add a member to `ServerFrame` and this assignment stops compiling,
+      // which is the only thing that forces a new frame to be handled rather
+      // than silently swallowed by this branch. An adversarial review of the
+      // 11b design found the plan relying on a forcing function that did not
+      // exist yet — a `doc_sync` frame would have vanished here with a green
+      // suite, a green typecheck and no runtime complaint.
+      const unhandled: never = frame;
+      void unhandled;
+      return view;
+    }
   }
 }
 
