@@ -309,7 +309,7 @@ export function startGeminiAgent(room: Room, emit: EmitFn, deps: GeminiDeps = {}
         // header) — cheap, and it is what stops a future change to
         // `outboundTools` from silently reopening the automatic-function-
         // calling hole.
-        const guard = { ok: true } as ReturnType<typeof guardGeminiTools>;
+        const guard = guardGeminiTools(outboundTools);
         if (!guard.ok) {
           emit({
             type: 'agent_error',
