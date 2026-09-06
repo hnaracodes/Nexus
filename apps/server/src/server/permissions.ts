@@ -99,16 +99,21 @@ export function createPermissionGate(
         const expiresAt = Date.now() + timeoutMs;
 
         const timer = setTimeout(() => {
-          pending.delete(requestId);
-          const decision: Decision = {
+          // Routed through `entry.settle` rather than repeating its three
+          // effects here. This path used to inline them, which was correct but
+          // meant `settle` was only DOCUMENTED as the single place that clears
+          // the timer, drops the pending entry and resolves the promise — a
+          // later side effect added to `settle` would have silently skipped
+          // timeouts. `entry` is referenced, not captured by value: it is
+          // declared below, and this callback cannot run until long after that.
+          // `clearTimeout` on the timer that is currently firing is a no-op.
+          entry.settle({
             decision: 'deny',
             participantId: null,
             displayName: null,
             via: 'timeout',
             reason: `Nobody in the room responded within ${Math.round(timeoutMs / 1000)}s, so this was denied.`,
-          };
-          publish(requestId, toolName, decision);
-          resolveOuter(decision);
+          });
         }, timeoutMs);
 
         const entry: Pending = {
