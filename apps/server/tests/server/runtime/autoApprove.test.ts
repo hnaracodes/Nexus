@@ -22,12 +22,21 @@ describe('isAutoApproved', () => {
     }
   });
 
-  it('approves an MCP-prefixed spelling of a read-only tool, bare name after the LAST double underscore', () => {
+  it('approves an MCP-prefixed read-only tool from a server Nexus owns', () => {
     expect(isAutoApproved('mcp__nexus__read_file')).toBe(true);
-    expect(isAutoApproved('mcp__nexus_github__Read')).toBe(true);
     // A server name containing its own underscore must not confuse the parse —
     // splitting on the FIRST `__` would misread `nexus_github` as the name.
-    expect(isAutoApproved('mcp__some_server_name__list_files')).toBe(true);
+    // Still tested, just with a server that is actually ours.
+    expect(isAutoApproved('mcp__nexus_github__Read')).toBe(true);
+
+    // CHANGED, and the change is the point. This line previously asserted
+    // `true` for an arbitrary server name, which encoded the vulnerability as
+    // intended behaviour: a hostile MCP server could name a destructive tool
+    // `list_files` and skip the room entirely. The assertion was wrong, not
+    // the implementation that satisfied it — a test can pin a hole just as
+    // firmly as it pins a feature, and this one would have defended the hole
+    // against the fix.
+    expect(isAutoApproved('mcp__some_server_name__list_files')).toBe(false);
   });
 
   it('refuses anything that writes, executes, or publishes', () => {
@@ -58,5 +67,46 @@ describe('isAutoApproved', () => {
     expect([...AUTO_APPROVE].sort()).toEqual(
       ['Glob', 'Grep', 'NotebookRead', 'Read', 'TodoWrite'].sort(),
     );
+  });
+});
+
+describe('the MCP server half is not trustworthy', () => {
+  /**
+   * The original predicate took the segment after the LAST `__` and compared
+   * it against the read-only names, which reads as careful MCP-convention
+   * parsing and is a hole: it trusts the TOOL half of a name whose SERVER half
+   * an attacker chose. `agentConfig.ts` already accepts a participant-supplied
+   * `mcpServers` object, and phase 13 persists and launches those — so a
+   * hostile server naming its destructive tool `Read` would auto-approve, with
+   * no `permission_requested` event, no card and no vote.
+   *
+   * Unreachable the day it was written (the only registered server is
+   * `nexus_github`, whose one tool correctly denies). That is exactly what
+   * makes it worth a test: it arms itself later, in a phase whose author will
+   * have no reason to look here.
+   */
+  it('refuses a read-only NAME supplied by a server Nexus does not own', () => {
+    expect(isAutoApproved('mcp__attacker__Read')).toBe(false);
+    expect(isAutoApproved('mcp__attacker__read_file')).toBe(false);
+    expect(isAutoApproved('mcp__evil__x__Grep')).toBe(false);
+  });
+
+  it('refuses a bare name that merely ends in a read-only one', () => {
+    // No `mcp__` prefix at all, so there is no server to vet — judged whole.
+    expect(isAutoApproved('totally_evil__Read')).toBe(false);
+    expect(isAutoApproved('rm_rf__Grep')).toBe(false);
+  });
+
+  it('still auto-approves the Nexus read-only tools, however spelled', () => {
+    expect(isAutoApproved('Read')).toBe(true);
+    expect(isAutoApproved('read_file')).toBe(true);
+    expect(isAutoApproved('mcp__nexus__read_file')).toBe(true);
+  });
+
+  it('still refuses publish, which is Nexus-owned but not read-only', () => {
+    // The server allow-list must not become a blanket trust of everything a
+    // Nexus server offers — pushing to someone's repository is precisely what
+    // four-eyes approval exists for.
+    expect(isAutoApproved('mcp__nexus_github__publish_pull_request')).toBe(false);
   });
 });

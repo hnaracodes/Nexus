@@ -51,19 +51,60 @@ const NEXUS_READ_ONLY_NAMES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * An MCP-wrapped tool is spelled `mcp__<server>__<name>` — Claude's own
- * convention (e.g. `mcp__nexus_github__publish_pull_request`). Taking the
- * segment after the LAST double underscore is deliberate: a server name may
- * itself contain a single underscore (`nexus_github`), so splitting on the
- * FIRST `__` would misparse the server name as part of the tool name, and
- * there is no other delimiter available to disambiguate.
+ * The MCP servers Nexus itself registers.
+ *
+ * This set is the whole fix for a real hole, so it is worth stating what the
+ * hole was. The first version of this file parsed `mcp__<server>__<tool>` by
+ * taking the segment after the last `__` and comparing THAT against the
+ * read-only names. That reads as careful convention-handling and it trusts the
+ * wrong half: the tool name is chosen by whoever wrote the server, and
+ * `agentConfig.ts` already accepts a participant-supplied `mcpServers` object
+ * which phase 13 will persist and launch. A hostile server naming its
+ * destructive tool `Read` would have been auto-approved — no
+ * `permission_requested` event, no card, no vote, nothing in the log saying a
+ * human decided.
+ *
+ * Verified by execution rather than by reading, because reading the old
+ * version is precisely what fails to notice:
+ *   isAutoApproved('mcp__attacker__Read')  was true
+ *   isAutoApproved('totally_evil__Read')   was true
+ *
+ * Unreachable on the day it was written — the only server Nexus registers is
+ * `nexus_github`, whose single tool correctly denies — which is exactly what
+ * makes it dangerous: it arms itself in a later phase whose author has no
+ * reason to look at this file.
  */
-function bareName(toolName: string): string {
-  const index = toolName.lastIndexOf('__');
-  return index === -1 ? toolName : toolName.slice(index + 2);
+const NEXUS_MCP_SERVERS: ReadonlySet<string> = new Set(['nexus', 'nexus_github']);
+
+/**
+ * Splits `mcp__<server>__<tool>` into its two halves, or returns null when the
+ * name is not MCP-wrapped at all.
+ *
+ * Taking the LAST `__` inside the remainder is still right, and for the
+ * original reason: a server name may itself contain a single underscore
+ * (`nexus_github`), so splitting on the first `__` would misparse it. What
+ * changed is that the server half is now returned and checked rather than
+ * discarded.
+ */
+function splitMcpName(toolName: string): { server: string; tool: string } | null {
+  if (!toolName.startsWith('mcp__')) return null;
+  const rest = toolName.slice('mcp__'.length);
+  const index = rest.lastIndexOf('__');
+  if (index === -1) return null;
+  return { server: rest.slice(0, index), tool: rest.slice(index + 2) };
+}
+
+function isReadOnlyName(name: string): boolean {
+  return AUTO_APPROVE.has(name) || NEXUS_READ_ONLY_NAMES.has(name);
 }
 
 export function isAutoApproved(toolName: string): boolean {
-  const bare = bareName(toolName);
-  return AUTO_APPROVE.has(bare) || NEXUS_READ_ONLY_NAMES.has(bare);
+  const mcp = splitMcpName(toolName);
+  // Not MCP-wrapped: judged WHOLE. `totally_evil__Read` is a tool called
+  // `totally_evil__Read`, not a read-only tool wearing a prefix.
+  if (mcp === null) return isReadOnlyName(toolName);
+  // MCP-wrapped: the server must be one Nexus registered, AND the tool must
+  // still be read-only. Allow-list on both halves — a Nexus server does not
+  // get blanket trust either, which is why `publish_pull_request` still asks.
+  return NEXUS_MCP_SERVERS.has(mcp.server) && isReadOnlyName(mcp.tool);
 }
