@@ -1,20 +1,19 @@
 import { randomUUID } from 'node:crypto';
 import type { UnsequencedEvent } from '@nexus/protocol/events';
 import type { Room } from './rooms.js';
+import { isAutoApproved } from './runtime/autoApprove.js';
 
 export const DECISION_TIMEOUT_MS = 120_000;
 
 /**
- * Read-only tools decide themselves. Without this the room becomes a clicking
- * simulator and people turn the feature off — and the feature is the product.
+ * Re-exported rather than redefined. `runtime/autoApprove.ts` owns this list
+ * now (phase 10) because a bare Set of Claude names stopped being the whole
+ * story the moment a tool could be spelled `mcp__nexus__read_file` or
+ * `read_file` — see that file for why the gate below defaults to a predicate
+ * instead. This re-export exists only so existing callers and the pinned test
+ * that import `AUTO_APPROVE` from here keep working unchanged.
  */
-export const AUTO_APPROVE: ReadonlySet<string> = new Set([
-  'Read',
-  'Glob',
-  'Grep',
-  'NotebookRead',
-  'TodoWrite',
-]);
+export { AUTO_APPROVE } from './runtime/autoApprove.js';
 
 export interface Decision {
   decision: 'allow' | 'deny';
@@ -58,12 +57,22 @@ export function createPermissionGate(
   options: {
     timeoutMs?: number;
     policy?: DecisionPolicy;
-    autoApprove?: ReadonlySet<string>;
+    /**
+     * The DEFAULT is `isAutoApproved`, a predicate — not `AUTO_APPROVE`, a
+     * fixed Set — because the gate must keep approving a read-only tool no
+     * matter how a given provider or MCP wrapping spells its name (see
+     * `runtime/autoApprove.ts`). A `ReadonlySet` is still accepted: several
+     * existing tests inject one to pin an exact, closed vocabulary, and a
+     * Set's own `.has` is just a predicate that happens to be pre-computed.
+     */
+    autoApprove?: ReadonlySet<string> | ((toolName: string) => boolean);
   } = {},
 ): PermissionGate {
   const timeoutMs = options.timeoutMs ?? DECISION_TIMEOUT_MS;
   const policy = options.policy ?? firstResponseWins;
-  const autoApprove = options.autoApprove ?? AUTO_APPROVE;
+  const autoApprove = options.autoApprove ?? isAutoApproved;
+  const isApproved = (toolName: string): boolean =>
+    typeof autoApprove === 'function' ? autoApprove(toolName) : autoApprove.has(toolName);
   const pending = new Map<string, Pending>();
 
   function publish(requestId: string, toolName: string, decision: Decision): void {
@@ -83,7 +92,7 @@ export function createPermissionGate(
     request(toolName: string, input: unknown, signal?: AbortSignal): Promise<Decision> {
       const requestId = `req_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
 
-      if (autoApprove.has(toolName)) {
+      if (isApproved(toolName)) {
         const decision: Decision = {
           decision: 'allow',
           participantId: null,
