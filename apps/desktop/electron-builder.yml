@@ -8,6 +8,14 @@
 # three targets, with signing left as an obvious blank rather than skipped
 # silently — certificates are being obtained separately.
 
+# Pinned, not ranged, and stated here as well as in package.json. Two reasons:
+# electron-builder downloads platform binaries for one exact release, so a range
+# is unresolvable; and in this npm workspace `electron` hoists to the REPO ROOT
+# node_modules, where electron-builder does not look — so inferring the version
+# from apps/desktop/node_modules fails even when electron is installed. Keep this
+# in step with the `electron` devDependency in package.json.
+electronVersion: 44.0.0
+
 appId: com.nexus.desktop
 productName: Nexus
 directories:

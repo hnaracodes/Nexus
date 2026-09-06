@@ -2,6 +2,10 @@
   "name": "@nexus/web",
   "version": "0.0.1",
   "private": true,
+  "//files": "Only the built bundle ships. @nexus/desktop depends on this package so electron-builder places it at node_modules/@nexus/web/dist, which is exactly where the server's serveStatic already looks. Without this field the whole package would be bundled including its node_modules — React and CodeMirror twice over, since Vite has already compiled them INTO dist.",
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "scripts": {
     "predev": "npm run protocol:build --prefix ../..",

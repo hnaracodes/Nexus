@@ -8,7 +8,7 @@
   "scripts": {
     "predev": "npm run protocol:build --prefix ../.. && npm run build -w @nexus/server --prefix ../..",
     "dev": "npm run build && electron .",
-    "prebuild": "npm run protocol:build --prefix ../.. && npm run build -w @nexus/server --prefix ../..",
+    "prebuild": "npm run protocol:build --prefix ../.. && npm run build -w @nexus/server --prefix ../.. && npm run build:client --prefix ../..",
     "build": "tsc -p tsconfig.build.json",
     "pretypecheck": "npm run protocol:build --prefix ../..",
     "typecheck": "tsc -p tsconfig.json",
@@ -20,11 +20,12 @@
     "package": "npm run build && electron-builder"
   },
   "dependencies": {
-    "@nexus/server": "*"
+    "@nexus/server": "*",
+    "@nexus/web": "*"
   },
   "devDependencies": {
     "@types/node": "^22.7.0",
-    "electron": "^44.0.0",
+    "electron": "44.0.0",
     "electron-builder": "^26.15.3",
     "typescript": "^5.6.0",
     "vitest": "^4.1.10"

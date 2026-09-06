@@ -16,3 +16,6 @@ sessions/
 # Tracked on purpose: the human-facing tour and its progress log. Kept in git so
 # progress is reviewable in a diff rather than living only on one machine.
 !TUTORIAL.md
+
+# electron-builder output — 150MB+ of platform binaries per build
+apps/desktop/release/
