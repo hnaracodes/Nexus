@@ -1,6 +1,8 @@
 import type { ClientFrame, ServerFrame } from '@nexus/protocol/wire';
 import { EMPTY_VIEW, reduce } from './store.js';
 import type { RoomView } from './store.js';
+import { createDocSession } from './workspace/docSession.js';
+import type { DocSession } from './workspace/docSession.js';
 
 export type Status = 'connecting' | 'open' | 'reconnecting' | 'closed';
 
@@ -19,6 +21,17 @@ export interface ConnectOptions {
   displayName: string;
   onView(view: RoomView): void;
   onStatus(status: Status): void;
+  /**
+   * Fired exactly once per `connect()` call, the moment this connection's
+   * `DocSession` becomes available. Not synchronous with `connect()` itself:
+   * a `DocSession` needs this client's own participant id (to recognise its
+   * own edits echoed back — see `docSession.ts`), which is only known once
+   * the server's `replay_complete` frame arrives, so the session is created
+   * lazily at that point and handed back through this callback rather than a
+   * return value the caller would otherwise have to treat as possibly absent
+   * forever.
+   */
+  onDocSession?(session: DocSession): void;
   socketFactory?: (url: string) => WebSocketLike;
   baseUrl?: string;
 }
@@ -120,6 +133,15 @@ export function connect(options: ConnectOptions): Connection {
   let deliberatelyClosed = false;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let identity: StoredIdentity | null = readIdentity(options.roomId, options.displayName);
+  /**
+   * Created ONCE per `connect()` call (this whole function's lifetime), not
+   * once per underlying socket — a reconnect must not throw away in-progress
+   * local edits or reopen every document from scratch. `send` below always
+   * goes through the live `socket` variable rather than a closure captured at
+   * construction time, so the same session keeps working across a reconnect
+   * without having to be told about the new socket.
+   */
+  let docSession: DocSession | null = null;
 
   function open(): void {
     options.onStatus(attempt === 0 ? 'connecting' : 'reconnecting');
@@ -154,7 +176,27 @@ export function connect(options: ConnectOptions): Connection {
       if (frame.kind === 'replay_complete') {
         identity = { participantId: frame.participantId, resumeToken: frame.resumeToken };
         writeIdentity(options.roomId, options.displayName, identity);
+        // The session needs this client's OWN participant id at construction
+        // (to recognise its own edits echoed back — `docSession.ts`'s own
+        // comment on why `selfId` is a plain string, captured once, rather
+        // than a live accessor), which is only known from this exact frame.
+        // Guarded so a reconnect's second `replay_complete` reuses the
+        // existing session instead of replacing it and losing whatever it
+        // holds locally.
+        if (docSession === null) {
+          docSession = createDocSession((f) => socket?.send(JSON.stringify(f)), frame.participantId);
+          options.onDocSession?.(docSession);
+        }
       }
+      // Give the document layer first look at every frame, exactly as
+      // `docSession.ts`'s own module comment describes: `doc_sync` /
+      // `doc_presence` are keystroke-rate, and folding them into the room
+      // reducer would re-render the transcript, the roster and the approval
+      // queue on every character anyone types in any open file. `replay_complete`
+      // itself is handled just above and ALSO falls through to `reduce` below
+      // (`handleFrame` returns false for it), so `view.selfId` still gets set
+      // the normal way.
+      if (docSession !== null && docSession.handleFrame(frame)) return;
       view = reduce(view, frame);
       options.onView(view);
     };
@@ -196,6 +238,7 @@ export function connect(options: ConnectOptions): Connection {
         clearTimeout(reconnectTimer);
         reconnectTimer = null;
       }
+      docSession?.dispose();
       socket?.close();
       socket = null;
       options.onStatus('closed');

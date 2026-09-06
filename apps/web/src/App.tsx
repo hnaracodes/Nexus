@@ -15,6 +15,7 @@ import { MalformedLink } from './pages/MalformedLink.js';
 import { WorkspacePane } from './components/WorkspacePane.js';
 import { PaneErrorBoundary } from './components/PaneErrorBoundary.js';
 import { createWorkspaceApi } from './workspace/workspaceApi.js';
+import type { DocSession } from './workspace/docSession.js';
 // phase-7c import anchor
 import { PromptDock } from './components/PromptDock.js';
 import { JoinGate, readStoredName, storeName } from './components/JoinGate.js';
@@ -232,6 +233,16 @@ export default function App(): JSX.Element {
   const [view, setView] = useState<RoomView>(EMPTY_VIEW);
   const [status, setStatus] = useState<Status>('connecting');
   const [connection, setConnection] = useState<Connection | null>(null);
+  /**
+   * The room's collaborative document session, handed over by `connect()` once
+   * `replay_complete` supplies this client's own participant id (a session
+   * needs it to recognise its own edits echoed back).
+   *
+   * Held in state rather than a ref because the file pane must RE-RENDER when
+   * it arrives — a ref would leave the editor mounted read-only for the rest
+   * of the session, which is indistinguishable from the feature not shipping.
+   */
+  const [docSession, setDocSession] = useState<DocSession | null>(null);
   const [now, setNow] = useState(() => Date.now());
   // phase-3d: dismiss by count, not message text — "You are not driving" is
   // the most common error and a non-driver hits it repeatedly, so comparing
@@ -251,10 +262,18 @@ export default function App(): JSX.Element {
       ...params,
       onView: setView,
       onStatus: setStatus,
+      onDocSession: setDocSession,
       socketFactory: (url) => new CloseCodeTrackingSocket(url, setLastCloseCode),
     });
     setConnection(active);
-    return () => active.close();
+    return () => {
+      active.close();
+      // Cleared with the connection that owned it. `connect()` builds exactly
+      // one session per call and disposes it on close, so keeping the old
+      // reference across a room switch would hand the editor a session whose
+      // socket is gone — writable in appearance, inert in fact.
+      setDocSession(null);
+    };
   }, [params]);
 
   useEffect(() => {
@@ -307,6 +326,7 @@ export default function App(): JSX.Element {
       roomLink={roomLink}
       agentStatus={agentStatus}
       pendingApprovals={pendingApprovals}
+      docSession={docSession}
     />
   );
   // --- END phase-5b layout ---
@@ -335,6 +355,7 @@ function RoomShell({
   roomLink,
   agentStatus,
   pendingApprovals,
+  docSession,
 }: {
   params: { roomId: string; token: string; displayName: string };
   view: RoomView;
@@ -351,6 +372,9 @@ function RoomShell({
   roomLink: string;
   agentStatus: ReturnType<typeof deriveAgentStatus>;
   pendingApprovals: PendingApproval[];
+  /** The room's collaborative document session, or null before
+   *  `replay_complete` has arrived. Null keeps the file pane read-only. */
+  docSession: DocSession | null;
 }): JSX.Element {
   const [promptText, setPromptText] = useState('');
   const [switcherOpen, setSwitcherOpen] = useState(false);
@@ -573,7 +597,13 @@ function RoomShell({
 
         <div className="hidden min-h-0 flex-1 lg:flex">
           <PaneErrorBoundary label="The workspace panel">
-                <WorkspacePane events={view.events} api={workspaceApi} externalChanges={view.externalChanges} />
+                <WorkspacePane
+                  events={view.events}
+                  api={workspaceApi}
+                  externalChanges={view.externalChanges}
+                  {...(docSession === null ? {} : { docSession })}
+                  selfId={view.selfId}
+                />
               </PaneErrorBoundary>
         </div>
       </div>
@@ -613,7 +643,13 @@ function RoomShell({
             </div>
             <div className="flex min-h-0 flex-1">
               <PaneErrorBoundary label="The workspace panel">
-                <WorkspacePane events={view.events} api={workspaceApi} externalChanges={view.externalChanges} />
+                <WorkspacePane
+                  events={view.events}
+                  api={workspaceApi}
+                  externalChanges={view.externalChanges}
+                  {...(docSession === null ? {} : { docSession })}
+                  selfId={view.selfId}
+                />
               </PaneErrorBoundary>
             </div>
           </div>

@@ -4,6 +4,7 @@ import type { NexusEvent } from '@nexus/protocol/events';
 import { deriveCurrentFile, deriveLatestEditSeqByPath, deriveTouchedFiles } from '../derive/workspaceFiles.js';
 import { withExternalChanges } from '../derive/externalChanges.js';
 import { useWorkspace } from '../workspace/useWorkspace.js';
+import type { DocSession } from '../workspace/docSession.js';
 import type { WorkspaceApi } from '../workspace/workspaceApi.js';
 import type { GitStatusEntry } from '../workspace/types.js';
 import { WorkspaceError } from '../workspace/types.js';
@@ -22,6 +23,23 @@ export interface WorkspacePaneProps {
    * behave exactly as before.
    */
   externalChanges?: { paths: string[]; nonce: number };
+  /**
+   * The room's collaborative document session (phase 11). Optional, and its
+   * absence is meaningful rather than merely tolerated: with no session the
+   * pane stays exactly as read-only as 11a, which is what every test that
+   * renders this component without a room behind it depends on.
+   *
+   * This prop is the LAST MILE of the CRDT work. Everything below it —
+   * `CodeEditor`'s writability switches, `cmCollab`'s binding, the socket's
+   * session construction — can be complete and green while the pane a human
+   * actually types into stays read-only, because this component sits between
+   * them. That gap existed and shipped once; `WorkspacePane.collab.test.tsx`
+   * asserts the rendered surface, not the forwarded prop, so it cannot come
+   * back unnoticed.
+   */
+  docSession?: DocSession;
+  /** This client's own participant id, for remote-cursor attribution only. */
+  selfId?: string | null;
 }
 
 type WorkspaceTab = 'files' | 'changes' | 'preview';
@@ -44,6 +62,8 @@ export function WorkspacePane({
   events,
   api,
   externalChanges = { paths: [], nonce: 0 },
+  docSession,
+  selfId,
 }: WorkspacePaneProps): JSX.Element {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('files');
   const [pinned, setPinned] = useState(false);
@@ -159,6 +179,8 @@ export function WorkspacePane({
               path={selectedPath}
               cached={selectedPath !== null ? workspace.files.get(selectedPath) : undefined}
               onRefresh={workspace.refetchFile}
+              {...(docSession === undefined ? {} : { docSession })}
+              {...(selfId === null || selfId === undefined ? {} : { selfId })}
             />
           </>
         )}

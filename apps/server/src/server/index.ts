@@ -698,9 +698,57 @@ export function createServer(
           return;
         }
         // --- END phase-3b interrupt slot ---
+
+        // --- BEGIN phase-11 collaborative document frames ---
+        // Deliberately NOT gated on the driver token, for every one of the
+        // four frames below — see wire.ts's own comment on `doc_sync`: the
+        // token arbitrates who steers the AGENT (I2'), and a multiplayer
+        // editor where only one person may type is a screen share. Any
+        // participant may open, edit, watch or close any file.
+        if (frame.kind === 'doc_open') {
+          runtime.docOpen(ws, participantId, frame.path).catch((error: unknown) => {
+            // WorkspacePathError's messages are already written to be shown
+            // (the same "never surface the raw error" discipline used
+            // elsewhere in this file) — anything else is unexpected and gets
+            // a generic message instead of a raw stack trace over the wire.
+            ws.send(
+              JSON.stringify({
+                kind: 'error',
+                message: error instanceof WorkspacePathError ? error.message : 'Could not open that file.',
+              }),
+            );
+          });
+          return;
+        }
+
+        if (frame.kind === 'doc_close') {
+          runtime.docClose(ws, participantId, frame.path);
+          return;
+        }
+
+        if (frame.kind === 'doc_sync') {
+          void runtime.docApplySync(ws, participantId, frame.path, frame.payload).catch(() => {
+            // A malformed or corrupt payload (bad base64, truncated JSON, a
+            // change bundle Automerge rejects) — never surface the raw
+            // decode error, and never let it take the socket down.
+            ws.send(JSON.stringify({ kind: 'error', message: 'Could not apply that edit.' }));
+          });
+          return;
+        }
+
+        if (frame.kind === 'doc_presence') {
+          runtime.docSetPresence(ws, participantId, displayName, frame.path, frame.anchor, frame.head);
+          return;
+        }
+        // --- END phase-11 collaborative document frames ---
       });
 
       ws.on('close', () => {
+        // Every path THIS socket opened, regardless of whether other sockets
+        // (this participant's other tabs, or other people) still have it —
+        // see `docDisconnect`'s own comment for the one-tab-per-file
+        // simplification this accepts.
+        runtime.docDisconnect(ws, participantId);
         runtime.removeSocket(ws);
         // Two tabs can share one identity now that ids survive a reconnect.
         // Closing one of them is not the person leaving, and must not arm the
