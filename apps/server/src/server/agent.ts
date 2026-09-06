@@ -1,10 +1,11 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
-import type { CanUseTool, HookJSONOutput, ModelInfo, PermissionResult } from '@anthropic-ai/claude-agent-sdk';
+import type { CanUseTool, HookJSONOutput, PermissionResult } from '@anthropic-ai/claude-agent-sdk';
 import type { NexusEvent, UnsequencedEvent } from '@nexus/protocol/events';
 import type { Room } from './rooms.js';
 import { createGithubMcpServer } from './publishTool.js';
 import { AsyncQueue } from './queue.js';
 import { createPermissionGate } from './permissions.js';
+import type { AgentRuntime, Interrupter, ModelChoice } from './runtime/types.js';
 import type { Decision, PermissionGate } from './permissions.js';
 import { createTurnGate } from './turnGate.js';
 import type { Batch, PendingPrompt } from './turnGate.js';
@@ -12,32 +13,19 @@ import { toUserMessage } from './errors.js';
 
 export type EmitFn = (event: UnsequencedEvent) => void;
 
-/** Who pressed Stop. Needed to attribute a discarded batch in the log. */
-export interface Interrupter {
-  participantId: string;
-  displayName: string;
-}
-
-export interface AgentHandle {
-  /**
-   * Enqueue a prompt. Attribution is applied by the turn gate at flush time,
-   * not by the caller — a prompt held behind a running turn is rendered
-   * alongside whatever else arrived with it, and the driver marker reflects
-   * who held the token then.
-   */
-  submit(prompt: PendingPrompt): void;
-  interrupt(by: Interrupter): Promise<void>;
-  stop(): void;
-  /**
-   * Switch the room's model. `null` means "the account default" — the SDK's
-   * own `setModel(model?: string)` wants `undefined` for that, so this bridges
-   * the two rather than passing `null` straight through, which is a type
-   * error. Mutates the existing session; never calls `query()` again (I1).
-   */
-  setModel(model: string | null): Promise<void>;
-  listModels(): Promise<ModelInfo[]>;
-  gate: PermissionGate;
-}
+/**
+ * The Claude implementation's handle IS the provider-neutral contract — not a
+ * subtype of it, not a wrapper around it. Phase 10 found that `AgentHandle`'s
+ * shape was already right and only two things leaked: the SDK's `ModelInfo`
+ * (now `ModelChoice`) and an assumption that `interrupt` can promise the
+ * provider stopped working, which is false for Gemini. Both are documented on
+ * `AgentRuntime`.
+ *
+ * Aliasing rather than re-declaring is what prevents the two drifting: there is
+ * no second definition to forget to update.
+ */
+export type AgentHandle = AgentRuntime;
+export type { Interrupter, ModelChoice } from './runtime/types.js';
 
 /** Injection seam so tests can drive the loop without a live API key. */
 export interface AgentDeps {
@@ -385,7 +373,7 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
       // async-iterable prompt (the `prompts` queue above), never a bare string.
       await session.setModel(model ?? undefined);
     },
-    listModels(): Promise<ModelInfo[]> {
+    listModels(): Promise<ModelChoice[]> {
       return session.supportedModels();
     },
     gate,
