@@ -399,7 +399,8 @@ many concurrent agents, and user-supplied agent configs.
 |---|---|---|
 | 8a | Monorepo | Done |
 | 8b | Protocol v2 (`agentId`) | Done |
-| 9a | Electron shell | Done — not packaged/signed |
+| 9a | Electron shell | Done |
+| 9b | Packaging → runnable `.dmg` | **Done** — unsigned; signing/notarization need certificates |
 | 10 | Provider-neutral runtime + gate | **Blocked on a decision** — gate and config validation done; `AgentRuntime` and a second provider need a provider choice |
 | 11a | CodeMirror editor surface | **Done** — browser-verified |
 | 11b | Automerge doc layer, editing | **In progress** |
@@ -448,6 +449,30 @@ Newest first. Each entry is one shippable unit with the evidence that it works,
 so "done" always means *observed*, never *compiled*.
 
 Suite counts are the honest health metric: **server / web / desktop**.
+
+### 2026-09-06 — the desktop app actually packages; INTERNALS.md
+
+`353 / 396 / 10` · commits `3258dd7`, `7a708e2`, `d7b32cc`
+
+- **A real macOS `.dmg` exists and runs.** 156 MB, arm64. Verified by launching
+  the packaged binary and asking its server for a page — `200`, real SPA title,
+  real hashed bundle — not by reading a build log. Two blockers had been sitting
+  undiscovered since 9a wired the config without ever running it: electron's
+  version was a *range* (unresolvable, and it hoists to the repo root where
+  electron-builder does not look), and the web bundle was not packaged, so the
+  app booted and served a missing-bundle error. Declaring `@nexus/web` as a
+  dependency of `@nexus/desktop` puts it exactly where the server already looks,
+  so no server code changed.
+- **"Blocked on certificates" was wrong** and had been repeated for several
+  sessions. Only signing and notarization need certificates. Packaging never
+  did — the config's own comment said so.
+- **`INTERNALS.md`** — the low-level companion to this document. Seven
+  subsystems, written by agents that read the real source, cited to `file:line`
+  throughout. Five citations spot-checked against the tree; all exact.
+- **Two of its ten loose threads fixed rather than filed** — see §8 of that
+  document. `seq`'s total ordering was resting on an unenforced convention
+  (`commitAs` being synchronous); it is now pinned by a mutation-tested guard,
+  which matters because multi-agent work is what would have broken it.
 
 ### 2026-09-05 — 11b designed, then attacked; two shipped defects fixed
 
