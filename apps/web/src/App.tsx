@@ -573,7 +573,7 @@ function RoomShell({
 
         <div className="hidden min-h-0 flex-1 lg:flex">
           <PaneErrorBoundary label="The workspace panel">
-                <WorkspacePane events={view.events} api={workspaceApi} />
+                <WorkspacePane events={view.events} api={workspaceApi} externalChanges={view.externalChanges} />
               </PaneErrorBoundary>
         </div>
       </div>
@@ -613,7 +613,7 @@ function RoomShell({
             </div>
             <div className="flex min-h-0 flex-1">
               <PaneErrorBoundary label="The workspace panel">
-                <WorkspacePane events={view.events} api={workspaceApi} />
+                <WorkspacePane events={view.events} api={workspaceApi} externalChanges={view.externalChanges} />
               </PaneErrorBoundary>
             </div>
           </div>

@@ -160,3 +160,44 @@ describe('transient error frames', () => {
     expect(view.lastSeq).toBe(0);
   });
 });
+
+/**
+ * External edits — a shell command, a `git checkout`, a formatter — reach the
+ * client ONLY as a transient `workspace_changed` frame. Until now nothing
+ * consumed it, so the pane silently showed stale content after any change the
+ * agent did not make. Agent edits refresh through logged events, which is why
+ * this survived phase 7 unnoticed.
+ *
+ * The state lands in RoomView beside `pendingDeltas`, `lastError` and
+ * `errorCount` — all three are already transient, unlogged and unreplayed, so
+ * this follows an established shape rather than inventing one.
+ */
+describe('workspace_changed', () => {
+  const changed = (paths: string[]) =>
+    ({ kind: 'workspace_changed', paths, truncated: false }) as ServerFrame;
+
+  it('records the paths the watcher reported', () => {
+    const view = reduce(EMPTY_VIEW, changed(['src/a.ts', 'README.md']));
+    expect(view.externalChanges.paths).toEqual(['src/a.ts', 'README.md']);
+  });
+
+  it('advances a nonce on every frame, even when the same path changes again', () => {
+    // The nonce is the point. A file edited repeatedly by a formatter reports
+    // the identical path list each time, and comparing paths alone would treat
+    // every change after the first as "nothing happened" — the same reasoning
+    // `errorCount` already exists for.
+    const once = reduce(EMPTY_VIEW, changed(['src/a.ts']));
+    const twice = reduce(once, changed(['src/a.ts']));
+
+    expect(twice.externalChanges.nonce).toBeGreaterThan(once.externalChanges.nonce);
+    expect(once.externalChanges.nonce).toBeGreaterThan(EMPTY_VIEW.externalChanges.nonce);
+  });
+
+  it('leaves the logged view untouched — it is transient, not an event', () => {
+    // No seq, so it must not move lastSeq or append to `events`; a replay must
+    // not be able to reproduce it.
+    const view = reduce(EMPTY_VIEW, changed(['src/a.ts']));
+    expect(view.lastSeq).toBe(EMPTY_VIEW.lastSeq);
+    expect(view.events).toEqual([]);
+  });
+});

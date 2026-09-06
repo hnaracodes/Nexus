@@ -44,6 +44,18 @@ export interface RoomView {
    * message text alone would swallow every repeat after the first dismissal.
    */
   errorCount: number;
+  /**
+   * The most recent set of paths the server's watcher saw change OUTSIDE the
+   * agent — a shell command, a `git checkout`, a formatter — with a nonce that
+   * advances on every frame.
+   *
+   * Transient, like `pendingDeltas` and `lastError`: it carries no seq, is never
+   * logged and never survives a replay. The nonce is not decoration. A formatter
+   * rewriting one file reports the identical path list each time, so comparing
+   * paths alone would read every change after the first as "nothing happened" —
+   * the same trap `errorCount` above already exists to avoid.
+   */
+  externalChanges: { paths: string[]; nonce: number };
 }
 
 export const EMPTY_VIEW: RoomView = {
@@ -57,6 +69,7 @@ export const EMPTY_VIEW: RoomView = {
   pendingDeltas: {},
   lastError: null,
   errorCount: 0,
+  externalChanges: { paths: [], nonce: 0 },
 };
 
 export function reduce(view: RoomView, frame: ServerFrame): RoomView {
@@ -87,20 +100,17 @@ export function reduce(view: RoomView, frame: ServerFrame): RoomView {
         ? view
         : applyEvent({ ...view, events: [...view.events, frame.event] }, frame.event);
     case 'workspace_changed':
-      // Deliberately not reduced — and this is a KNOWN GAP, not a decision.
+      // Consumed, at last. The server has always broadcast this (`ws.ts:257`)
+      // and the protocol has always declared it (`wire.ts:41-49`), but no client
+      // code read it, so an edit Nexus did not make never reached the pane.
       //
-      // The server broadcasts this whenever the watcher sees the working tree
-      // change outside the agent (`ws.ts:257`), which is how a shell command, a
-      // `git checkout` or a formatter is supposed to reach the UI. Nothing on
-      // the client consumes it: agent edits refresh the pane via logged events
-      // (`deriveTouchedFiles`), so the omission is invisible in ordinary use and
-      // survived phase 7. It means EXTERNAL edits do not refresh the file tree.
-      //
-      // Left unhandled on purpose rather than fixed here: wiring it is a
-      // behaviour change to shipped phase-7 code and belongs in its own commit.
-      // The exhaustiveness check below is what turned it from an invisible
-      // default-branch swallow into something written down.
-      return view;
+      // Deliberately does NOT refetch anything. Staleness and refetching belong
+      // to `useWorkspace`, which owns the file cache; this reducer's only job is
+      // to make the fact visible in the view that every component already reads.
+      return {
+        ...view,
+        externalChanges: { paths: frame.paths, nonce: view.externalChanges.nonce + 1 },
+      };
     default: {
       // Compile-time exhaustiveness, runtime tolerance — deliberately both.
       //

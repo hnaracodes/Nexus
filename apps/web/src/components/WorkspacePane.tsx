@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { FolderTree, GitCompare, Pin, PinOff, Rows3 } from 'lucide-react';
 import type { NexusEvent } from '@nexus/protocol/events';
 import { deriveCurrentFile, deriveLatestEditSeqByPath, deriveTouchedFiles } from '../derive/workspaceFiles.js';
+import { withExternalChanges } from '../derive/externalChanges.js';
 import { useWorkspace } from '../workspace/useWorkspace.js';
 import type { WorkspaceApi } from '../workspace/workspaceApi.js';
 import type { GitStatusEntry } from '../workspace/types.js';
@@ -14,6 +15,13 @@ import { FileTree } from './FileTree.js';
 export interface WorkspacePaneProps {
   events: NexusEvent[];
   api: WorkspaceApi;
+  /**
+   * Paths changed OUTSIDE the agent, from the transient `workspace_changed`
+   * frame. Optional so the many tests that render this pane without a room
+   * behind it keep working, and because a client that never receives one should
+   * behave exactly as before.
+   */
+  externalChanges?: { paths: string[]; nonce: number };
 }
 
 type WorkspaceTab = 'files' | 'changes' | 'preview';
@@ -32,7 +40,11 @@ const TABS: Array<{ id: WorkspaceTab; label: string; Icon: typeof FolderTree }> 
  * — `events` arrives as plain `NexusEvent[]`, and file contents are cached
  * locally by `useWorkspace`, entirely outside the room's log-derived view.
  */
-export function WorkspacePane({ events, api }: WorkspacePaneProps): JSX.Element {
+export function WorkspacePane({
+  events,
+  api,
+  externalChanges = { paths: [], nonce: 0 },
+}: WorkspacePaneProps): JSX.Element {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('files');
   const [pinned, setPinned] = useState(false);
   const [manualPath, setManualPath] = useState<string | null>(null);
@@ -41,7 +53,15 @@ export function WorkspacePane({ events, api }: WorkspacePaneProps): JSX.Element 
 
   const touchedFiles = useMemo(() => deriveTouchedFiles(events), [events]);
   const currentFile = useMemo(() => deriveCurrentFile(events), [events]);
-  const editSeqByPath = useMemo(() => deriveLatestEditSeqByPath(events), [events]);
+  const loggedEditSeq = useMemo(() => deriveLatestEditSeqByPath(events), [events]);
+  // Log-derived edits and watcher-reported ones are folded into ONE freshness
+  // map, so `useWorkspace` keeps its single staleness path and cannot tell the
+  // two apart. Keyed on the nonce, not the array, since the paths are frequently
+  // identical between frames.
+  const editSeqByPath = useMemo(
+    () => withExternalChanges(loggedEditSeq, externalChanges),
+    [loggedEditSeq, externalChanges.nonce],
+  );
 
   const selectedPath = pinned && manualPath !== null ? manualPath : currentFile;
 
