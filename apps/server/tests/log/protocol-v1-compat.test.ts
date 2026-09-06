@@ -19,9 +19,9 @@ import { projectAgents, reconstruct } from '../../src/log/replay.js';
  * It is SEEDED from a real protocol-v1 log — a room was created against a
  * running server before any v2 protocol change existed, and its room id, cwd,
  * participant id and timestamp format come from that capture. But that real log
- * contained only two events, so the remaining 22 were HAND-AUTHORED to cover all
- * 20 members of `LOGGED_TYPES`. The tidy ids (`msg_01`, `req_abc123`) and the
- * exactly-one-second spacing are the tell.
+ * contained only two events, so the rest were HAND-AUTHORED to cover every
+ * member of `LOGGED_TYPES` that existed at v1. The tidy ids (`msg_01`,
+ * `req_abc123`) and the exactly-one-second spacing are the tell.
  *
  * What that means for how much this proves: it demonstrates the migration
  * survives every event SHAPE the protocol declares, which is the property worth
@@ -29,11 +29,84 @@ import { projectAgents, reconstruct } from '../../src/log/replay.js';
  * production volume, because a synthesized fixture can only contain shapes its
  * author thought of. Replaying a genuine production log remains an open item.
  *
- * What it does prove rests on the union being exhaustively covered — hence the
- * set-equality test below, which fails if a 21st event type is ever added.
+ * COVERAGE AFTER PROTOCOL v3, and why it is now split in two.
+ *
+ * v3 added five logged types that a v1 log cannot contain by construction —
+ * fleet membership and collaborative documents did not exist. Adding them to
+ * this fixture would have been the easy way to keep the set-equality test green,
+ * and it would have destroyed the fixture's only real property: that it is a
+ * GENUINE v1 log. The first test in this file exists to catch exactly that kind
+ * of helpful edit.
+ *
+ * So the two guarantees, which used to ride on one fixture, are now separate:
+ * this file stays v1-genuine, `V3_ONLY_EVENTS` below carries the shapes v1 could
+ * never have, and the coverage test asserts their UNION equals the protocol.
+ * Neither can be satisfied by weakening the other.
  */
 
 const FIXTURE = fileURLToPath(new URL('../fixtures/protocol-v1-room.jsonl', import.meta.url));
+
+/**
+ * The v3-only logged shapes, hand-authored, in the same style as the fixture.
+ *
+ * These carry `agentId` where the protocol says they may, precisely because a v1
+ * log never could — keeping them here rather than in the fixture is what lets
+ * the "no event carries an agentId" assertion above stay meaningful.
+ */
+const V3_ONLY_EVENTS: NexusEvent[] = [
+  {
+    type: 'agent_spawned',
+    agentId: 'reviewer',
+    provider: 'openai',
+    model: 'gpt-5.1',
+    displayName: 'Reviewer',
+    participantId: 'p_9f9d2a056281',
+    spawnedByName: 'smoke',
+    seq: 25,
+    ts: '2026-09-06T12:00:00.000Z',
+    roomId: 'room_802c12cbc2704971',
+  },
+  {
+    type: 'agent_stopped',
+    agentId: 'reviewer',
+    reason: 'stopped',
+    participantId: 'p_9f9d2a056281',
+    stoppedByName: 'smoke',
+    seq: 26,
+    ts: '2026-09-06T12:00:01.000Z',
+    roomId: 'room_802c12cbc2704971',
+  },
+  {
+    type: 'crew_launched',
+    crewId: 'crew_01',
+    crewName: 'review-and-test',
+    agentIds: ['reviewer', 'tester'],
+    participantId: 'p_9f9d2a056281',
+    displayName: 'smoke',
+    seq: 27,
+    ts: '2026-09-06T12:00:02.000Z',
+    roomId: 'room_802c12cbc2704971',
+  },
+  {
+    type: 'doc_snapshot',
+    path: 'src/app.ts',
+    snapshot: 'AAAA',
+    heads: ['50b50eaa397144e9b8d9c3024c20868e86254bf0c21ab546073af2c0f49c8523'],
+    seq: 28,
+    ts: '2026-09-06T12:00:03.000Z',
+    roomId: 'room_802c12cbc2704971',
+  },
+  {
+    type: 'file_edited',
+    path: 'src/app.ts',
+    participantId: 'p_9f9d2a056281',
+    displayName: 'smoke',
+    bytesDelta: 42,
+    seq: 29,
+    ts: '2026-09-06T12:00:04.000Z',
+    roomId: 'room_802c12cbc2704971',
+  },
+];
 
 function readFixture(): NexusEvent[] {
   return readFileSync(FIXTURE, 'utf8')
@@ -51,13 +124,34 @@ describe('protocol v1 logs on disk', () => {
   });
 
   it('covers every logged event type, so the migration cannot miss one', () => {
-    // Set EQUALITY, not cardinality. Asserting `size === 20` was a property of
-    // the fixture rather than of the protocol: it kept passing if a 21st type
-    // were added to LOGGED_TYPES, and even passed for a fixture that omitted a
-    // real type while including a bogus one. Now adding a type to the union
-    // fails here until the fixture covers it.
-    const seen = [...new Set(readFixture().map((event) => event.type))].sort();
+    // Set EQUALITY, not cardinality. Asserting a count was a property of the
+    // fixture rather than of the protocol: it kept passing when a new type was
+    // added to LOGGED_TYPES, and even passed for a fixture that omitted a real
+    // type while including a bogus one. Now adding a type to the union fails
+    // here until something covers it.
+    const seen = [
+      ...new Set([...readFixture(), ...V3_ONLY_EVENTS].map((event) => event.type)),
+    ].sort();
     expect(seen).toEqual([...loggedEventTypes()].sort());
+  });
+
+  it('adds nothing to the v1 fixture that v1 could have written', () => {
+    // The two halves must stay disjoint. If a v3-only shape ever appears in the
+    // fixture too, the coverage test above would still pass while the fixture
+    // silently stopped being a v1 log — the exact failure the split exists to
+    // prevent, and one that no other assertion here would notice.
+    const v1Types = new Set(readFixture().map((event) => event.type));
+    for (const event of V3_ONLY_EVENTS) {
+      expect(v1Types.has(event.type), `${event.type} leaked into the v1 fixture`).toBe(false);
+    }
+  });
+
+  it('accepts every v3-only shape through isLoggedEvent', () => {
+    // Same guarantee the fixture gets: a type declared in the union but rejected
+    // here is written to disk and then silently dropped on reload (I3).
+    for (const event of V3_ONLY_EVENTS) {
+      expect(isLoggedEvent(event), `rejected: ${event.type}`).toBe(true);
+    }
   });
 
   it('is still accepted in full by isLoggedEvent', () => {

@@ -17,6 +17,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@automerge/automerge": "^3.4.1",
+    "@codemirror/collab": "^6.1.1",
     "@codemirror/lang-css": "^6.3.1",
     "@codemirror/lang-html": "^6.4.12",
     "@codemirror/lang-javascript": "^6.2.5",

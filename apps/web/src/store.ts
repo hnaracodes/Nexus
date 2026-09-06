@@ -1,5 +1,5 @@
 import type { NexusEvent } from '@nexus/protocol/events';
-import type { PresenceEntry, ServerFrame } from '@nexus/protocol/wire';
+import type { FleetEntry, PresenceEntry, ServerFrame } from '@nexus/protocol/wire';
 
 export interface Message {
   id: string;
@@ -56,6 +56,17 @@ export interface RoomView {
    * the same trap `errorCount` above already exists to avoid.
    */
   externalChanges: { paths: string[]; nonce: number };
+  /**
+   * Live status for every agent in the room's fleet.
+   *
+   * Held here, beside `participants`, because it is the same KIND of thing: a
+   * transient snapshot of who is present and what they are doing, pushed whole
+   * on every change rather than accumulated. Fleet MEMBERSHIP is derivable from
+   * the log (`agent_spawned` / `agent_stopped`) and any component may derive it
+   * from `events`; what cannot be derived is whether an agent is mid-turn right
+   * now, which is precisely what `connected` is for a human.
+   */
+  fleet: FleetEntry[];
 }
 
 export const EMPTY_VIEW: RoomView = {
@@ -70,6 +81,7 @@ export const EMPTY_VIEW: RoomView = {
   lastError: null,
   errorCount: 0,
   externalChanges: { paths: [], nonce: 0 },
+  fleet: [],
 };
 
 export function reduce(view: RoomView, frame: ServerFrame): RoomView {
@@ -111,6 +123,24 @@ export function reduce(view: RoomView, frame: ServerFrame): RoomView {
         ...view,
         externalChanges: { paths: frame.paths, nonce: view.externalChanges.nonce + 1 },
       };
+    case 'fleet':
+      return { ...view, fleet: frame.agents };
+    case 'doc_sync':
+    case 'doc_presence':
+      /**
+       * Deliberately ignored HERE, and that is a routing decision rather than a
+       * swallow — the distinction the exhaustiveness check below exists to
+       * force someone to make out loud.
+       *
+       * Both frames are keystroke-rate. Folding them into this reducer would put
+       * a CRDT sync stream into React state, so every character anyone typed in
+       * any open file would re-render the transcript, the roster and the
+       * approval queue. The document layer subscribes to the socket directly
+       * instead, exactly as `useWorkspace` owns the file cache outside the
+       * log-derived view — the room's state model stays a fold over the log, and
+       * the editor's state model stays a CRDT.
+       */
+      return view;
     default: {
       // Compile-time exhaustiveness, runtime tolerance — deliberately both.
       //
