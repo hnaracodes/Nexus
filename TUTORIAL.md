@@ -450,6 +450,118 @@ so "done" always means *observed*, never *compiled*.
 
 Suite counts are the honest health metric: **server / web / desktop**.
 
+### 2026-09-06 — protocol v3, three providers, and a writable room
+
+`441 / 438 / 10` · commits `a11e546`, `8730248`, `72ac6fa`, `35616e5`, `b8121fa`, `b3f60a0`
+
+**Protocol v3 landed first, on purpose.** Every remaining phase needs new events,
+and `packages/protocol` is the one file all of them would collide on. Designing
+10 through 14's protocol in a single pass was cheaper than five merges — and it
+forced the phase-14 data model to be answerable now, while phase 11's shape was
+still soft. New: `agent_spawned` / `agent_stopped` (the fleet, derivable from the
+log alone), `doc_snapshot` + `file_edited` (documents without a keystroke
+firehose), `crew_launched`, `parentToolUseId` (what makes a subagent *visible*
+rather than a black box), and the `doc_sync` / `doc_presence` / `fleet` transient
+frames.
+
+Two forcing functions fired the moment it landed, which is the whole reason they
+exist:
+
+- **`store.ts` stopped compiling.** The 11b review had added
+  `const unhandled: never = frame` precisely because the design was relying on a
+  guard that did not exist yet. Without it a `doc_sync` frame would have vanished
+  into the tolerant `default` branch with a green suite and a green typecheck.
+- **The v1 fixture test failed, and the easy fix was wrong.** Adding the five new
+  shapes to the fixture would have made it green while destroying its only real
+  property — that it is a *genuine* v1 log. The guarantee was split instead:
+  fixture stays v1, `V3_ONLY_EVENTS` carries what v1 could never contain, and a
+  third test asserts the halves stay disjoint, so neither can be satisfied by
+  weakening the other.
+
+**Phase 10 — three providers, one gate.** OpenAI and Google do not run tools for
+you: they emit a call and wait. So Nexus owns the execution loop, which means
+Nexus owns the gate. `runtime/tools.ts` exposes exactly one way to run a tool,
+`dispatchToolCall`, and it awaits the room before it runs anything. Both provider
+adapters are structurally identical twins, so `factory.ts` has three arms of the
+same shape with a `never`-typed default — a fourth provider fails to *compile*
+rather than silently falling through to Claude, which would be a room spending an
+Anthropic key while believing it was on OpenAI.
+
+The two outbound bypasses are closed by an allow-list, not a deny-list, because
+both are properties of the REQUEST rather than the response and neither emits
+anything a dispatcher could intercept: OpenAI's hosted MCP tool with
+`require_approval: 'never'` executes on OpenAI's infrastructure, and Gemini's
+`CallableTool` makes the SDK run up to ten tool round trips *inside*
+`generateContent`.
+
+**`interrupt()` promises the weakest provider's truth.** Claude has a real
+interrupt; OpenAI aborts the request; Gemini's `AbortSignal` is documented as
+client-side only — it stops local consumption but not the backend work and not
+the billing. So the contract promises *no further tool calls dispatched, no
+further events emitted*, never "the provider stopped." A stop button implying
+otherwise would be lying to the room.
+
+**What running the code caught that reading it did not** — three times in one
+session:
+
+- Automerge 3's WASM was the big feared risk for jsdom and Electron. A two-minute
+  spike killed it: clean import in both, and two concurrent edits (a human's and
+  an agent's) merge with neither clobbered.
+- `saveIncremental()` after a fresh `load()` returns **more** bytes than `save()`
+  (496 vs 262), because everything since the load counts as unsaved — the exact
+  opposite of the plan's advice.
+- `isAutoApproved('mcp__attacker__Read')` returns **true**. The predicate parses
+  the MCP naming convention carefully and never asks whether the *server* half
+  should be trusted, so any MCP server can name a destructive tool `Read` and
+  skip the room entirely. Unreachable today; arms itself the moment phase 13
+  persists participant-supplied `mcpServers`.
+
+**Phase 11 — the file pane is writable, and reaching a human was the hard
+part.** The CRDT layer is the *write path* for file content: any file open by
+anyone, human or agent, has a document, and every edit merges through it. That
+is what avoids the bug class where an agent's disk write races the editor
+buffer — agents are CRDT peers, not out-of-band disk writers. The registry is
+room-scoped, flush re-jails the path at write time and records its own content
+hash so it does not fight the watcher, and `reconcileExternal` is a *merge*, so
+a `git checkout` under two open editors does not discard the last few hundred
+milliseconds of typing.
+
+The instructive part is the last mile. `CodeEditor` accepted a `DocSession` and
+flipped both writability switches; `cmCollab` bound a view to a session; the
+socket built one. `npm run verify` was **fully green** — and the pane a human
+types into was still read-only, because `WorkspacePane` sat between them and
+nothing passed the session through. The layer was built, tested, wired to the
+socket, and unreachable. Its test now asserts the *rendered surface* rather
+than prop forwarding, because a spy proving the prop was passed would still
+pass if the editor ignored it.
+
+**Two dead gates, in one day, in the feature the product exists to provide.**
+
+- `runtime/gemini.ts` shipped with `const guard = { ok: true } as …` — a
+  leftover mutation-test mutant. The mutated line passes every test, because
+  the test that kills it asserts on the *error path*, which a hard-coded `ok`
+  skips. While it was in, the Gemini tool guard was decorative, and
+  `guardGeminiTools` is the only thing standing between the room and a
+  `CallableTool` that makes the SDK run ten tool round trips where Nexus never
+  sees them. Caught by a workflow **retry** that I had been calling redundant
+  and was about to kill.
+- `isAutoApproved('mcp__attacker__Read')` returned **true**. One existing test
+  asserted `true` for an arbitrary MCP server name — the vulnerability written
+  down as intended behaviour. The assertion was wrong, not the implementation
+  that satisfied it, and it would have defended the hole against its own fix.
+
+Both share a shape worth naming: a security property asserted in a comment,
+believed by everyone, and enforced by nothing. Green suites, clean typecheck,
+and a careful read all failed to catch either. Grepping for the mutant shape
+and *running* the predicate caught both.
+
+**And the repo's signature trap caught its own author.** The OpenAI adapter's
+tests were 11-green and killed all five mutants — then failed `npm run
+typecheck`, because the `PendingPrompt` fixtures were `{seq, text}` and the real
+type also carries `displayName` and `wasDriver`. Vitest strips types with esbuild
+without checking them. `wasDriver` is I2′-load-bearing, so those fixtures were
+not exercising the shape the server actually delivers.
+
 ### 2026-09-06 — the desktop app actually packages; INTERNALS.md
 
 `353 / 396 / 10` · commits `3258dd7`, `7a708e2`, `d7b32cc`
