@@ -8,11 +8,15 @@ import { EMPTY_VIEW } from './store.js';
 import type { RoomView } from './store.js';
 import { connect } from './ws.js';
 import type { Connection, Status, WebSocketLike } from './ws.js';
-import type { NexusEvent } from '@nexus/protocol/events';
+import type { AgentId, NexusEvent } from '@nexus/protocol/events';
+import { PRIMARY_AGENT_ID, agentIdOf } from '@nexus/protocol/events';
 // phase-5a import anchor
 import { MalformedLink } from './pages/MalformedLink.js';
 // phase-7b import anchor
 import { WorkspacePane } from './components/WorkspacePane.js';
+import { FleetPane } from './components/FleetPane.js';
+import { ApprovalQueue } from './components/ApprovalQueue.js';
+import type { FleetApprovalRequest } from './components/ApprovalQueue.js';
 import { PaneErrorBoundary } from './components/PaneErrorBoundary.js';
 import { createWorkspaceApi } from './workspace/workspaceApi.js';
 import type { DocSession } from './workspace/docSession.js';
@@ -376,6 +380,12 @@ function RoomShell({
    *  `replay_complete` has arrived. Null keeps the file pane read-only. */
   docSession: DocSession | null;
 }): JSX.Element {
+  /**
+   * Which agent's transcript is on screen. LOCAL UI state, like the workspace
+   * pane's pin/follow — no room state, no arbitration, no server round trip.
+   * `null` means the primary agent, which is what a solo room always shows.
+   */
+  const [focusedAgentId, setFocusedAgentId] = useState<AgentId | null>(null);
   const [promptText, setPromptText] = useState('');
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [cheatsheetOpen, setCheatsheetOpen] = useState(false);
@@ -391,6 +401,65 @@ function RoomShell({
   // event log, so they are fetched over REST and cached inside useWorkspace.
   // This is the one piece of room-visible state in the app that is not
   // log-derived, and drawing that boundary explicitly is the point.
+  /**
+   * The room's pending approvals, re-shaped per agent for the fleet queue.
+   *
+   * Derived here rather than by widening `deriveApprovals`, because the
+   * single-agent card path below still consumes that function's existing
+   * shape and a solo room must keep rendering byte-identically. `expiresAt` is
+   * carried through as-is: a request the server has not yet SURFACED has no
+   * clock running (phase 12, D3), and the queue must not draw a countdown for
+   * something that is not counting down.
+   */
+  const fleetApprovals = useMemo<FleetApprovalRequest[]>(() => {
+    const settled = new Set(
+      view.events.filter((e) => e.type === 'permission_decided').map((e) => e.requestId),
+    );
+    const nameOf = new Map(view.fleet.map((entry) => [entry.agentId, entry.displayName]));
+    return view.events
+      .filter((e): e is Extract<NexusEvent, { type: 'permission_requested' }> =>
+        e.type === 'permission_requested' && !settled.has(e.requestId))
+      .map((e) => {
+        const agentId = agentIdOf(e);
+        return {
+          requestId: e.requestId,
+          agentId,
+          agentName: nameOf.get(agentId) ?? (agentId === PRIMARY_AGENT_ID ? 'Agent' : agentId),
+          toolName: e.toolName,
+          input: e.input,
+          expiresAt: e.expiresAt,
+        };
+      });
+  }, [view.events, view.fleet]);
+
+  /**
+   * The events the transcript shows. Unfiltered unless a fleet exists AND a
+   * specific agent is focused — a solo room, and a fleet room with nothing
+   * focused, both render exactly what they always did.
+   *
+   * Filtering by `agentIdOf` also drops room-level events (joins, driver
+   * hand-offs) from a non-primary agent's view, which is deliberate: you asked
+   * to look at one agent's work, and the primary transcript still holds the
+   * room's own history.
+   */
+  const focusedEvents = useMemo(
+    () =>
+      focusedAgentId === null
+        ? view.events
+        : view.events.filter(
+            // Cast for the same reason `replay.ts` does it server-side:
+            // `agentIdOf` reads an optional field that only the agent-scoped
+            // members of the union declare, and a room-level event simply
+            // reads as the primary agent — which is exactly the v1 convention
+            // this helper exists to centralise.
+            (event) => agentIdOf(event as { agentId?: AgentId }) === focusedAgentId,
+          ),
+    [view.events, focusedAgentId],
+  );
+
+  /** A solo room must not grow a sidebar it does not need. */
+  const hasFleet = view.fleet.length > 1;
+
   const workspaceApi = useMemo(
     () => createWorkspaceApi({ roomId: params.roomId, token: params.token }),
     [params.roomId, params.token],
@@ -539,7 +608,22 @@ function RoomShell({
           {/* A blocked room is the most urgent fact on the screen — these stay
               above the transcript in the main column, in addition to the
               pending count shown in the side rail. */}
-          {pendingApprovals.map((approval) => (
+          {hasFleet && (
+            <ApprovalQueue
+              requests={fleetApprovals}
+              now={now}
+              onDecide={(requestId, agentId, decision, reason) =>
+                connection?.send({
+                  kind: 'permission_decision',
+                  requestId,
+                  decision,
+                  agentId,
+                  ...(reason === undefined ? {} : { reason }),
+                })
+              }
+            />
+          )}
+          {!hasFleet && pendingApprovals.map((approval) => (
             <ApprovalCard
               key={approval.requestId}
               approval={approval}
@@ -555,8 +639,18 @@ function RoomShell({
           ))}
           {/* --- END phase-2d approval slot --- */}
 
+          {hasFleet && (
+            <FleetPane
+              agents={view.fleet}
+              focusedAgentId={focusedAgentId}
+              onFocus={setFocusedAgentId}
+              onSpawn={(params) => connection?.send({ kind: 'spawn_agent', ...params })}
+              onStop={(agentId) => connection?.send({ kind: 'stop_agent', agentId })}
+            />
+          )}
+
           <div className="min-h-0 flex-1">
-            <MessageList events={view.events} pendingDeltas={view.pendingDeltas} />
+            <MessageList events={focusedEvents} pendingDeltas={view.pendingDeltas} />
           </div>
 
           {/*

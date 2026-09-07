@@ -8,7 +8,7 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { WebSocketServer } from 'ws';
 import type { GithubRepoRef } from '@nexus/protocol/events';
-import { PROTOCOL_VERSION } from '@nexus/protocol/events';
+import { PRIMARY_AGENT_ID, PROTOCOL_VERSION } from '@nexus/protocol/events';
 import { parseClientFrame } from '@nexus/protocol/wire';
 // STATIC import, deliberately. Evaluating github.ts is what reads the App
 // secrets and DELETES them from process.env, and that has to happen before any
@@ -44,6 +44,7 @@ import {
 } from './rooms.js';
 import type { AgentDeps } from './agent.js';
 import { attachRoom, getRuntime, resolveParticipantId } from './ws.js';
+import { spawnAgent, stopAgent } from './fleet.js';
 import {
   cancelAutoRelease,
   claimIfVacant,
@@ -652,10 +653,26 @@ export function createServer(
             );
             return;
           }
-          void runtime.agent
+          // Routed per agent (phase 12). Absent `agentId` means the primary
+          // agent, which is what every pre-fleet client sends — so a v1 client
+          // is byte-identical. An id naming no live agent is refused rather
+          // than silently falling back: switching the wrong agent's model is a
+          // steering failure, and `getAgent` deliberately does not default.
+          const modelTarget = runtime.getAgent(frame.agentId);
+          if (modelTarget === undefined) {
+            ws.send(JSON.stringify({ kind: 'error', message: 'That agent is not in this room.' }));
+            return;
+          }
+          void modelTarget
             .setModel(frame.model)
             .then(() => {
-              runtime.commit({ type: 'model_changed', participantId, displayName, model: frame.model });
+              runtime.commitAs(frame.agentId ?? PRIMARY_AGENT_ID, {
+                type: 'model_changed',
+                participantId,
+                displayName,
+                model: frame.model,
+              });
+              runtime.broadcastFleet();
             })
             .catch(() => {
               // Never interpolate the raw error: it can carry the API key, and
@@ -682,10 +699,21 @@ export function createServer(
           // running with its batch undiscarded. Of all the operations still
           // addressed per-room, Stop is the one that must not be partial — it
           // is the safety valve.
+          // Phase 12: an explicit `agentId` stops exactly that agent; an ABSENT
+          // one still fans out to every agent, unchanged. That asymmetry is
+          // deliberate. Stop is the safety valve, and the `interrupted` event
+          // committed just above is room-wide — so the default must keep
+          // meaning "stop everything", or the log would claim the room stopped
+          // while agents kept running. Naming an agent is an opt-in narrowing,
+          // never the default.
+          const stopTargets =
+            frame.agentId === undefined
+              ? [...runtime.agents.values()]
+              : [runtime.getAgent(frame.agentId)].filter(
+                  (handle): handle is NonNullable<typeof handle> => handle !== undefined,
+                );
           void Promise.all(
-            [...runtime.agents.values()].map((handle) =>
-              handle.interrupt({ participantId, displayName }),
-            ),
+            stopTargets.map((handle) => handle.interrupt({ participantId, displayName })),
           ).catch(() => {
             // Never interpolate the raw error: it can carry the API key, and
             // this text is committed to the durable log (I4). The SDK rejecting
@@ -698,6 +726,42 @@ export function createServer(
           return;
         }
         // --- END phase-3b interrupt slot ---
+
+        // --- BEGIN phase-12 fleet frames ---
+        // Gated on the driver token with EXACTLY `set_model`'s semantics —
+        // refused when someone holds it, open when the floor is open. Adding
+        // or killing an agent reshapes the room more than switching a model
+        // does, so it cannot be looser than the thing it is stricter than.
+        if (frame.kind === 'spawn_agent' || frame.kind === 'stop_agent') {
+          if (room.driverId !== null && !isDriver(room, participantId)) {
+            ws.send(
+              JSON.stringify({ kind: 'error', message: 'Only the driver can change the fleet.' }),
+            );
+            return;
+          }
+          const by = { participantId, displayName };
+          const result =
+            frame.kind === 'spawn_agent'
+              ? spawnAgent({
+                  runtime,
+                  displayName: frame.displayName,
+                  provider: frame.provider,
+                  model: frame.model,
+                  by,
+                  ...(frame.configName === undefined ? {} : { configName: frame.configName }),
+                })
+              : stopAgent({ runtime, agentId: frame.agentId, by });
+          if (!result.ok) {
+            // `reason` is written to be shown — a refusal a human cannot act on
+            // is a support ticket, and "the fleet is full" is exactly the thing
+            // a person needs to be told rather than left guessing at.
+            ws.send(JSON.stringify({ kind: 'error', message: result.reason }));
+            return;
+          }
+          runtime.broadcastFleet();
+          return;
+        }
+        // --- END phase-12 fleet frames ---
 
         // --- BEGIN phase-11 collaborative document frames ---
         // Deliberately NOT gated on the driver token, for every one of the

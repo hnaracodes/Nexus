@@ -8,7 +8,7 @@ import type {
 import type { NexusEvent } from '@nexus/protocol/events';
 import type { Room } from '../rooms.js';
 import { createPermissionGate } from '../permissions.js';
-import type { PermissionGate } from '../permissions.js';
+import type { PermissionGate, RequestVisibility } from '../permissions.js';
 import { createTurnGate } from '../turnGate.js';
 import type { Batch, PendingPrompt } from '../turnGate.js';
 import { buildNexusTools, dispatchToolCall } from './tools.js';
@@ -89,6 +89,14 @@ export interface OpenAiDeps {
   gate?: PermissionGate;
   /** Overrides the outbound tool array. See `OpenAiRequest.tools` for why. */
   tools?: readonly unknown[];
+  /**
+   * The room's approval-queue seam (phase 12, D3). When supplied, this agent's
+   * gate does not start a request's timeout clock until the room's queue says
+   * the request is visible — so a request sitting behind others cannot expire
+   * before anyone has seen it. Absent, the gate surfaces every request
+   * immediately, which is exactly the pre-fleet behaviour.
+   */
+  visibility?: RequestVisibility;
   /** Static fallback for `listModels()`. */
   models?: readonly ModelChoice[];
 }
@@ -244,7 +252,13 @@ export function startOpenAiAgent(room: Room, emit: EmitFn, deps: OpenAiDeps = {}
   const client = deps.client ?? defaultClient(room);
   const idleTimeoutMs = deps.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
   const readEvents = deps.readEvents ?? ((): NexusEvent[] => []);
-  const gate = deps.gate ?? createPermissionGate(room, emit);
+  const gate =
+    deps.gate ??
+    createPermissionGate(
+      room,
+      emit,
+      deps.visibility === undefined ? {} : { visibility: deps.visibility },
+    );
   const nexusTools = buildNexusTools(room);
   const turns = createTurnGate();
 

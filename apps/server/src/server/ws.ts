@@ -9,6 +9,9 @@ import { redactEvent } from '../log/redact.js';
 import type { AgentDeps, AgentHandle } from './agent.js';
 import type { Decision } from './permissions.js';
 import { createDocRegistry } from './docs.js';
+import { createApprovalQueue } from './approvalQueue.js';
+import type { ApprovalQueue } from './approvalQueue.js';
+import { fleetSnapshot } from './fleet.js';
 import type { DocRegistry } from './docs.js';
 import { createRuntime } from './runtime/factory.js';
 import type { Room } from './rooms.js';
@@ -162,6 +165,10 @@ export interface RoomRuntime {
   /** `commit`, attributed to a specific agent. See the implementation for why
    *  the primary agent is deliberately left unstamped. */
   commitAs(agentId: AgentId, event: UnsequencedEvent): NexusEvent;
+  /** The room's shared approval queue (phase 12). */
+  approvals: ApprovalQueue;
+  /** Broadcast the transient `fleet` frame — liveness, never membership. */
+  broadcastFleet(): void;
   /**
    * Settle a pending approval on the agent that actually holds it.
    *
@@ -246,6 +253,16 @@ export function attachRoom(
     return [...entries.values()];
   }
 
+  /**
+   * ONE approval queue per room, shared by every agent's gate — which is the
+   * whole point. The governance cap phase 12 needs is "how many agents may be
+   * simultaneously blocked on a HUMAN", and a human is a property of the room,
+   * not of an agent. A per-agent queue would let twenty agents each surface
+   * their own request and reproduce exactly the wall of cards this exists to
+   * prevent.
+   */
+  const approvals: ApprovalQueue = createApprovalQueue();
+
   const docs: DocRegistry = createDocRegistry(
     // Only `doc_snapshot` and `file_edited` ever reach this — see docs.ts's
     // own `EmitFn` comment. Routed through `commitAs` when the event already
@@ -276,6 +293,7 @@ export function attachRoom(
   const runtime: RoomRuntime = {
     room,
     sink,
+    approvals,
     agents,
     get agent(): AgentHandle {
       const primary = agents.get(PRIMARY_AGENT_ID);
@@ -310,6 +328,15 @@ export function attachRoom(
         emit: (event) => runtime.commitAs(agentId, event),
         deps: {
           readEvents: () => sink.read(),
+          // Bound per agent so the queue can attribute a waiting request to
+          // the agent that is blocked on it — `agentId` is captured here, not
+          // read off the request, because the gate has no idea which agent it
+          // belongs to.
+          visibility: {
+            admit: (requestId, toolName, surface) =>
+              approvals.admit(agentId, requestId, toolName, surface),
+            release: (requestId) => approvals.release(requestId),
+          },
           ...deps,
           ...agentDeps,
         },
@@ -442,6 +469,16 @@ export function attachRoom(
       for (const socket of sockets.keys()) {
         if (socket.readyState === socket.OPEN) socket.send(payload);
       }
+    },
+    /**
+     * Liveness, never membership. The fleet's MEMBERSHIP is derivable from the
+     * log (`agent_spawned` / `agent_stopped`) and survives a restart; what is
+     * not derivable is what each agent is doing this second, which is exactly
+     * the role `connected` plays for a human on `PresenceEntry`. So this frame
+     * is transient and unlogged, like `presence` beside it.
+     */
+    broadcastFleet(): void {
+      runtime.broadcast({ kind: 'fleet', agents: fleetSnapshot(runtime) });
     },
     commit(event: UnsequencedEvent): NexusEvent {
       return runtime.commitAs(PRIMARY_AGENT_ID, event);

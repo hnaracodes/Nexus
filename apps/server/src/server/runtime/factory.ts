@@ -74,10 +74,21 @@ export function createRuntime(args: {
   switch (provider) {
     case 'anthropic':
       return startAgent(room, emit, deps);
+    // `visibility` is a ROOM-level concern (the approval queue every agent in
+    // the room shares), so it lives on the shared deps rather than inside a
+    // per-provider bag — but each adapter builds its own gate, so it has to be
+    // forwarded into each. Spread AFTER the provider deps so a test that
+    // supplies its own still wins.
     case 'openai':
-      return startOpenAiAgent(room, emit, deps.openai ?? {});
+      return startOpenAiAgent(room, emit, {
+        ...deps.openai,
+        ...(deps.visibility === undefined ? {} : { visibility: deps.visibility }),
+      });
     case 'google':
-      return startGeminiAgent(room, emit, deps.google ?? {});
+      return startGeminiAgent(room, emit, {
+        ...deps.google,
+        ...(deps.visibility === undefined ? {} : { visibility: deps.visibility }),
+      });
     default: {
       // Exhaustiveness check. If `AgentProvider` (packages/protocol/src/events.ts)
       // ever grows a fourth member, `provider` stops being assignable to

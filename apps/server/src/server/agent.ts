@@ -6,7 +6,7 @@ import { createGithubMcpServer } from './publishTool.js';
 import { AsyncQueue } from './queue.js';
 import { createPermissionGate } from './permissions.js';
 import type { AgentRuntime, Interrupter, ModelChoice } from './runtime/types.js';
-import type { Decision, PermissionGate } from './permissions.js';
+import type { Decision, PermissionGate, RequestVisibility } from './permissions.js';
 import { createTurnGate } from './turnGate.js';
 import type { Batch, PendingPrompt } from './turnGate.js';
 import { toUserMessage } from './errors.js';
@@ -38,6 +38,14 @@ export interface AgentDeps {
    * Supplied by `attachRoom`, which is the only place that holds the sink.
    */
   readEvents?: () => NexusEvent[];
+  /**
+   * The room's approval-queue seam (phase 12, D3). When supplied, this agent's
+   * gate does not start a request's timeout clock until the room's queue says
+   * the request is visible — so a request sitting behind others cannot expire
+   * before anyone has seen it. Absent, the gate surfaces every request
+   * immediately, which is exactly the pre-fleet behaviour.
+   */
+  visibility?: RequestVisibility;
 }
 
 /**
@@ -88,7 +96,11 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
   const runQuery = deps.runQuery ?? query;
   const idleTimeoutMs = deps.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
   const prompts = new AsyncQueue<PromptMessage>();
-  const gate = createPermissionGate(room, emit);
+  const gate = createPermissionGate(
+    room,
+    emit,
+    deps.visibility === undefined ? {} : { visibility: deps.visibility },
+  );
 
   /**
    * Bypass detection. The SDK gives Nexus no way to know when it has skipped a
