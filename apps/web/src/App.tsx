@@ -16,6 +16,10 @@ import { MalformedLink } from './pages/MalformedLink.js';
 import { WorkspacePane } from './components/WorkspacePane.js';
 import { FleetPane } from './components/FleetPane.js';
 import { ApprovalQueue } from './components/ApprovalQueue.js';
+import { Button } from './components/Button.js';
+import { Canvas } from './canvas/Canvas.js';
+import { RunOverlay } from './canvas/RunOverlay.js';
+import type { Graph } from './canvas/graph.js';
 import type { FleetApprovalRequest } from './components/ApprovalQueue.js';
 import { PaneErrorBoundary } from './components/PaneErrorBoundary.js';
 import { createWorkspaceApi } from './workspace/workspaceApi.js';
@@ -386,6 +390,20 @@ function RoomShell({
    * `null` means the primary agent, which is what a solo room always shows.
    */
   const [focusedAgentId, setFocusedAgentId] = useState<AgentId | null>(null);
+  /**
+   * The workflow graph on screen, if any.
+   *
+   * The canvas lives INSIDE the room rather than on its own page, and that is
+   * the phase-14 claim made structural: it is a VIEW over the orchestration
+   * model, so it renders where the model actually is. A standalone page would
+   * have had no live `fleet` frame and could only ever have drawn a graph that
+   * was not running — which is a diagram, not a canvas.
+   */
+  const [canvasGraph, setCanvasGraph] = useState<Graph | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  /** Saved crews that actually carry a graph — the only ones the canvas can draw. */
+  const [graphCrews, setGraphCrews] = useState<Array<{ name: string; graph: Graph }>>([]);
+  const [runError, setRunError] = useState<string | null>(null);
   const [promptText, setPromptText] = useState('');
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [cheatsheetOpen, setCheatsheetOpen] = useState(false);
@@ -459,6 +477,24 @@ function RoomShell({
 
   /** A solo room must not grow a sidebar it does not need. */
   const hasFleet = view.fleet.length > 1;
+
+  useEffect(() => {
+    // Room-scoped and token-carrying, like every other write-capable route
+    // here — see ConfigLibrary.tsx for why an unscoped config endpoint was the
+    // wrong answer even though a config is not room state.
+    void fetch(`/api/rooms/${encodeURIComponent(params.roomId)}/configs`, {
+      headers: { 'X-Nexus-Token': params.token },
+    })
+      .then((r) => (r.ok ? r.json() : { crews: [] }))
+      .then((body: { crews?: Array<{ name: string; graph?: Graph }> }) => {
+        setGraphCrews(
+          (body.crews ?? [])
+            .filter((c): c is { name: string; graph: Graph } => c.graph !== undefined)
+            .map((c) => ({ name: c.name, graph: c.graph })),
+        );
+      })
+      .catch(() => setGraphCrews([]));
+  }, [params.roomId, params.token]);
 
   const workspaceApi = useMemo(
     () => createWorkspaceApi({ roomId: params.roomId, token: params.token }),
@@ -638,6 +674,87 @@ function RoomShell({
             />
           ))}
           {/* --- END phase-2d approval slot --- */}
+
+          {graphCrews.length > 0 && (
+            <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-fg-muted">
+              <span>Workflows:</span>
+              {graphCrews.map((crew) => (
+                <button
+                  key={crew.name}
+                  type="button"
+                  onClick={() => {
+                    setCanvasGraph(crew.graph);
+                    setRunError(null);
+                  }}
+                  className="rounded border border-border px-2 py-1 text-fg hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                >
+                  {crew.name}
+                </button>
+              ))}
+              {canvasGraph !== null && (
+                <>
+                  <Button
+                    onClick={() => {
+                      const crew = graphCrews.find((c) => c.graph === canvasGraph);
+                      if (crew === undefined) return;
+                      setRunError(null);
+                      void fetch(
+                        `/api/rooms/${encodeURIComponent(params.roomId)}/crews/${encodeURIComponent(crew.name)}/run`,
+                        {
+                          method: 'POST',
+                          headers: {
+                            'X-Nexus-Token': params.token,
+                            'content-type': 'application/json',
+                          },
+                          body: JSON.stringify({ prompt: promptText.trim() || 'Begin.' }),
+                        },
+                      )
+                        .then(async (r) => {
+                          if (r.ok) return;
+                          const body = (await r.json().catch(() => ({}))) as { error?: string };
+                          // Every node in a graph is an agent that will ask
+                          // permission; a refusal here is usually the fleet's
+                          // resource cap, and the person needs to be told
+                          // which rather than left guessing.
+                          setRunError(body.error ?? 'Could not start that workflow.');
+                        })
+                        .catch(() => setRunError('Could not reach the server.'));
+                    }}
+                  >
+                    Run
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => setCanvasGraph(null)}
+                    className="rounded border border-border px-2 py-1 hover:bg-surface-2"
+                  >
+                    Close
+                  </button>
+                </>
+              )}
+              {runError !== null && <span className="text-danger">{runError}</span>}
+            </div>
+          )}
+
+          {canvasGraph !== null && (
+            <div className="relative mb-3 h-72 overflow-hidden rounded-lg border border-border">
+              <Canvas
+                graph={canvasGraph}
+                selectedNodeId={selectedNodeId}
+                onSelect={setSelectedNodeId}
+                onNodeMove={(id, x, y) =>
+                  setCanvasGraph((g) =>
+                    g === null
+                      ? g
+                      : { ...g, nodes: g.nodes.map((n) => (n.id === id ? { ...n, x, y } : n)) },
+                  )
+                }
+              />
+              {/* Live status comes from the transient `fleet` frame; MEMBERSHIP
+                  still comes from the log. Not a third source of truth. */}
+              <RunOverlay graph={canvasGraph} fleet={view.fleet} />
+            </div>
+          )}
 
           {hasFleet && (
             <FleetPane

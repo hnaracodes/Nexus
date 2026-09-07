@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { AgentProvider } from '@nexus/protocol/events';
 import { isAgentProvider } from '@nexus/protocol/events';
@@ -147,7 +147,7 @@ export function intersectTools(config: AgentConfig, roomTools: readonly string[]
  * that (a `dependsOn` field on a member is additive), but it is not built yet.
  * ---------------------------------------------------------------------- */
 
-const ALLOWED_CREW_FIELDS = ['name', 'members'] as const;
+const ALLOWED_CREW_FIELDS = ['name', 'members', 'graph'] as const;
 const ALLOWED_MEMBER_FIELDS = ['configName', 'displayName', 'provider', 'model'] as const;
 
 export interface CrewMember {
@@ -163,6 +163,88 @@ export interface CrewMember {
 export interface Crew {
   name: string;
   members: CrewMember[];
+  /**
+   * The phase-14 dependency graph, when this crew was drawn on the canvas
+   * rather than listed. Optional, and its absence means "run every member at
+   * once", which is exactly what a crew without a graph already did — so every
+   * crew saved before this field existed keeps working unchanged.
+   *
+   * Structure is validated here; ACYCLICITY is not. A cycle check needs
+   * `hasCycle` from `workflowRunner.ts`, which reaches `crews.ts`, which
+   * reaches this file — importing it here would close a real dependency cycle
+   * in the module graph while checking for one in the data. The route that
+   * saves a crew does that check instead, before calling `saveCrew`.
+   */
+  graph?: CrewGraph;
+}
+
+/** Mirrors `workflowRunner.ts`'s `WorkflowGraph`, declared here rather than
+ *  imported for the dependency reason on `Crew.graph` above. The two are
+ *  checked against each other where they meet, in the route. */
+export interface CrewGraph {
+  nodes: Array<{
+    id: string;
+    configName: string;
+    displayName: string;
+    provider: AgentProvider;
+    model: string | null;
+    x: number;
+    y: number;
+  }>;
+  edges: Array<{ from: string; to: string }>;
+}
+
+function parseGraph(value: unknown): { problems: string[]; graph?: CrewGraph } {
+  if (!isPlainObject(value)) return { problems: ['`graph` must be an object.'] };
+  const rawNodes = value['nodes'];
+  const rawEdges = value['edges'];
+  if (!Array.isArray(rawNodes)) return { problems: ['`graph.nodes` must be an array.'] };
+  if (!Array.isArray(rawEdges)) return { problems: ['`graph.edges` must be an array.'] };
+
+  const problems: string[] = [];
+  const nodes: CrewGraph['nodes'] = [];
+  rawNodes.forEach((raw, index) => {
+    if (!isPlainObject(raw)) {
+      problems.push(`\`graph.nodes[${index}]\` must be an object.`);
+      return;
+    }
+    const id = raw['id'];
+    const configName = raw['configName'];
+    const displayName = raw['displayName'];
+    if (typeof id !== 'string' || id === '') problems.push(`\`graph.nodes[${index}].id\` is required.`);
+    if (typeof configName !== 'string') problems.push(`\`graph.nodes[${index}].configName\` is required.`);
+    if (typeof displayName !== 'string') problems.push(`\`graph.nodes[${index}].displayName\` is required.`);
+    if (!isAgentProvider(raw['provider'])) problems.push(`\`graph.nodes[${index}].provider\` is not a provider Nexus supports.`);
+    if (typeof raw['x'] !== 'number' || typeof raw['y'] !== 'number') {
+      problems.push(`\`graph.nodes[${index}]\` needs numeric x and y.`);
+    }
+    if (typeof raw['model'] !== 'string' && raw['model'] !== null) {
+      problems.push(`\`graph.nodes[${index}].model\` must be a string or null.`);
+    }
+    if (problems.length === 0) {
+      nodes.push({
+        id: id as string,
+        configName: configName as string,
+        displayName: displayName as string,
+        provider: raw['provider'] as AgentProvider,
+        model: raw['model'] as string | null,
+        x: raw['x'] as number,
+        y: raw['y'] as number,
+      });
+    }
+  });
+
+  const edges: CrewGraph['edges'] = [];
+  rawEdges.forEach((raw, index) => {
+    if (!isPlainObject(raw) || typeof raw['from'] !== 'string' || typeof raw['to'] !== 'string') {
+      problems.push(`\`graph.edges[${index}]\` needs a string \`from\` and \`to\`.`);
+      return;
+    }
+    edges.push({ from: raw['from'], to: raw['to'] });
+  });
+
+  if (problems.length > 0) return { problems };
+  return { problems: [], graph: { nodes, edges } };
 }
 
 export type CrewResult = { ok: true; crew: Crew } | { ok: false; problems: string[] };
@@ -235,7 +317,23 @@ export function parseCrew(input: unknown): CrewResult {
 
   if (problems.length > 0) return { ok: false, problems };
 
-  return { ok: true, crew: { name: input['name'] as string, members } };
+  let graph: CrewGraph | undefined;
+  if (input['graph'] !== undefined) {
+    const parsed = parseGraph(input['graph']);
+    if (parsed.problems.length > 0) return { ok: false, problems: parsed.problems };
+    graph = parsed.graph;
+  }
+
+  return {
+    ok: true,
+    crew: {
+      name: input['name'] as string,
+      members,
+      // Rebuilt, never spread — the same discipline `agentConfig.ts`'s header
+      // insists on, for the same reason.
+      ...(graph === undefined ? {} : { graph }),
+    },
+  };
 }
 
 /** Validates `input` through `parseCrew` and, only on success, writes it to
@@ -270,4 +368,32 @@ export function readCrews(dataDir: string = DEFAULT_DATA_DIR): Crew[] {
     if (result.ok) crews.push(result.crew);
   }
   return crews;
+}
+
+/**
+ * Remove a saved config or crew.
+ *
+ * Returns whether anything was actually removed, so a route can answer 404
+ * rather than pretending. Deliberately tolerant of a missing file: a delete
+ * that races another delete is not an error, and throwing here would turn an
+ * idempotent operation into a 500.
+ *
+ * Names are encoded on the way to the filesystem for the same reason they are
+ * on the way in — a config name is chosen by a person and is not a safe path
+ * segment the way a server-minted room id is.
+ */
+export function deleteConfig(name: string, dataDir: string = DEFAULT_DATA_DIR): boolean {
+  return removeNamed('configs', name, dataDir);
+}
+
+export function deleteCrew(name: string, dataDir: string = DEFAULT_DATA_DIR): boolean {
+  return removeNamed('crews', name, dataDir);
+}
+
+function removeNamed(kind: 'configs' | 'crews', name: string, dataDir: string): boolean {
+  if (name === '') return false;
+  const path = join(resolve(dataDir), kind, `${encodeURIComponent(name)}.json`);
+  if (!existsSync(path)) return false;
+  rmSync(path);
+  return true;
 }

@@ -17,21 +17,49 @@ import { Button } from '../components/Button.js';
  * itself DOES come from `@nexus/protocol/events` — it is a real protocol type,
  * not a server-internal one, and `FleetPane.tsx` already imports it the same way.
  *
- * D3 is why this page talks to `/api/configs` and `/api/crews` rather than a
- * room-scoped `/api/rooms/:id/...` route the way `workspaceApi.ts` does:
- * configs and crews are USER ASSETS, not room history, so there is no room id
- * or `X-Nexus-Token` in play here at all — nothing on this page is scoped to a
- * room. When accounts land (D1/D3: "keyed by account once accounts exist")
- * these calls gain whatever session credential identifies the signed-in user,
- * carried in a header the same way `workspaceApi.ts` carries the room token —
- * never a query parameter — but today the store is process-wide, matching
- * `configStore.ts`'s current (account-less) signature.
+ * D3 says configs and crews are USER ASSETS rather than room history, and this
+ * page was first written to talk to unscoped `/api/configs` and `/api/crews`
+ * on exactly that reasoning. That framing is right about the DATA and wrong
+ * about the CREDENTIAL, and the difference is a hole: an unscoped POST here is
+ * an unauthenticated write endpoint for executable input — a saved config
+ * names tools and MCP servers — so anyone who could reach the server could
+ * plant one for someone else's room to launch.
+ *
+ * Until accounts exist, the room token is the only credential this system has,
+ * so these calls are room-scoped and carry `X-Nexus-Token`, exactly as
+ * `workspaceApi.ts` does. That is a statement about who may write, not about
+ * who owns the data. When accounts land (D1/D3: "keyed by account once
+ * accounts exist") the scope moves to a session credential; the header does
+ * not become optional in the meantime.
  *
  * D2 is why the banner below exists and is not optional decoration: a saved
  * config is executable input, and CLAUDE.md §11 requires the real security
  * boundary to be surfaced in the UI, not left to a README. This page is where
  * a person actually reads it.
  */
+
+/**
+ * The room this page acts on behalf of, read from the link — the same
+ * `?room=&token=` pair every other room-scoped view uses. The token rides in a
+ * header, never a query parameter (CLAUDE.md §11), which is why it is read
+ * here and attached below rather than appended to a URL.
+ */
+function roomParams(): { roomId: string; token: string } {
+  const params = new URLSearchParams(globalThis.location.search);
+  return { roomId: params.get('room') ?? '', token: params.get('token') ?? '' };
+}
+
+function configsUrl(suffix = ''): string {
+  return `/api/rooms/${encodeURIComponent(roomParams().roomId)}/configs${suffix}`;
+}
+
+function crewsUrl(suffix = ''): string {
+  return `/api/rooms/${encodeURIComponent(roomParams().roomId)}/crews${suffix}`;
+}
+
+function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  return { 'X-Nexus-Token': roomParams().token, ...extra };
+}
 
 interface SubagentConfig {
   description: string;
@@ -278,7 +306,12 @@ export function ConfigLibrary(): JSX.Element {
     setLoading(true);
     setLoadError(null);
     try {
-      const [configsResponse, crewsResponse] = await Promise.all([fetch('/api/configs'), fetch('/api/crews')]);
+      // One route now serves both — the server returns `{ configs, crews }`
+      // together, so a page load is one round trip rather than two.
+      // ONE round trip: the route returns `{ configs, crews }` together, so
+      // both reads below come from the same response.
+      const configsResponse = await fetch(configsUrl(), { headers: authHeaders() });
+      const crewsResponse = configsResponse;
       if (!configsResponse.ok || !crewsResponse.ok) {
         throw new Error('load-failed');
       }
@@ -343,9 +376,9 @@ export function ConfigLibrary(): JSX.Element {
 
     setSavingConfig(true);
     try {
-      const response = await fetch('/api/configs', {
+      const response = await fetch(configsUrl(), {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: authHeaders({ 'content-type': 'application/json' }),
         body: JSON.stringify(payload),
       });
       const body = await safeJson(response);
@@ -415,9 +448,9 @@ export function ConfigLibrary(): JSX.Element {
     setCrewFormError(null);
     setSavingCrew(true);
     try {
-      const response = await fetch('/api/crews', {
+      const response = await fetch(crewsUrl(), {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: authHeaders({ 'content-type': 'application/json' }),
         body: JSON.stringify(buildCrewPayload(crewForm)),
       });
       const body = await safeJson(response);
@@ -456,8 +489,10 @@ export function ConfigLibrary(): JSX.Element {
     setDeleteError(null);
     try {
       const response = await fetch(
-        `${kind === 'config' ? '/api/configs' : '/api/crews'}/${encodeURIComponent(name)}`,
-        { method: 'DELETE' },
+        kind === 'config'
+          ? configsUrl(`/${encodeURIComponent(name)}`)
+          : crewsUrl(`/${encodeURIComponent(name)}`),
+        { method: 'DELETE', headers: authHeaders() },
       );
       if (!response.ok) {
         setDeleteError(`Could not delete "${name}". Try again.`);

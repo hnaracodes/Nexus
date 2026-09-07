@@ -4,8 +4,17 @@ import { ConfigLibrary } from '../ConfigLibrary.js';
 
 /**
  * Routes a stubbed `fetch` by method + path, so each test only has to name the
- * responses it actually cares about. Every test hits GET /api/configs and
- * GET /api/crews on mount (the page loads both lists together), so those two
+ * responses it actually cares about.
+ *
+ * The routes are ROOM-SCOPED and token-guarded — `/api/rooms/:id/configs` — and
+ * the mount does ONE GET that returns `{ configs, crews }` together. The page
+ * originally called unscoped `/api/configs`, on the (correct) reasoning that a
+ * config is a user asset rather than room state; that was right about the data
+ * and wrong about the credential, since an unscoped POST is an unauthenticated
+ * write endpoint for executable input. The room token is the only credential
+ * this system has until accounts land.
+ *
+ * The mount GET, so those
  * default to empty unless a test overrides them — an unhandled combination
  * throws rather than hanging, so a wrong URL in the component fails LOUDLY
  * instead of leaving `await screen.findBy...` to time out with no clue why.
@@ -22,30 +31,38 @@ function routedFetch(handlers: {
     const url = String(input);
     const method = (init?.method ?? 'GET').toUpperCase();
 
-    if (url === '/api/configs' && method === 'GET') {
-      return jsonResponse(200, { configs: handlers.configs ?? [] });
+    // Path-suffix matching, so the test does not have to restate the room id
+    // the page reads out of the link.
+    const isConfigs = /\/api\/rooms\/[^/]*\/configs$/.test(url);
+    const isCrews = /\/api\/rooms\/[^/]*\/crews$/.test(url);
+    const configDelete = /\/api\/rooms\/[^/]*\/configs\/(.+)$/.exec(url);
+    const crewDelete = /\/api\/rooms\/[^/]*\/crews\/(.+)$/.exec(url);
+
+    if (isConfigs && method === 'GET') {
+      // One route, both lists — the page makes a single round trip on mount.
+      return jsonResponse(200, { configs: handlers.configs ?? [], crews: handlers.crews ?? [] });
     }
-    if (url === '/api/crews' && method === 'GET') {
+    if (isCrews && method === 'GET') {
       return jsonResponse(200, { crews: handlers.crews ?? [] });
     }
-    if (url === '/api/configs' && method === 'POST') {
-      if (handlers.postConfig === undefined) throw new Error('unexpected POST /api/configs in this test');
+    if (isConfigs && method === 'POST') {
+      if (handlers.postConfig === undefined) throw new Error('unexpected POST configs in this test');
       const { status, body } = await handlers.postConfig(JSON.parse(String(init?.body)));
       return jsonResponse(status, body);
     }
-    if (url === '/api/crews' && method === 'POST') {
-      if (handlers.postCrew === undefined) throw new Error('unexpected POST /api/crews in this test');
+    if (isCrews && method === 'POST') {
+      if (handlers.postCrew === undefined) throw new Error('unexpected POST crews in this test');
       const { status, body } = await handlers.postCrew(JSON.parse(String(init?.body)));
       return jsonResponse(status, body);
     }
-    if (url.startsWith('/api/configs/') && method === 'DELETE') {
-      if (handlers.deleteConfig === undefined) throw new Error('unexpected DELETE /api/configs/*');
-      const { status, body } = handlers.deleteConfig(decodeURIComponent(url.slice('/api/configs/'.length)));
+    if (configDelete !== null && method === 'DELETE') {
+      if (handlers.deleteConfig === undefined) throw new Error('unexpected DELETE configs/*');
+      const { status, body } = handlers.deleteConfig(decodeURIComponent(configDelete[1] ?? ''));
       return jsonResponse(status, body);
     }
-    if (url.startsWith('/api/crews/') && method === 'DELETE') {
-      if (handlers.deleteCrew === undefined) throw new Error('unexpected DELETE /api/crews/*');
-      const { status, body } = handlers.deleteCrew(decodeURIComponent(url.slice('/api/crews/'.length)));
+    if (crewDelete !== null && method === 'DELETE') {
+      if (handlers.deleteCrew === undefined) throw new Error('unexpected DELETE crews/*');
+      const { status, body } = handlers.deleteCrew(decodeURIComponent(crewDelete[1] ?? ''));
       return jsonResponse(status, body);
     }
     throw new Error(`unhandled fetch: ${method} ${url}`);
@@ -143,7 +160,10 @@ describe('ConfigLibrary', () => {
     fireEvent.click(screen.getByRole('button', { name: /save config/i }));
 
     await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith('/api/configs', expect.objectContaining({ method: 'POST' })),
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringMatching(/\/api\/rooms\/[^/]*\/configs$/),
+        expect.objectContaining({ method: 'POST' }),
+      ),
     );
 
     expect(sentBody).toEqual({
@@ -198,9 +218,11 @@ describe('ConfigLibrary', () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       const method = (init?.method ?? 'GET').toUpperCase();
-      if (url === '/api/configs' && method === 'GET') return jsonResponse(200, { configs: [] });
+      if (/\/api\/rooms\/[^/]*\/configs$/.test(url) && method === 'GET') {
+        return jsonResponse(200, { configs: [], crews: [] });
+      }
       if (url === '/api/crews' && method === 'GET') return jsonResponse(200, { crews: [] });
-      if (url === '/api/configs' && method === 'POST') {
+      if (/\/api\/rooms\/[^/]*\/configs$/.test(url) && method === 'POST') {
         throw new TypeError('Failed to fetch');
       }
       throw new Error(`unhandled fetch: ${method} ${url}`);

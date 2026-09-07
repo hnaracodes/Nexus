@@ -46,7 +46,8 @@ import type { AgentDeps } from './agent.js';
 import { attachRoom, getRuntime, resolveParticipantId } from './ws.js';
 import { spawnAgent, stopAgent } from './fleet.js';
 import { launchCrew } from './crews.js';
-import { readConfigs, readCrews, saveConfig, saveCrew } from './configStore.js';
+import { hasCycle, startWorkflowRun } from './workflowRunner.js';
+import { deleteConfig, deleteCrew, readConfigs, readCrew, readCrews, saveConfig, saveCrew } from './configStore.js';
 import {
   cancelAutoRelease,
   claimIfVacant,
@@ -371,8 +372,83 @@ export function createServer(
   app.post('/api/rooms/:id/crews', async (c) => {
     const guarded = requireRoom(c);
     if (guarded instanceof Response) return guarded;
-    const result = saveCrew(await c.req.json().catch(() => null));
+    const body = (await c.req.json().catch(() => null)) as { graph?: unknown } | null;
+
+    // ACYCLICITY IS CHECKED AT SAVE TIME, not at run time (phase 14). Refusing
+    // at run time would mean a saved workflow that can never run, discovered by
+    // a user who has already drawn it. Checked HERE rather than inside
+    // `configStore.saveCrew`, because `hasCycle` lives in `workflowRunner.ts`,
+    // which reaches `crews.ts`, which reaches `configStore.ts` — importing it
+    // there would close a real cycle in the module graph while looking for one
+    // in the data.
+    const graph = body?.graph;
+    if (graph !== undefined && hasCycle(graph as Parameters<typeof hasCycle>[0])) {
+      return c.json({ problems: ['This workflow has a cycle, so it could never finish.'] }, 400);
+    }
+
+    const result = saveCrew(body);
     return result.ok ? c.json({ crew: result.crew }) : c.json({ problems: result.problems }, 400);
+  });
+
+  app.delete('/api/rooms/:id/configs/:name', (c) => {
+    const guarded = requireRoom(c);
+    if (guarded instanceof Response) return guarded;
+    return deleteConfig(c.req.param('name') ?? '')
+      ? c.json({ deleted: true })
+      : c.json({ error: 'No such config.' }, 404);
+  });
+
+  app.delete('/api/rooms/:id/crews/:name', (c) => {
+    const guarded = requireRoom(c);
+    if (guarded instanceof Response) return guarded;
+    return deleteCrew(c.req.param('name') ?? '')
+      ? c.json({ deleted: true })
+      : c.json({ error: 'No such crew.' }, 404);
+  });
+
+  /**
+   * Start a saved crew's graph as a real fleet run.
+   *
+   * A REST route rather than a new wire frame on purpose: a run's PROGRESS is
+   * already observable through the transient `fleet` frame and the event log,
+   * which is the whole claim of this phase — the canvas is a view over the
+   * orchestration model, not a second one. A new frame would be a second
+   * channel carrying facts that already have one.
+   */
+  app.post('/api/rooms/:id/crews/:name/run', async (c) => {
+    const guarded = requireRoom(c);
+    if (guarded instanceof Response) return guarded;
+    const runtime = getRuntime(guarded.room.id);
+    if (runtime === undefined) return c.json({ error: 'That room is not attached.' }, 409);
+
+    const crew = readCrew(c.req.param('name') ?? '');
+    if (crew === null) return c.json({ error: 'No such crew.' }, 404);
+    if (crew.graph === undefined) {
+      return c.json({ error: 'That crew has no workflow graph. Launch it as a crew instead.' }, 400);
+    }
+
+    const body = (await c.req.json().catch(() => ({}))) as { prompt?: unknown };
+    const prompt = typeof body.prompt === 'string' ? body.prompt : '';
+    if (prompt.trim() === '') return c.json({ error: 'A run needs a prompt.' }, 400);
+
+    const driverId = guarded.room.driverId;
+    const result = startWorkflowRun({
+      runtime,
+      graph: crew.graph,
+      prompt,
+      // Attributed to whoever holds the driver token. A run is started by a
+      // person, and every node's `agent_spawned` and synthetic `user_prompt`
+      // carries that attribution server-side (I2').
+      by: {
+        participantId: driverId ?? 'unknown',
+        displayName:
+          (driverId === null ? undefined : guarded.room.participants.get(driverId)?.displayName) ??
+          'Someone',
+      },
+    });
+    if (!result.ok) return c.json({ error: result.reason }, 400);
+    runtime.broadcastFleet();
+    return c.json({ nodes: [...result.run.nodeAgentIds.entries()] });
   });
   // --- END phase-13 config + crew routes ---
 
