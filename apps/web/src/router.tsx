@@ -3,6 +3,7 @@ import App from './App.js';
 import { Landing } from './pages/Landing.js';
 import { CreateRoom } from './pages/CreateRoom.js';
 import { Privacy } from './pages/Privacy.js';
+import { ConfigLibrary } from './pages/ConfigLibrary.js';
 import { Terms } from './pages/Terms.js';
 import { Security } from './pages/Security.js';
 import { resolveRoute } from './routing.js';
@@ -36,6 +37,8 @@ export function Router(): JSX.Element {
       return <App />;
     case 'create':
       return <CreateRoom onCreated={(link) => globalThis.location.assign(link)} />;
+    case 'configs':
+      return <ConfigLibrary />;
     case 'privacy':
       return <Privacy />;
     case 'terms':

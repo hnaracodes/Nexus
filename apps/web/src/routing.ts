@@ -6,7 +6,7 @@
  * pages are owned and built by sibling agents landing concurrently.
  */
 
-export type Route = 'landing' | 'create' | 'privacy' | 'terms' | 'security' | 'room';
+export type Route = 'landing' | 'create' | 'privacy' | 'terms' | 'security' | 'room' | 'configs';
 
 const PATHS: Record<string, Route> = {
   '/': 'landing',
@@ -14,6 +14,7 @@ const PATHS: Record<string, Route> = {
   '/privacy': 'privacy',
   '/terms': 'terms',
   '/security': 'security',
+  '/configs': 'configs',
   '/room': 'room',
 };
 

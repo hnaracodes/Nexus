@@ -45,6 +45,8 @@ import {
 import type { AgentDeps } from './agent.js';
 import { attachRoom, getRuntime, resolveParticipantId } from './ws.js';
 import { spawnAgent, stopAgent } from './fleet.js';
+import { launchCrew } from './crews.js';
+import { readConfigs, readCrews, saveConfig, saveCrew } from './configStore.js';
 import {
   cancelAutoRelease,
   claimIfVacant,
@@ -341,6 +343,39 @@ export function createServer(
     return c.json({ error: 'Could not read the workspace.' }, 500);
   }
 
+  // --- BEGIN phase-13 config + crew routes ---
+  // Scoped under a room and guarded by `requireRoom`, which calls
+  // `authorize()`. Configs are not strictly room state — they are user assets
+  // (phase-13-crews-and-accounts.md, D3) — but the room TOKEN is the only
+  // credential this system has, and CLAUDE.md §11 is explicit that the room ID
+  // is not one: it is 64 bits and appears in every URL, referrer and
+  // screenshot, while the token is 256. Leaving these ungated because "a
+  // config isn't room state" is exactly the reasoning that produced a
+  // room-hijack hole here once already.
+  app.get('/api/rooms/:id/configs', (c) => {
+    const guarded = requireRoom(c);
+    if (guarded instanceof Response) return guarded;
+    return c.json({ configs: readConfigs(), crews: readCrews() });
+  });
+
+  app.post('/api/rooms/:id/configs', async (c) => {
+    const guarded = requireRoom(c);
+    if (guarded instanceof Response) return guarded;
+    const result = saveConfig(await c.req.json().catch(() => null));
+    // `problems` is written to be read by a human and is surfaced verbatim —
+    // `agentConfig.ts` goes to real trouble to name the offending field,
+    // because a rejection nobody can act on is a support ticket.
+    return result.ok ? c.json({ config: result.config }) : c.json({ problems: result.problems }, 400);
+  });
+
+  app.post('/api/rooms/:id/crews', async (c) => {
+    const guarded = requireRoom(c);
+    if (guarded instanceof Response) return guarded;
+    const result = saveCrew(await c.req.json().catch(() => null));
+    return result.ok ? c.json({ crew: result.crew }) : c.json({ problems: result.problems }, 400);
+  });
+  // --- END phase-13 config + crew routes ---
+
   app.get('/api/rooms/:id/workspace/tree', (c) => {
     const guarded = requireRoom(c);
     if (guarded instanceof Response) return guarded;
@@ -442,7 +477,7 @@ export function createServer(
   // Adding a page means adding its path here; that friction is intentional.
   // A room link is "/?room=…&token=…" (and now also "/room?…"), so "/"
   // serves the shell either way and the client decides which view to mount.
-  const PAGE_ROUTES = ['/', '/new', '/privacy', '/terms', '/security', '/room'] as const;
+  const PAGE_ROUTES = ['/', '/new', '/privacy', '/terms', '/security', '/room', '/configs'] as const;
   // Anchored to this module, NOT to process.cwd(). Before the monorepo move
   // the default was the cwd-relative 'apps/web/dist', which worked only because
   // every invocation path happened to run from the repo root. Under workspaces
@@ -762,6 +797,31 @@ export function createServer(
           return;
         }
         // --- END phase-12 fleet frames ---
+        // --- BEGIN phase-13 launch_crew frame ---
+        // Same driver semantics as spawn/stop above: a crew IS a spawn, several
+        // at once, and is exactly how a person will first meet the fleet's
+        // resource cap.
+        if (frame.kind === 'launch_crew') {
+          if (room.driverId !== null && !isDriver(room, participantId)) {
+            ws.send(
+              JSON.stringify({ kind: 'error', message: 'Only the driver can launch a crew.' }),
+            );
+            return;
+          }
+          const result = launchCrew({
+            runtime,
+            crewName: frame.crewName,
+            by: { participantId, displayName },
+          });
+          if (!result.ok) {
+            ws.send(JSON.stringify({ kind: 'error', message: result.reason }));
+            return;
+          }
+          runtime.broadcastFleet();
+          return;
+        }
+        // --- END phase-13 launch_crew frame ---
+
 
         // --- BEGIN phase-11 collaborative document frames ---
         // Deliberately NOT gated on the driver token, for every one of the
