@@ -401,13 +401,24 @@ export function translate(message: unknown): UnsequencedEvent[] {
   const m = message as Record<string, unknown>;
   const events: UnsequencedEvent[] = [];
 
+  // Phase 13, D4: a subagent is visible or it is a hole. `parent_tool_use_id`
+  // sits beside `message`, not inside it — verified against the installed SDK
+  // (coreTypes.d.ts: SDKAssistantMessage, SDKUserMessageContent) — and is
+  // REQUIRED there, `null` at the top level. It is never written onto the
+  // logged event as `null`: protocol v3's own doc comment makes absent MEAN
+  // "top level", so materialising a `null` default for every ordinary message
+  // would be a no-op that still touches the object — exactly the kind of
+  // quiet rewrite I3 rules out. Spread it in only when there is a real id.
   if (m['type'] === 'assistant') {
     const inner = m['message'] as { id?: string; content?: unknown[] } | undefined;
     const messageId = typeof inner?.id === 'string' ? inner.id : 'msg_unknown';
+    const parentToolUseId = m['parent_tool_use_id'];
+    const parent: { parentToolUseId?: string } =
+      typeof parentToolUseId === 'string' ? { parentToolUseId } : {};
     for (const block of inner?.content ?? []) {
       const b = block as Record<string, unknown>;
       if (b['type'] === 'text' && typeof b['text'] === 'string') {
-        events.push({ type: 'assistant_message', messageId, text: b['text'] });
+        events.push({ type: 'assistant_message', messageId, text: b['text'], ...parent });
       }
       if (b['type'] === 'tool_use') {
         events.push({
@@ -415,6 +426,7 @@ export function translate(message: unknown): UnsequencedEvent[] {
           toolUseId: String(b['id']),
           toolName: String(b['name']),
           input: b['input'],
+          ...parent,
         });
       }
     }
@@ -422,6 +434,9 @@ export function translate(message: unknown): UnsequencedEvent[] {
 
   if (m['type'] === 'user') {
     const inner = m['message'] as { content?: unknown[] } | undefined;
+    const parentToolUseId = m['parent_tool_use_id'];
+    const parent: { parentToolUseId?: string } =
+      typeof parentToolUseId === 'string' ? { parentToolUseId } : {};
     for (const block of inner?.content ?? []) {
       const b = block as Record<string, unknown>;
       if (b['type'] !== 'tool_result') continue;
@@ -431,6 +446,7 @@ export function translate(message: unknown): UnsequencedEvent[] {
         toolName: '',
         isError: b['is_error'] === true,
         output: String(b['content'] ?? '').slice(0, 4000),
+        ...parent,
       });
     }
   }

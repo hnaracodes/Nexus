@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { AlertTriangle, ChevronDown, ChevronRight, FileText, Terminal } from 'lucide-react';
 
 /**
@@ -40,6 +41,17 @@ export interface ToolCallRowProps {
   /** null while the tool is still running — no `tool_result` has arrived yet. */
   output: string | null;
   isError: boolean;
+  /**
+   * A subagent's own activity (phase 13), nested under the call that spawned
+   * it. Rendered UNCONDITIONALLY — never inside the `expanded &&` block below
+   * — because this row's own collapse toggle only hides ITS input/output.
+   * A nested tool call still sitting behind the room's approval gate (no
+   * `tool_result` yet, rendered "running" by the nested `ToolCallRow` itself)
+   * must stay visible even while this parent is collapsed; gating its
+   * visibility on the parent's expand state would make the gate invisible,
+   * which is the one failure this feature exists to prevent.
+   */
+  children?: ReactNode;
 }
 
 /**
@@ -48,7 +60,7 @@ export interface ToolCallRowProps {
  * styling — colour never carries that meaning alone, so it also gets an
  * `AlertTriangle` icon and the word "Error".
  */
-export function ToolCallRow({ toolName, input, output, isError }: ToolCallRowProps): JSX.Element {
+export function ToolCallRow({ toolName, input, output, isError, children }: ToolCallRowProps): JSX.Element {
   const [manuallyExpanded, setManuallyExpanded] = useState(false);
   const expanded = isError || manuallyExpanded;
   const Icon = MONO_TOOLS.has(toolName) ? Terminal : FileText;
@@ -105,6 +117,8 @@ export function ToolCallRow({ toolName, input, output, isError }: ToolCallRowPro
           )}
         </div>
       )}
+
+      {children}
     </div>
   );
 }
