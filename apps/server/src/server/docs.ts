@@ -204,16 +204,14 @@ function headsEqual(a: readonly string[], b: readonly string[]): boolean {
  * state machine to get wrong, and is exactly as correct: Automerge changes
  * merge the same way regardless of the envelope they arrive in.
  */
-export function encodeChangeBundle(changes: readonly Uint8Array[]): string {
-  const inner = JSON.stringify(changes.map((c) => Buffer.from(c).toString('base64')));
-  return Buffer.from(inner, 'utf8').toString('base64');
-}
+// Re-exported, not re-implemented. The definition moved to
+// `@nexus/protocol/docsync` because the browser client had independently
+// implemented a DIFFERENT format and neither side's tests crossed the
+// boundary to notice. Keeping the names exported here means this module's
+// existing tests and callers are unchanged.
+import { decodeChangeBundle, encodeChangeBundle } from '@nexus/protocol/docsync';
 
-export function decodeChangeBundle(payloadBase64: string): Uint8Array[] {
-  const inner = Buffer.from(payloadBase64, 'base64').toString('utf8');
-  const parsed = JSON.parse(inner) as string[];
-  return parsed.map((s) => new Uint8Array(Buffer.from(s, 'base64')));
-}
+export { decodeChangeBundle, encodeChangeBundle };
 
 export function createDocRegistry(emit: EmitFn, options: DocRegistryOptions = {}): DocRegistry {
   const flushDebounceMs = options.flushDebounceMs ?? DEFAULT_FLUSH_DEBOUNCE_MS;

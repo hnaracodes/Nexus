@@ -1,4 +1,5 @@
 import * as Automerge from '@automerge/automerge';
+import { decodeChangeBundle, encodeChangeBundle } from '@nexus/protocol/docsync';
 import type { ClientFrame, DocPresenceEntry, ServerFrame } from '@nexus/protocol/wire';
 
 /** The one shape every open document holds. Kept minimal on purpose: phase 11
@@ -13,7 +14,21 @@ type PresenceListener = (entries: DocPresenceEntry[]) => void;
 
 interface PathEntry {
   doc: Automerge.Doc<DocShape>;
-  syncState: Automerge.SyncState;
+  /**
+   * The heads this session has already handed to the server — everything at or
+   * behind these is known to be over there, so `getChangesSince` against them
+   * is exactly "what is new".
+   *
+   * Replaces an `Automerge.SyncState`. The official sync protocol earns its
+   * keep between peers who might each hold history the other lacks; here the
+   * server holds the one authoritative copy and relays to everyone, and the
+   * two sides MUST agree on an envelope. They did not: this client spoke the
+   * sync protocol while the server sent flat change bundles, both were fully
+   * tested against themselves, and collaborative editing was broken across the
+   * wire with every suite green. The format now lives in
+   * `@nexus/protocol/docsync` so there is only one of it.
+   */
+  lastSentHeads: Automerge.Heads;
   /**
    * Whether `doc_open` has actually been sent for this path. Tracked
    * separately from "does an entry exist in `paths`" because `onChange` /
@@ -95,7 +110,7 @@ export function createDocSession(send: (frame: ClientFrame) => void, selfId: str
         // update branch) — every other case receives "text" as an ordinary
         // key addition via sync, with no competing origin to conflict with.
         doc: Automerge.init<DocShape>(),
-        syncState: Automerge.initSyncState(),
+        lastSentHeads: [],
         opened: false,
         changeListeners: new Set(),
         presenceListeners: new Set(),
@@ -113,11 +128,12 @@ export function createDocSession(send: (frame: ClientFrame) => void, selfId: str
    *  sync message on every keystroke would defeat the point of a sync
    *  protocol over "just send the whole document". */
   function sync(path: string, entry: PathEntry): void {
-    const [nextSyncState, message] = Automerge.generateSyncMessage(entry.doc, entry.syncState);
-    entry.syncState = nextSyncState;
-    if (message !== null) {
-      send({ kind: 'doc_sync', path, payload: encodeMessage(message) });
-    }
+    const changes = Automerge.getChangesSince(entry.doc, entry.lastSentHeads);
+    // Nothing new to say. Common: every remote frame ends by calling this, and
+    // a receive leaves nothing outstanding.
+    if (changes.length === 0) return;
+    entry.lastSentHeads = Automerge.getHeads(entry.doc);
+    send({ kind: 'doc_sync', path, payload: encodeChangeBundle(changes) });
   }
 
   return {
@@ -249,13 +265,16 @@ export function createDocSession(send: (frame: ClientFrame) => void, selfId: str
           const entry = paths.get(frame.path);
           if (entry === undefined) return true;
           const previousText = readText(entry.doc);
-          const [nextDoc, nextSyncState] = Automerge.receiveSyncMessage(
+          const [nextDoc] = Automerge.applyChanges(
             entry.doc,
-            entry.syncState,
-            decodeMessage(frame.payload),
+            decodeChangeBundle(frame.payload),
           );
           entry.doc = nextDoc;
-          entry.syncState = nextSyncState;
+          // The server sent us what it had, and it already holds everything we
+          // had sent — so after applying, the two sides are level. Advancing
+          // the mark here is what stops `sync()` below from immediately
+          // shipping the remote changes straight back and feeding a loop.
+          entry.lastSentHeads = Automerge.getHeads(entry.doc);
           // Only notify when the visible text actually moved. A sync
           // message can be pure bookkeeping (a bloom-filter probe that
           // turns out to describe state both sides already agree on), and
@@ -316,15 +335,3 @@ function readText(doc: Automerge.Doc<DocShape>): string {
  * (not a Node-only `Buffer` shim), and are also stable Node 22 globals, so
  * this file works unchanged in the browser bundle and under vitest/jsdom.
  */
-function encodeMessage(message: Uint8Array): string {
-  let binary = '';
-  for (const byte of message) binary += String.fromCharCode(byte);
-  return btoa(binary);
-}
-
-function decodeMessage(payload: string): Uint8Array {
-  const binary = atob(payload);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-  return bytes;
-}
