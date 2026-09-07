@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import type { GithubRepoRef, NexusEvent } from '@nexus/protocol/events';
+import type { AgentId, GithubRepoRef, NexusEvent } from '@nexus/protocol/events';
 import { openLog } from '../log/event-log.js';
-import { reconstruct } from '../log/replay.js';
+import { projectFleet, reconstruct } from '../log/replay.js';
 import { restoreRoom } from './rooms.js';
 
 const DEFAULT_DATA_DIR = process.env['NEXUS_DATA_DIR'] ?? './data';
@@ -65,17 +65,38 @@ export function readRoomMetas(dataDir: string = DEFAULT_DATA_DIR): RoomMeta[] {
   return metas;
 }
 
+/**
+ * How many of ONE room's agents recovery will resume automatically.
+ *
+ * Deliberately a fixed number, not `fleet.ts`'s measured, spawn-time cap (plan
+ * D1: `os.totalmem()` / `os.freemem()` read at the moment a NEW agent is about
+ * to start). Recovery runs once, unconditionally, at boot — often long before
+ * anyone reconnects and the room is actually attached — so a memory reading
+ * taken here would describe a machine state that may no longer hold by the
+ * time it matters (the same "wrong moment" reasoning D3 uses for the approval
+ * timeout: measure at the moment that is actually relevant, not the moment
+ * that is merely convenient). What recovery CAN decide safely, once, is how
+ * many of one room's agents get to keep calling themselves "still running"
+ * going forward — a stable number here is more honest than a precise-looking
+ * measurement of a moment that will already be stale by the time anyone acts
+ * on it.
+ */
+export const DEFAULT_RECOVERY_AGENT_CAP = 6;
+
 export function recoverRooms(
   dataDir: string = DEFAULT_DATA_DIR,
-): { roomId: string; lastSeq: number; needsApiKey: true }[] {
-  const recovered: { roomId: string; lastSeq: number; needsApiKey: true }[] = [];
+  maxAgentsPerRoom: number = DEFAULT_RECOVERY_AGENT_CAP,
+): { roomId: string; lastSeq: number; needsApiKey: true; liveAgentIds: AgentId[] }[] {
+  const recovered: { roomId: string; lastSeq: number; needsApiKey: true; liveAgentIds: AgentId[] }[] =
+    [];
   for (const meta of readRoomMetas(dataDir)) {
     // One room's corrupt log or unsafe id must not take the rest of recovery
     // (and therefore server startup) down with it — mirrors the torn-write
     // tolerance in readRoomMetas above, just one level further in.
     try {
       const log = openLog(meta.roomId, dataDir);
-      const state = reconstruct(log.read());
+      const events = log.read();
+      const state = reconstruct(events);
       if (state === null) {
         // Reachable in normal operation: the sidecar is written before the
         // first room_created is committed, so a crash between the two leaves
@@ -107,6 +128,49 @@ export function recoverRooms(
         } as NexusEvent);
       }
 
+      // The fleet's counterpart to the driver-token branch above, same shape:
+      // never silently drop an agent the log says was running, and never
+      // silently restore more than the room can actually hold — record the
+      // decision in the log instead, so a log-only reader and what actually
+      // gets re-attached later never disagree (I3). Unlike the driver seat,
+      // resuming a live agent is NOT inherently wrong — attachAgent already
+      // recreates the primary agent this way on every restart, agentId
+      // included, and that has always been correct (I1) — so an agent within
+      // the cap gets no synthetic event at all; it stays exactly as "still
+      // running" as the log already said, and a later attach (ws.ts, on
+      // demand) is a resumption, not a discrepancy. Only the agents THIS
+      // room cannot resume need their fate written down now: recovery is the
+      // one place a room's whole fleet is ever considered at once, so if this
+      // is the moment that declines to bring an agent back, that decision has
+      // to be on the record or nothing ever will be.
+      const fleet = projectFleet(events);
+      const live = fleet.filter((entry) => !entry.stopped);
+      const resumed = live.slice(0, maxAgentsPerRoom);
+      const overCap = live.slice(maxAgentsPerRoom);
+
+      if (overCap.length > 0) {
+        console.log(
+          `room ${meta.roomId}: ${live.length} agents were running when the server stopped; ` +
+            `only ${maxAgentsPerRoom} will resume. Not resuming: ${overCap
+              .map((entry) => entry.agentId)
+              .join(', ')}`,
+        );
+      }
+
+      for (const entry of overCap) {
+        lastSeq += 1;
+        log.append({
+          seq: lastSeq,
+          ts: new Date().toISOString(),
+          roomId: meta.roomId,
+          type: 'agent_stopped',
+          agentId: entry.agentId,
+          reason: 'capacity_exceeded',
+          participantId: null,
+          stoppedByName: null,
+        } as NexusEvent);
+      }
+
       // Put the room back in the live registry under its ORIGINAL id and
       // token, or the recovery is cosmetic: authorize() only reads that
       // registry, so the original link would still be refused and nobody
@@ -124,7 +188,12 @@ export function recoverRooms(
         // without asking the human to reconnect GitHub.
         github: meta.github ?? null,
       });
-      recovered.push({ roomId: meta.roomId, lastSeq, needsApiKey: true });
+      recovered.push({
+        roomId: meta.roomId,
+        lastSeq,
+        needsApiKey: true,
+        liveAgentIds: resumed.map((entry) => entry.agentId),
+      });
     } catch (error) {
       console.log(`failed to recover room ${meta.roomId}: ${error}`);
       continue;
