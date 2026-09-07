@@ -450,6 +450,68 @@ so "done" always means *observed*, never *compiled*.
 
 Suite counts are the honest health metric: **server / web / desktop**.
 
+### 2026-09-07 — the fleet, crews, and a canvas that runs
+
+`535 / 509 / 10` · commits `8ecaa98`, `abe40a5`, `b24fb71`, `72a5699`, `41bb905`,
+`e37334e`, `9f4d3d4`
+
+**Phase 12 — N agents, and approval that survives them.** The load-bearing
+piece is not the fleet, it is the approval queue. `createPermissionGate` armed
+its 120-second timer at request CREATION. With one agent that is the same
+instant a human could see it, because there is only ever one card. With a fleet
+and a queue, a request can expire while still behind others — and the log would
+record `via: "timeout"`, which reads as *the room declined to answer*. It didn't;
+it never saw the question. The clock now starts at **visibility**, and an
+unsurfaced request logs nothing at all: no card existed, no clock ran, and a
+`permission_decided` for it would claim a human decided something they were
+never shown.
+
+**Phase 11 was broken across the wire, and nothing noticed.** The server encoded
+flat Automerge change bundles; the browser spoke Automerge's sync protocol. Two
+incompatible formats. Every test passed because no test crossed the boundary —
+each side proved it could talk to itself. The format now lives in
+`@nexus/protocol/docsync` and both sides import it. The new test deliberately
+uses the *server's* codec in both directions, because one that used the client's
+would pass against exactly this bug.
+
+**Phase 13 — configs are validated on read as well as write.** A stored config
+is executable input on the way *out* too. `oauth.ts` introduced no new
+server-wide secret, reusing github.ts's credentials via a *static* import so the
+existing delete-from-`process.env` scrub still fires — which matters because
+`startAgent` spawns the SDK with `env: { ...process.env }` and a participant can
+ask an agent to run `printenv`.
+
+**Phase 14 — the canvas is a view over the orchestration model, not a second
+one.** Nodes spawn through the fleet manager and prompt through the ordinary
+path, so each node's gate binds to the room's shared approval queue with no
+extra code. A graph is not a way to pre-approve: twelve nodes is twelve agents
+that will each ask. Cycles are refused at *save* time, because refusing at run
+time means a saved workflow that can never run, found by a user who already drew
+it. It renders inside the room rather than on its own page — a standalone page
+has no live `fleet` frame and could only draw a graph that wasn't running.
+
+**Two more security defects, both found by wiring rather than by reading:**
+
+- `ConfigLibrary.tsx` called unscoped `/api/configs`, reasoning correctly that a
+  config is a user asset rather than room state. Right about the data, wrong
+  about the credential — an unscoped POST is an unauthenticated write endpoint
+  for executable input.
+- A `Promise`-shaped visibility seam claimed in its own comment to be
+  "byte-identical" to the old behaviour. It wasn't: a microtask moved
+  `permission_requested` out of `request()`, and the socket suite went flaky.
+  Diagnosed by probing ordering directly rather than re-rolling the suite.
+
+**What this session actually taught.** Six defects of one shape — green on both
+sides, broken in the middle, or asserted in a comment and enforced by nothing.
+The dead Gemini guard, `mcp__attacker__Read`, the CRDT format split, the
+timeout-at-creation clock, the async seam, the unscoped config route. None was
+findable by reading. All six were findable by running.
+
+And on process: the fan-out builds modules well and *reliably* fails at the one
+unit touching `ws.ts`, `index.ts` and `App.tsx` at once — it stalled on every
+attempt in two consecutive phases. Dropping it took phase 13 from 2.4 hours and
+a dead agent to 33 minutes and zero errors, with the wiring done by hand.
+
 ### 2026-09-06 — protocol v3, three providers, and a writable room
 
 `441 / 438 / 10` · commits `a11e546`, `8730248`, `72ac6fa`, `35616e5`, `b8121fa`, `b3f60a0`
