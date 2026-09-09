@@ -349,6 +349,20 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
       canUseTool: (async (toolName, input, options): Promise<PermissionResult> => {
         // options: { signal: AbortSignal; suggestions?: PermissionUpdate[];
         //            blockedPath?: string; decisionReason?: string; toolUseID?: string }
+        // The sandbox runs here TOO, and this is not belt-and-braces.
+        //
+        // This repo's whole reason for keeping two gate seams is that the SDK
+        // decides which one it honours, and it has changed its mind before —
+        // `canUseTool` was silently dead in production for a whole phase. A
+        // sandbox check on only the hook would therefore be a boundary that
+        // holds exactly as long as the SDK keeps preferring the hook, which is
+        // not a property anyone can rely on. Both seams enforce it, for the
+        // same reason both route through `decide`.
+        const sandboxed = sandboxDenial(input, room.cwd);
+        if (sandboxed !== null) {
+          return { behavior: 'deny', message: sandboxed };
+        }
+
         // Routed through `decide`, not `gate.request`, so that if a future SDK
         // honours BOTH seams the room is still asked exactly once per call.
         const decision = await decide(
