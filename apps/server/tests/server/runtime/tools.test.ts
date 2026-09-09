@@ -189,11 +189,19 @@ describe('read_file', () => {
     expect(result.output).toBe('hello world');
   });
 
-  it('is refused by the jail for a path that escapes the workspace root', async () => {
+  it('is refused for a path that escapes the workspace root', async () => {
     // Ten levels of `..` clears any tmp-dir depth and lands exactly on
-    // `/etc/passwd`, a real file — so this proves the JAIL refused it
-    // (`WorkspacePathError` 'outside the workspace'), not merely that a
-    // relative guess happened not to exist.
+    // `/etc/passwd`, a real file — so this proves the path was REFUSED, not
+    // merely that a relative guess happened not to exist.
+    //
+    // Phase 15 changed WHICH layer refuses it, and the assertion moved with
+    // that. The sandbox (`sandbox.ts`) now runs ahead of the gate and rejects
+    // it first, so the message is its "outside the room", not the workspace
+    // jail's "outside the workspace". The jail is still there and still
+    // correct — it is now the second of two nets rather than the first, and
+    // this test deliberately asserts on the boundary being enforced rather
+    // than on which net caught it, so a future re-ordering of the two does not
+    // read as a regression.
     const result = await dispatchToolCall({
       tools: buildNexusTools(room),
       gate: allowGate(),
@@ -206,7 +214,7 @@ describe('read_file', () => {
       ctx: ctx(),
     });
     expect(result.isError).toBe(true);
-    expect(result.output.toLowerCase()).toContain('outside the workspace');
+    expect(result.output.toLowerCase()).toMatch(/outside the (room|workspace)/);
   });
 });
 

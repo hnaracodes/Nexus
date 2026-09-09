@@ -99,7 +99,14 @@ describe('the two gate seams share one room decision', () => {
     const signal = new AbortController().signal;
 
     void h.hook({ tool_name: 'Bash', tool_input: { command: 'ls' } }, 'tu_a', { signal });
-    void h.hook({ tool_name: 'Bash', tool_input: { command: 'rm -rf /' } }, 'tu_b', { signal });
+    // NOTE (phase 15): the example here used to be `rm -rf /`. The sandbox now
+    // refuses that outright, BEFORE the room is asked, because `/` is outside
+    // the room — which is the correct and stronger behaviour but makes it
+    // useless for demonstrating that the room gets asked at all. The example is
+    // now dangerous AND in-room, which is exactly the case four-eyes approval
+    // exists for: the sandbox governs where the agent may act, the room governs
+    // what it may do there.
+    void h.hook({ tool_name: 'Bash', tool_input: { command: 'rm -rf ./build' } }, 'tu_b', { signal });
     await settle();
 
     expect(asked(h.events).length).toBe(2);

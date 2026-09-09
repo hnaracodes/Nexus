@@ -8,6 +8,8 @@ import { createPermissionGate } from './permissions.js';
 import type { AgentRuntime, Interrupter, ModelChoice } from './runtime/types.js';
 import type { Decision, PermissionGate, RequestVisibility } from './permissions.js';
 import { createTurnGate } from './turnGate.js';
+import { checkCommand, checkPath } from './sandbox.js';
+import { buildAgentEnv } from './subprocessEnv.js';
 import type { Batch, PendingPrompt } from './turnGate.js';
 import { toUserMessage } from './errors.js';
 
@@ -91,6 +93,33 @@ const ROOM_SYSTEM_PROMPT = [
  */
 type PromptMessage =
   Parameters<typeof query>[0]['prompt'] extends string | AsyncIterable<infer M> ? M : never;
+
+
+/**
+ * Returns the refusal reason when a tool input names a path or command the
+ * sandbox forbids, or null when it is fine.
+ *
+ * Checks `file_path` as well as `path` because the Claude SDK's built-in tools
+ * use the former. Fails CLOSED on the key names this system actually uses to
+ * name a filesystem target: a tool that invents a third spelling is a gap, and
+ * saying so here is more useful than implying completeness.
+ */
+function sandboxDenial(input: unknown, roomCwd: string): string | null {
+  if (typeof input !== 'object' || input === null) return null;
+  const record = input as Record<string, unknown>;
+  for (const key of ['path', 'file_path', 'notebook_path']) {
+    const value = record[key];
+    if (typeof value !== 'string') continue;
+    const verdict = checkPath(value, roomCwd);
+    if (!verdict.allowed) return verdict.reason;
+  }
+  const command = record['command'];
+  if (typeof command === 'string') {
+    const verdict = checkCommand(command, roomCwd);
+    if (!verdict.allowed) return verdict.reason;
+  }
+  return null;
+}
 
 export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): AgentHandle {
   const runQuery = deps.runQuery ?? query;
@@ -229,7 +258,18 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
       ...(githubTools === null ? {} : { mcpServers: { nexus_github: githubTools } }),
       // The key is read here and nowhere else. It is never stored on anything
       // we serialize, never logged, never sent over the wire (I4).
-      env: { ...process.env, ANTHROPIC_API_KEY: room.getApiKey() },
+      /**
+       * An ALLOW-LIST, not the whole server environment (phase 15).
+       *
+       * This line used to be `{ ...process.env, ANTHROPIC_API_KEY: ... }`,
+       * which handed the agent every variable this process holds — and a
+       * participant can ask the agent to run `printenv`. The mitigation until
+       * now was `github.ts` deleting its own secrets at import, which covers
+       * exactly the secrets somebody remembered to delete. `buildAgentEnv`
+       * inverts that: the next deployment secret is dropped because it was
+       * never allowed, not because it matched a pattern.
+       */
+      env: buildAgentEnv(process.env, room.getApiKey()),
       /**
        * THE GATE. Not `canUseTool` — a PreToolUse hook.
        *
@@ -264,6 +304,31 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
                     ? ((hookInput as { tool_name: string }).tool_name)
                     : 'unknown';
                 const toolInput = (hookInput as { tool_input?: unknown }).tool_input;
+
+                /**
+                 * THE SANDBOX RUNS BEFORE THE ROOM IS ASKED (phase 15), for
+                 * the same reason it does in `dispatchToolCall`: a denied path
+                 * must produce no card and no vote, because a boundary four
+                 * people can agree to cross is not a boundary.
+                 *
+                 * The SDK's own tools spell their target `file_path`, not
+                 * `path` — Read, Write and Edit all use it — so both spellings
+                 * are checked. Nexus's provider-neutral tools use `path` and
+                 * are covered at the other choke point; a tool reachable
+                 * through both is checked twice, which is harmless and cheaper
+                 * than reasoning about which one applies.
+                 */
+                const sandboxed = sandboxDenial(toolInput, room.cwd);
+                if (sandboxed !== null) {
+                  return {
+                    hookSpecificOutput: {
+                      hookEventName: 'PreToolUse',
+                      permissionDecision: 'deny',
+                      permissionDecisionReason: sandboxed,
+                    },
+                  };
+                }
+
                 const decision = await decide(toolUseId, toolName, toolInput, hookOptions.signal);
                 return {
                   hookSpecificOutput: {

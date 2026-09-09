@@ -49,7 +49,18 @@ const stubQuery = (() => ({
 const attached: ReturnType<typeof attachRoom>[] = [];
 
 function attach(cwd?: string): ReturnType<typeof attachRoom> {
-  const room = createRoom({ apiKey: KEY, cwd: cwd ?? '/tmp/nexus-workflow-test-fixture', repoUrl: null });
+  // A REAL directory, not a plausible-looking string. The default used to be
+  // the hard-coded `/tmp/nexus-workflow-test-fixture`, which never existed —
+  // harmless while nothing resolved it, and caught the moment phase 15's
+  // sandbox did: it fails CLOSED on a room root it cannot realpath, which is
+  // the correct answer for a room whose working directory is gone, and which
+  // turned every node's `write_file` into a refusal before the gate was ever
+  // asked. The fixture was wrong, not the sandbox.
+  const room = createRoom({
+    apiKey: KEY,
+    cwd: cwd ?? mkdtempSync(join(tmpdir(), 'nexus-workflow-')),
+    repoUrl: null,
+  });
   const runtime = attachRoom(room, new MemorySink(), { runQuery: stubQuery });
   attached.push(runtime);
   return runtime;

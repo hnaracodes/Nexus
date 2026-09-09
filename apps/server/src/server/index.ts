@@ -45,6 +45,7 @@ import {
 import type { AgentDeps } from './agent.js';
 import { attachRoom, getRuntime, resolveParticipantId } from './ws.js';
 import { spawnAgent, stopAgent } from './fleet.js';
+import { securityHeaders } from './hardening.js';
 import { launchCrew } from './crews.js';
 import { hasCycle, startWorkflowRun } from './workflowRunner.js';
 import { deleteConfig, deleteCrew, readConfigs, readCrew, readCrews, saveConfig, saveCrew } from './configStore.js';
@@ -118,6 +119,18 @@ export function createServer(
   opts: { agentDeps?: AgentDeps } = {},
 ): { app: Hono; server: Server } {
   const app = new Hono();
+
+  /**
+   * Registered FIRST, so it covers every route including the 404s and the
+   * static bundle (phase 15).
+   *
+   * The highest-value header here is `Referrer-Policy: no-referrer`, and it is
+   * worth knowing why in this app specifically: the room URL contains the room
+   * TOKEN, which is the product's entire credential (CLAUDE.md §11). A referrer
+   * leaking to any third-party resource would be a room compromise, not a
+   * privacy nit.
+   */
+  app.use('*', securityHeaders());
 
   // A room link is "/?room=…&token=…", and the token IS the credential. Without
   // this, following any outbound link from a room page — including the GitHub

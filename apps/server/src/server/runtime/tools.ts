@@ -52,6 +52,7 @@ import {
 } from '../workspace.js';
 import type { TreeEntry } from '../workspace.js';
 import { isAutoApproved } from './autoApprove.js';
+import { checkCommand, checkPath } from '../sandbox.js';
 
 export type EmitFn = (event: UnsequencedEvent) => void;
 
@@ -616,6 +617,35 @@ export interface ToolCallResult {
  * `tool_result`. Both emitted events carry `toolUseId` and `toolName`, so the
  * transcript lines up with Claude's regardless of which provider is running.
  */
+
+/**
+ * The sandbox check, applied to a tool call's input before anything else can
+ * act on it (phase 15).
+ *
+ * Reads `path` and `command` off the input GENERICALLY rather than per tool,
+ * so a tool added later is covered the day it is written rather than the day
+ * someone remembers to add it here. That fails CLOSED for the two key names
+ * this system actually uses to name a filesystem target, which is the right
+ * direction for a security check: a new tool that takes a `path` is sandboxed
+ * automatically, and one that invents a third spelling is a gap this comment
+ * exists to make visible.
+ */
+function sandboxVerdict(input: unknown, roomCwd: string): { allowed: true } | { allowed: false; reason: string } {
+  if (typeof input !== 'object' || input === null) return { allowed: true };
+  const record = input as Record<string, unknown>;
+  const path = record['path'];
+  if (typeof path === 'string') {
+    const verdict = checkPath(path, roomCwd);
+    if (!verdict.allowed) return verdict;
+  }
+  const command = record['command'];
+  if (typeof command === 'string') {
+    const verdict = checkCommand(command, roomCwd);
+    if (!verdict.allowed) return verdict;
+  }
+  return { allowed: true };
+}
+
 export async function dispatchToolCall(args: {
   tools: readonly NexusTool[];
   gate: PermissionGate;
@@ -642,6 +672,25 @@ export async function dispatchToolCall(args: {
     // Claude survives calling a tool it does not have. Never reaches the
     // gate: there is nothing to approve for a tool that does not exist.
     return finish(`Unknown tool "${call.name}". No such tool is available in this room.`, true);
+  }
+
+  /**
+   * THE SANDBOX RUNS BEFORE THE GATE, and that ordering is the whole phase.
+   *
+   * A denied path is refused WITHOUT the room ever being asked, so there is no
+   * card to approve and no vote to win. If this check sat after `gate.request`,
+   * four people could agree to read `~/.ssh/id_rsa` and the system would let
+   * them — which is not a sandbox, it is a suggestion. The room's authority is
+   * over what the agent may do INSIDE the boundary; it does not extend to
+   * moving the boundary.
+   *
+   * It is also why this is not simply another `AUTO_APPROVE`-style predicate:
+   * auto-approval decides who answers, and this decides whether the question
+   * may be asked at all.
+   */
+  const sandbox = sandboxVerdict(call.input, ctx.room.cwd);
+  if (!sandbox.allowed) {
+    return finish(sandbox.reason, true);
   }
 
   const decision: Decision = await gate.request(call.name, call.input, signal);
