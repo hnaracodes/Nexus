@@ -255,16 +255,57 @@ export function checkCommand(command: string, roomCwd: string): SandboxVerdict {
     }
   }
 
+  /**
+   * A `..` SEGMENT ANYWHERE IS REFUSED, and this is the rule that makes the
+   * boundary hold rather than merely the sensitive-name list.
+   *
+   * The first version of this function only resolved tokens beginning with `/`
+   * or `~`, which left the most ordinary escape of all wide open. Verified by
+   * execution against a real shell, from a real room directory:
+   *
+   *   cat ../<sibling>/treasure.txt          -> ALLOWED, and it leaked
+   *   cd .. && cd <sibling> && cat *         -> ALLOWED, and it leaked
+   *
+   * That is not an obfuscation trick; it is how anyone would naturally reach a
+   * neighbouring directory. Rule 2 — the actual room boundary, not the in-room
+   * deny-list — was not being enforced for `run_command` at all.
+   *
+   * A command legitimately scoped to the room has no reason to traverse
+   * upwards, so refusing `..` outright costs nothing real and closes both
+   * demonstrated escapes. Checked on the raw string, not just on whitespace
+   * tokens, so `cd ..&&cat x` and `"../x"` are caught too.
+   */
+  if (/(^|[^A-Za-z0-9_])\.\.([^A-Za-z0-9_]|$)/.test(command)) {
+    return deny('Command traverses out of the room with "..".');
+  }
+
   for (const rawToken of command.split(/\s+/)) {
     const token = stripQuotes(rawToken);
-    if (token.startsWith('/') || token.startsWith('~')) {
-      const expanded = expandTilde(token);
-      const verdict = checkPath(expanded, roomCwd);
-      if (!verdict.allowed) {
-        return deny(`Command references a path outside the sandbox ("${token}"): ${verdict.reason}`);
-      }
+    // Every token that looks like a path is resolved, not only absolute and
+    // tilde ones — a bare `subdir/file` is a path too, and resolving it costs
+    // nothing when it is legitimately inside the room.
+    const looksLikePath = token.startsWith('/') || token.startsWith('~') || token.includes('/');
+    if (!looksLikePath) continue;
+    const expanded = expandTilde(token);
+    const verdict = checkPath(expanded, roomCwd);
+    if (!verdict.allowed) {
+      return deny(`Command references a path outside the sandbox ("${token}"): ${verdict.reason}`);
     }
   }
 
+  /**
+   * WHAT THIS STILL DOES NOT DO, stated plainly because the phase's headline
+   * claim must not outrun it: this is a lexical scan of an arbitrary shell
+   * string, and a shell can reach a file without naming it — through a
+   * variable, a glob that matches a dotfile, a here-doc, base64, or a script it
+   * writes first. Those remain reachable for files INSIDE the room.
+   *
+   * What holds: `run_command` is never auto-approved, so the room must vote on
+   * every one of these before it runs; and the paths the room's own file tools
+   * touch go through `checkPath`, which is a real resolution rather than a
+   * scan. The durable fix is to execute the command against a restricted view
+   * of the filesystem rather than to keep growing this function — see the
+   * session notes.
+   */
   return ALLOW;
 }

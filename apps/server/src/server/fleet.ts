@@ -33,6 +33,13 @@ export interface FleetRuntime {
   attachAgent(agentId: AgentId, deps?: AgentDeps, provider?: AgentProvider): AgentHandle;
   commitAs(agentId: AgentId, event: UnsequencedEvent): NexusEvent;
   sink: { read(): NexusEvent[] };
+  /**
+   * The room's shared approval queue, when the runtime has one.
+   *
+   * Optional so the many tests that build a minimal `FleetRuntime` by hand keep
+   * working, and because a room without a queue simply has nothing to drain.
+   */
+  approvals?: { dropAgentBacklog(agentId: AgentId): void };
 }
 
 /* -------------------------------------------------------------------------
@@ -219,6 +226,16 @@ export function stopAgent(args: StopAgentArgs): StopAgentResult {
   // lifecycle, not by this call. Settling explicitly here means a pending
   // approval never outlives its agent regardless of what a given provider's
   // `stop()` does or does not cascade into (landmine C, phase-12-fleet.md).
+  // FIRST, drop anything this agent still has QUEUED but never surfaced.
+  //
+  // Without this, the loop below releases a visible request, the queue
+  // immediately promotes this same agent's next one into the freed slot —
+  // arming a 120-second timer and emitting `permission_requested` — and the
+  // very next iteration denies it. The log would show the room being asked a
+  // question it was never shown, one tick before it was answered. Found by the
+  // final audit, reproduced by execution.
+  runtime.approvals?.dropAgentBacklog(agentId);
+
   for (const requestId of handle.gate.pendingIds()) {
     handle.gate.resolve(requestId, {
       decision: 'deny',

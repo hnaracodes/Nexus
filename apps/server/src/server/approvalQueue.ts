@@ -68,6 +68,19 @@ export interface ApprovalQueue {
    * actually surfaced the request it is releasing.
    */
   release(requestId: string): void;
+  /**
+   * Drop every ticket this agent still has WAITING, without surfacing any of
+   * them and without promoting anything into their place.
+   *
+   * Exists because `stopAgent` settles a stopped agent's pending requests one
+   * at a time, and releasing a VISIBLE one frees a slot the queue immediately
+   * fills — from the same agent's backlog. That armed a fresh 120-second timer
+   * and emitted `permission_requested` for a request nobody would ever see,
+   * one tick before it was denied as aborted. The log then claimed the room was
+   * asked a question it was never shown, which is precisely the confusion the
+   * visibility clock exists to prevent (D3). Call this FIRST, then settle.
+   */
+  dropAgentBacklog(agentId: AgentId): void;
   /** Tickets currently visible — i.e., admitted, clocks running — oldest first. */
   visible(): QueuedApproval[];
   /** How many tickets are behind the visible set, waiting for a slot. */
@@ -113,6 +126,15 @@ export function createApprovalQueue(options: { capacity?: number } = {}): Approv
         return;
       }
       backlog.push({ ...ticket, resolveAdmit: surface });
+    },
+
+    dropAgentBacklog(agentId: AgentId): void {
+      for (let i = backlog.length - 1; i >= 0; i -= 1) {
+        // Spliced without calling `resolveAdmit` — surfacing it is exactly what
+        // must not happen. The gate settles the underlying promise itself, via
+        // the abort/deny path that follows in `stopAgent`.
+        if (backlog[i]?.agentId === agentId) backlog.splice(i, 1);
+      }
     },
 
     release(requestId: string): void {

@@ -1,5 +1,6 @@
 import type { Server } from 'node:http';
 import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { createAdaptorServer } from '@hono/node-server';
 import { getConnInfo } from '@hono/node-server/conninfo';
 import { serveStatic } from '@hono/node-server/serve-static';
@@ -114,6 +115,10 @@ function publicOrigin(c: Context): string {
 function githubCallbackUrl(c: Context): string {
   return `${publicOrigin(c)}/api/github/callback`;
 }
+
+/** The data root every room-scoped store hangs off. Mirrors `recovery.ts`'s
+ *  own default so a room's configs land beside its log and its meta sidecar. */
+const DATA_DIR_ROOT = process.env['NEXUS_DATA_DIR'] ?? './data';
 
 export function createServer(
   opts: { agentDeps?: AgentDeps } = {},
@@ -357,6 +362,26 @@ export function createServer(
     return c.json({ error: 'Could not read the workspace.' }, 500);
   }
 
+  /**
+   * Where THIS room's saved configs and crews live.
+   *
+   * The routes below were originally guarded by `requireRoom` alone, which
+   * proves the caller holds a valid token for SOME room — while the store
+   * itself was process-global. A participant in room A could therefore read,
+   * overwrite or delete room B's configs, and a config is executable input
+   * that another room will later launch. Authentication without scoping is not
+   * authorization.
+   *
+   * Namespacing by room id is the safe default while accounts are deferred
+   * (CLAUDE.md §7). It does cost the "share a crew between rooms" half of
+   * phase 13's demo bar — that is a genuine, deliberate narrowing, and sharing
+   * belongs with the account identity that can express WHO may share, rather
+   * than with "anyone holding any room token".
+   */
+  function roomScope(roomId: string): string {
+    return join(DATA_DIR_ROOT, 'roomdata', roomId);
+  }
+
   // --- BEGIN phase-13 config + crew routes ---
   // Scoped under a room and guarded by `requireRoom`, which calls
   // `authorize()`. Configs are not strictly room state — they are user assets
@@ -369,13 +394,14 @@ export function createServer(
   app.get('/api/rooms/:id/configs', (c) => {
     const guarded = requireRoom(c);
     if (guarded instanceof Response) return guarded;
-    return c.json({ configs: readConfigs(), crews: readCrews() });
+    const scope = roomScope(guarded.room.id);
+    return c.json({ configs: readConfigs(scope), crews: readCrews(scope) });
   });
 
   app.post('/api/rooms/:id/configs', async (c) => {
     const guarded = requireRoom(c);
     if (guarded instanceof Response) return guarded;
-    const result = saveConfig(await c.req.json().catch(() => null));
+    const result = saveConfig(await c.req.json().catch(() => null), roomScope(guarded.room.id));
     // `problems` is written to be read by a human and is surfaced verbatim —
     // `agentConfig.ts` goes to real trouble to name the offending field,
     // because a rejection nobody can act on is a support ticket.
@@ -399,14 +425,14 @@ export function createServer(
       return c.json({ problems: ['This workflow has a cycle, so it could never finish.'] }, 400);
     }
 
-    const result = saveCrew(body);
+    const result = saveCrew(body, roomScope(guarded.room.id));
     return result.ok ? c.json({ crew: result.crew }) : c.json({ problems: result.problems }, 400);
   });
 
   app.delete('/api/rooms/:id/configs/:name', (c) => {
     const guarded = requireRoom(c);
     if (guarded instanceof Response) return guarded;
-    return deleteConfig(c.req.param('name') ?? '')
+    return deleteConfig(c.req.param('name') ?? '', roomScope(guarded.room.id))
       ? c.json({ deleted: true })
       : c.json({ error: 'No such config.' }, 404);
   });
@@ -414,7 +440,7 @@ export function createServer(
   app.delete('/api/rooms/:id/crews/:name', (c) => {
     const guarded = requireRoom(c);
     if (guarded instanceof Response) return guarded;
-    return deleteCrew(c.req.param('name') ?? '')
+    return deleteCrew(c.req.param('name') ?? '', roomScope(guarded.room.id))
       ? c.json({ deleted: true })
       : c.json({ error: 'No such crew.' }, 404);
   });
@@ -434,7 +460,7 @@ export function createServer(
     const runtime = getRuntime(guarded.room.id);
     if (runtime === undefined) return c.json({ error: 'That room is not attached.' }, 409);
 
-    const crew = readCrew(c.req.param('name') ?? '');
+    const crew = readCrew(c.req.param('name') ?? '', roomScope(guarded.room.id));
     if (crew === null) return c.json({ error: 'No such crew.' }, 404);
     if (crew.graph === undefined) {
       return c.json({ error: 'That crew has no workflow graph. Launch it as a crew instead.' }, 400);
@@ -901,6 +927,10 @@ export function createServer(
             runtime,
             crewName: frame.crewName,
             by: { participantId, displayName },
+            // Same room-scoped store the REST routes use — a crew launched
+            // over the socket must resolve to the same configs a person just
+            // saved over HTTP, and must not reach another room's.
+            dataDir: join(DATA_DIR_ROOT, 'roomdata', room.id),
           });
           if (!result.ok) {
             ws.send(JSON.stringify({ kind: 'error', message: result.reason }));

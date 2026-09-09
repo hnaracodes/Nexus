@@ -250,6 +250,11 @@ export function attachRoom(
     const entries = docPresence.get(path);
     if (entries === undefined || !entries.has(participantId)) return null;
     entries.delete(participantId);
+      // Prune the path entry once its last cursor is gone, mirroring
+      // `docSubscribers` beside it. Without this the map only ever grows: a
+      // room that opens forty files over an hour keeps forty empty Maps
+      // forever. Found by the final audit.
+      if (entries.size === 0) docPresence.delete(path);
     return [...entries.values()];
   }
 
