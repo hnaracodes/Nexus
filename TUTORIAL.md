@@ -450,6 +450,54 @@ so "done" always means *observed*, never *compiled*.
 
 Suite counts are the honest health metric: **server / web / desktop**.
 
+### 2026-09-09 — the sandbox, and an audit that found a hole an hour old
+
+`575 / 509 / 10` · commits `c5dec12`, `a5823f8`, `f81991f`, `fb3537d`
+
+**Phase 15 gave the room its first real boundary.** CLAUDE.md §11 had said since
+phase 0 that *"whatever the room can do, every participant can do — read `.env`,
+use git credentials, run commands."* That sentence is now wrong, and §11 has
+been rewritten rather than left flattering.
+
+The ordering is the whole phase: **the sandbox runs before the gate**, at all
+three seams. A denied path produces no card and no vote. If it ran after, four
+people could agree to read `~/.ssh/id_rsa` and the system would comply — which
+is not a sandbox, it is a suggestion. The room's authority is over what an agent
+may do *inside* the boundary; it does not extend to moving it.
+
+The subprocess environment went from `{ ...process.env }` — everything this
+process holds, with `printenv` one prompt away — to an allow-list of three keys.
+A made-up `TOTALLY_NOVEL_CREDENTIAL` is dropped because it was never allowed,
+which is the property a deny-list can never have.
+
+**Then the audit found a boundary break in code committed an hour earlier.**
+`checkCommand` only resolved tokens starting with `/` or `~`, so an ordinary
+relative path walked straight out:
+
+    cat ../<sibling>/treasure.txt      -> ALLOWED, and it leaked
+
+Not obfuscation — it is how anyone reaches a neighbouring directory. Rule 2, the
+actual room boundary, was not enforced for `run_command` at all, while the phase
+was being reported as done and *proven by execution*. The proof had been real
+and the coverage had not.
+
+The audit's other critical was mine too: the config routes were gated on
+`requireRoom`, which proves the caller holds a token for **some** room, while
+the store was process-global — so room A could overwrite room B's executable
+configs. **Authentication without scoping is not authorization**, which is the
+same class of error this session flagged in agent work twice.
+
+**What the audit could not break**, having tried: `checkPath`'s symlink
+resolution, its case-folding, the tool-input field coverage, and
+`buildAgentEnv`'s allow-list.
+
+**The honest limit, now written in the file rather than implied:** `checkCommand`
+is a lexical scan of an arbitrary shell string and cannot enumerate what a shell
+will read. A variable, a here-doc, a glob or a script the agent writes first can
+still reach an in-room file. `run_command` is never auto-approved, so the room
+votes on every one. The durable fix is executing against a restricted filesystem
+view, not a bigger regex.
+
 ### 2026-09-07 — the fleet, crews, and a canvas that runs
 
 `535 / 509 / 10` · commits `8ecaa98`, `abe40a5`, `b24fb71`, `72a5699`, `41bb905`,
