@@ -41,13 +41,29 @@ COPY package.json package-lock.json ./
 COPY packages/protocol/package.json ./packages/protocol/
 COPY apps/server/package.json ./apps/server/
 COPY apps/web/package.json ./apps/web/
-# Installs the full workspace minus devDependencies. That pulls in the web app's
-# runtime deps, which the server never loads: measured at ~50MB of a 729MB image
-# (lucide-react alone is 41MB) against a 179MB node_modules. Deliberate — a
+# Installs ONLY the workspaces the server actually needs, minus devDependencies.
+#
+# This used to install the whole workspace, with a comment explaining that a
 # filtered `--workspace=` install risks the @nexus/protocol symlink not being
-# created, and a server that fails at boot on an unresolvable import costs more
-# than 7% of an image. Revisit only with the smoke test in hand.
-RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+# created — "a server that fails at boot on an unresolvable import costs more
+# than 7% of an image. Revisit only with the smoke test in hand."
+#
+# That caution was right to demand evidence, and the evidence now exists. Built
+# both variants and ran `scripts/smoke-ws.mjs` against each:
+#   full install: 841 MB image, 262 MB node_modules, SMOKE OK
+#   filtered:     782 MB image, 210 MB node_modules, SMOKE OK
+# and checked the exact thing the warning named — `node_modules/@nexus/protocol`
+# is a live symlink to `../../packages/protocol` with its `dist/` populated, the
+# server boots ("nexus listening on :8080"), and the SPA still serves its real
+# hashed bundle.
+#
+# What goes away is the web app's runtime deps, which Vite has already bundled
+# into `apps/web/dist` and the server never imports: lucide-react (41 MB),
+# react-dom and @codemirror. `--include-workspace-root` keeps the root deps and
+# `--workspace @nexus/protocol` is what keeps the symlink real.
+RUN npm ci --omit=dev --ignore-scripts \
+  --workspace @nexus/server --workspace @nexus/protocol --include-workspace-root \
+  && npm cache clean --force
 
 # The workspace layout is preserved on purpose. The server resolves the web
 # bundle as `../../../web/dist` relative to its own module URL, so apps/server
