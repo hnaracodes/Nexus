@@ -112,7 +112,29 @@ function buildCsp(c: Context): string {
 
   return [
     "default-src 'self'",
-    "script-src 'self'",
+    /**
+     * `'wasm-unsafe-eval'` is REQUIRED, and it is not a loosening of the
+     * policy in the way its name suggests.
+     *
+     * Phase 11's collaborative editor is Automerge, which is a WebAssembly
+     * module. Under a bare `script-src 'self'` the browser refuses to compile
+     * it — "Compiling or instantiating WebAssembly module violates the
+     * following Content Security policy directive" — the module throws during
+     * mount, React never renders, and the ENTIRE ROOM IS A BLANK SCREEN.
+     *
+     * Two features shipped in the same session collided: the CSP that hardens
+     * the app and the WASM the editor needs. 575 server tests, 509 web tests,
+     * two live harnesses and a four-lens audit all passed, because not one of
+     * them loads a real browser. It was found by opening the page and looking
+     * at it — and this repo has had a production blank-screen incident before.
+     *
+     * `'wasm-unsafe-eval'` is the narrow, purpose-built directive: it permits
+     * WebAssembly compilation and NOTHING else. It is emphatically not
+     * `'unsafe-eval'`, which would re-enable `eval()` and `new Function()` for
+     * ordinary JavaScript and give an XSS a far larger surface. Do not
+     * "simplify" the two into one.
+     */
+    "script-src 'self' 'wasm-unsafe-eval'",
     // React sets inline `style="…"` attributes at runtime (canvas node
     // positions, progress-bar widths, and similar) — `style-src` governs
     // those too, not just <style> tags, so 'unsafe-inline' is load-bearing
