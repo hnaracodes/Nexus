@@ -9,3 +9,22 @@ work
 .superpowers
 *.md
 .claude/
+
+# The packaged desktop app. MEASURED at 812 MB of an 814 MB build context —
+# the .dmg, the unpacked .app, and a whole Electron runtime — none of which the
+# server image contains a single byte of. Everything else in the context put
+# together is about 2 MB, so this one line is essentially the entire cost of a
+# `docker build` here.
+#
+# `release/` rather than all of `apps/desktop`: the Dockerfile's build stage
+# does `COPY apps ./apps`, and dropping a whole workspace out of a tree whose
+# lockfile still lists it is the kind of change that surfaces as a confusing
+# `npm ci` failure rather than a clean one.
+apps/desktop/release
+
+# Build artifacts that should never reach a build context regardless of where
+# they are produced.
+*.dmg
+*.blockmap
+*.tsbuildinfo
+release
