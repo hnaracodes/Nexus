@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
+import { join as joinPath } from 'node:path';
 import type { Server } from 'node:http';
 import { BrowserWindow, app, shell } from 'electron';
-import { createServer } from '@nexus/server';
 import { resolveListenPort, serverOrigin } from './serverHost.js';
 import { isAllowedNavigation } from './navigationGuard.js';
 
@@ -15,7 +15,76 @@ import { isAllowedNavigation } from './navigationGuard.js';
 // it.
 let httpServer: Server | undefined;
 
+/**
+ * Point the server's writable paths somewhere a packaged app can actually
+ * write, BEFORE `createServer()` reads them.
+ *
+ * Both defaults — `./work` for room working directories and `./data` for the
+ * event log, room sidecars and the config store — are relative, so they resolve
+ * against `process.cwd()`. In a packaged macOS app that is `/`, which is not
+ * writable. The symptom is not an obvious permissions error either: room
+ * creation reports "Could not clone that repository. Check the URL and try
+ * again." for a room that named no repository at all, because `mkdirSync`
+ * throws inside the clone path's try block.
+ *
+ * Found by launching the packaged `.dmg` and asking it to make a room — the
+ * first thing any user does, and something no test in this repo does, because
+ * every test runs from a writable cwd. It is the same class of bug CLAUDE.md
+ * already records for `serveStatic` resolving against `process.cwd()`:
+ * "works today only because every invocation happens to run from the repo
+ * root."
+ *
+ * `app.getPath('userData')` is Electron's per-user, per-app writable
+ * directory (`~/Library/Application Support/Nexus` on macOS), which is also
+ * where a user would expect their rooms to survive an app update.
+ *
+ * Set only when the environment does not already say otherwise, so `npm run
+ * dev` from the repo — and anyone debugging with an explicit NEXUS_DATA_DIR —
+ * keeps its existing behaviour.
+ */
+function useWritablePaths(): void {
+  /**
+   * Name the app BEFORE asking for its userData path.
+   *
+   * `app.getName()` falls back to package.json's `name`, which here is the npm
+   * scope `@nexus/desktop` — and Electron joins that straight into the path, so
+   * a user's rooms landed in `~/Library/Application Support/@nexus/desktop/`.
+   * Writable, so nothing broke, but a scoped npm name is an implementation
+   * detail leaking into a directory a person will actually open in Finder.
+   *
+   * `productName` in package.json fixes it too and is set alongside this, but
+   * the explicit call is what makes it true regardless of how the app is
+   * launched — `npm run dev` reads a different package.json context than the
+   * packaged bundle does.
+   */
+  app.setName('Nexus');
+  const userData = app.getPath('userData');
+  process.env['NEXUS_DATA_DIR'] ??= joinPath(userData, 'data');
+  process.env['NEXUS_WORKDIR'] ??= joinPath(userData, 'work');
+}
+
 async function startBackend(): Promise<string> {
+  useWritablePaths();
+
+  /**
+   * DYNAMIC import, and this is load-bearing rather than stylistic.
+   *
+   * The server captures its writable paths in MODULE-SCOPE constants —
+   * `DEFAULT_WORKDIR` in create.ts, `DEFAULT_DATA_DIR` in recovery.ts and
+   * configStore.ts, `DATA_DIR_ROOT` in index.ts — all of the form
+   * `process.env[...] ?? './work'`. A static `import { createServer } from
+   * '@nexus/server'` is hoisted and evaluated before any statement in this
+   * file runs, so `useWritablePaths()` above would set the variables AFTER
+   * those constants had already been frozen to the unwritable defaults, and
+   * the fix would silently do nothing.
+   *
+   * Importing here, after the environment is set, is the only ordering that
+   * works. It cannot be "tidied" back into the import block at the top — that
+   * would compile, typecheck, pass every test, and break the packaged app
+   * exactly as it was broken before. CLAUDE.md records the same shape for
+   * `github.ts`, whose static import in `index.ts` looks removable and is not.
+   */
+  const { createServer } = await import('@nexus/server');
   // Port 0 hands port selection to the OS. This repo has already hit the
   // consequence of assuming a fixed port is free — CLAUDE.md documents 8080
   // being occupied by an unrelated process on the primary dev machine — and

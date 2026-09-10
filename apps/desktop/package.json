@@ -1,9 +1,12 @@
 {
   "name": "@nexus/desktop",
+  "productName": "Nexus",
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "main": "dist/main.js",
   "scripts": {
     "predev": "npm run protocol:build --prefix ../.. && npm run build -w @nexus/server --prefix ../..",
