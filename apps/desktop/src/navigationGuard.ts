@@ -13,15 +13,42 @@
  * characters but is a different host, and a same-origin check has to reject
  * it; a naive `.startsWith(appOrigin)` would not.
  */
-export function isAllowedNavigation(targetUrl: string, appOrigin: string): boolean {
+export function isAllowedNavigation(
+  targetUrl: string,
+  appOrigin: string,
+  /**
+   * The origin of a room this app has JOINED (phase 16a), if any.
+   *
+   * Exactly one additional origin, decided once at join time — never a pattern,
+   * never a wildcard. Widening this guard is the whole risk of letting the app
+   * leave localhost: the window carries the user's trust, and a joined room's
+   * page must not be able to walk it somewhere else. Absent means "no room
+   * joined", which must not degrade into "allow anything".
+   */
+  joinedOrigin?: string,
+): boolean {
   let target: URL;
-  let allowed: URL;
   try {
     target = new URL(targetUrl);
-    allowed = new URL(appOrigin);
   } catch {
-    // An unparseable URL is not the app's own origin, full stop.
+    // An unparseable URL is not any allowed origin, full stop.
     return false;
   }
-  return target.protocol === allowed.protocol && target.host === allowed.host;
+
+  const candidates = joinedOrigin === undefined ? [appOrigin] : [appOrigin, joinedOrigin];
+  return candidates.some((candidate) => {
+    let allowed: URL;
+    try {
+      allowed = new URL(candidate);
+    } catch {
+      return false;
+    }
+    // Protocol AND host, structurally. A scheme downgrade on the same host is
+    // refused too: a room link carries the token in its query string, so
+    // http:// to a host we reached over https:// would put a live credential on
+    // the wire. And host equality is checked rather than prefix — 
+    // "https://nexus-mvp.fly.dev.evil.example" starts with the right characters
+    // and is a different site.
+    return target.protocol === allowed.protocol && target.host === allowed.host;
+  });
 }

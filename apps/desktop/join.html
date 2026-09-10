@@ -1,0 +1,69 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Nexus</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; height: 100vh; display: grid; place-items: center;
+    background: #0e0f11; color: #e8e8ea;
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  main { width: 460px; }
+  h1 { font-size: 22px; margin: 0 0 6px; letter-spacing: -0.01em; }
+  p.sub { margin: 0 0 26px; color: #9a9aa2; }
+  label { display: block; font-weight: 500; margin-bottom: 8px; }
+  input {
+    width: 100%; box-sizing: border-box; padding: 11px 12px; border-radius: 8px;
+    border: 1px solid #2a2c31; background: #17181c; color: #e8e8ea; font-size: 14px;
+  }
+  input:focus { outline: 2px solid #d98b4a; outline-offset: 1px; border-color: transparent; }
+  .row { display: flex; gap: 10px; margin-top: 14px; }
+  button {
+    flex: 1; padding: 11px 14px; border-radius: 8px; border: 1px solid #2a2c31;
+    background: #17181c; color: #e8e8ea; font-size: 14px; font-weight: 500; cursor: pointer;
+  }
+  button.primary { background: #d98b4a; border-color: #d98b4a; color: #17120c; }
+  button:focus-visible { outline: 2px solid #d98b4a; outline-offset: 2px; }
+  .problem { margin-top: 14px; color: #f08a8a; min-height: 20px; }
+  .hint { margin-top: 28px; color: #6d6e76; font-size: 12.5px; border-top: 1px solid #1f2126; padding-top: 14px; }
+</style>
+<main>
+  <h1>Join a room</h1>
+  <p class="sub">Paste the link someone shared with you.</p>
+
+  <label for="link">Room link</label>
+  <input id="link" type="text" placeholder="https://nexus-mvp.fly.dev/?room=…&amp;token=…" autofocus />
+
+  <div class="row">
+    <button class="primary" id="join">Join room</button>
+    <button id="local">Work on this machine</button>
+  </div>
+
+  <p class="problem" id="problem" role="alert"></p>
+
+  <p class="hint">
+    <strong>Join a room</strong> connects to whoever is hosting it — the agent runs there.<br />
+    <strong>Work on this machine</strong> runs everything locally, against your own files. Nobody else can join it.
+  </p>
+</main>
+<script>
+  const link = document.getElementById('link');
+  const problem = document.getElementById('problem');
+  const join = document.getElementById('join');
+
+  async function submit() {
+    problem.textContent = '';
+    join.disabled = true;
+    const result = await window.nexusJoin.submit(link.value);
+    // A non-null result is a refusal to display; on success this window is
+    // replaced by the room, so there is nothing to re-enable.
+    if (result !== null) {
+      problem.textContent = result;
+      join.disabled = false;
+    }
+  }
+
+  join.addEventListener('click', submit);
+  link.addEventListener('keydown', (e) => { if (e.key === 'Enter') void submit(); });
+  document.getElementById('local').addEventListener('click', () => void window.nexusJoin.workLocally());
+</script>

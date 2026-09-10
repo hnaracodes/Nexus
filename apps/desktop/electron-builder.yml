@@ -23,6 +23,12 @@ directories:
 files:
   - dist/**/*
   - package.json
+  # The join screen (phase 16a). It is plain HTML rather than a build artifact,
+  # so `dist/**/*` does not cover it — and if it is missing from the bundle the
+  # app opens to a blank window with no error, because `loadFile` on a missing
+  # path fails silently in a packaged build. Verified present by launching the
+  # packaged .app, not by reading this list.
+  - join.html
 
 mac:
   category: public.app-category.developer-tools
