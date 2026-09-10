@@ -42,7 +42,10 @@ describe('canUseTool wiring', () => {
     const h = harness();
     expect(h.canUseTool()).not.toBeNull();
 
-    const pending = h.canUseTool()('Bash', { command: 'rm -rf /' }, {
+    // Dangerous AND in-room. `rm -rf /` is now refused by phase 15's sandbox
+    // before the room is ever asked — correct, and therefore useless for
+    // demonstrating that `canUseTool` suspends on a room decision.
+    const pending = h.canUseTool()('Bash', { command: 'rm -rf ./build' }, {
       signal: new AbortController().signal,
     });
     await Promise.resolve();

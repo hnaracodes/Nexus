@@ -1,5 +1,5 @@
 import type { NexusEvent } from '@nexus/protocol/events';
-import type { PresenceEntry, ServerFrame } from '@nexus/protocol/wire';
+import type { FleetEntry, PresenceEntry, ServerFrame } from '@nexus/protocol/wire';
 
 export interface Message {
   id: string;
@@ -44,6 +44,29 @@ export interface RoomView {
    * message text alone would swallow every repeat after the first dismissal.
    */
   errorCount: number;
+  /**
+   * The most recent set of paths the server's watcher saw change OUTSIDE the
+   * agent — a shell command, a `git checkout`, a formatter — with a nonce that
+   * advances on every frame.
+   *
+   * Transient, like `pendingDeltas` and `lastError`: it carries no seq, is never
+   * logged and never survives a replay. The nonce is not decoration. A formatter
+   * rewriting one file reports the identical path list each time, so comparing
+   * paths alone would read every change after the first as "nothing happened" —
+   * the same trap `errorCount` above already exists to avoid.
+   */
+  externalChanges: { paths: string[]; nonce: number };
+  /**
+   * Live status for every agent in the room's fleet.
+   *
+   * Held here, beside `participants`, because it is the same KIND of thing: a
+   * transient snapshot of who is present and what they are doing, pushed whole
+   * on every change rather than accumulated. Fleet MEMBERSHIP is derivable from
+   * the log (`agent_spawned` / `agent_stopped`) and any component may derive it
+   * from `events`; what cannot be derived is whether an agent is mid-turn right
+   * now, which is precisely what `connected` is for a human.
+   */
+  fleet: FleetEntry[];
 }
 
 export const EMPTY_VIEW: RoomView = {
@@ -57,6 +80,8 @@ export const EMPTY_VIEW: RoomView = {
   pendingDeltas: {},
   lastError: null,
   errorCount: 0,
+  externalChanges: { paths: [], nonce: 0 },
+  fleet: [],
 };
 
 export function reduce(view: RoomView, frame: ServerFrame): RoomView {
@@ -86,8 +111,54 @@ export function reduce(view: RoomView, frame: ServerFrame): RoomView {
       return frame.event.seq <= view.lastSeq
         ? view
         : applyEvent({ ...view, events: [...view.events, frame.event] }, frame.event);
-    default:
+    case 'workspace_changed':
+      // Consumed, at last. The server has always broadcast this (`ws.ts:257`)
+      // and the protocol has always declared it (`wire.ts:41-49`), but no client
+      // code read it, so an edit Nexus did not make never reached the pane.
+      //
+      // Deliberately does NOT refetch anything. Staleness and refetching belong
+      // to `useWorkspace`, which owns the file cache; this reducer's only job is
+      // to make the fact visible in the view that every component already reads.
+      return {
+        ...view,
+        externalChanges: { paths: frame.paths, nonce: view.externalChanges.nonce + 1 },
+      };
+    case 'fleet':
+      return { ...view, fleet: frame.agents };
+    case 'doc_sync':
+    case 'doc_presence':
+      /**
+       * Deliberately ignored HERE, and that is a routing decision rather than a
+       * swallow — the distinction the exhaustiveness check below exists to
+       * force someone to make out loud.
+       *
+       * Both frames are keystroke-rate. Folding them into this reducer would put
+       * a CRDT sync stream into React state, so every character anyone typed in
+       * any open file would re-render the transcript, the roster and the
+       * approval queue. The document layer subscribes to the socket directly
+       * instead, exactly as `useWorkspace` owns the file cache outside the
+       * log-derived view — the room's state model stays a fold over the log, and
+       * the editor's state model stays a CRDT.
+       */
       return view;
+    default: {
+      // Compile-time exhaustiveness, runtime tolerance — deliberately both.
+      //
+      // Runtime: an older client may meet a newer server, so an unrecognised
+      // frame must be IGNORED, never thrown on. That forward-compatibility is
+      // why this branch returns `view` rather than asserting.
+      //
+      // Compile time: with every kind handled above, `frame` narrows to `never`
+      // here. Add a member to `ServerFrame` and this assignment stops compiling,
+      // which is the only thing that forces a new frame to be handled rather
+      // than silently swallowed by this branch. An adversarial review of the
+      // 11b design found the plan relying on a forcing function that did not
+      // exist yet — a `doc_sync` frame would have vanished here with a green
+      // suite, a green typecheck and no runtime complaint.
+      const unhandled: never = frame;
+      void unhandled;
+      return view;
+    }
   }
 }
 

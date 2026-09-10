@@ -100,7 +100,14 @@ describe('the PreToolUse hook routes decisions through the room, not around it',
 
     const controller = new AbortController();
     const pending = hook?.(
-      { tool_name: 'Bash', tool_input: { command: 'rm -rf /' } },
+    // NOTE (phase 15): the example here used to be `rm -rf /`. The sandbox now
+    // refuses that outright, BEFORE the room is asked, because `/` is outside
+    // the room — which is the correct and stronger behaviour but makes it
+    // useless for demonstrating that the room gets asked at all. The example is
+    // now dangerous AND in-room, which is exactly the case four-eyes approval
+    // exists for: the sandbox governs where the agent may act, the room governs
+    // what it may do there.
+      { tool_name: 'Bash', tool_input: { command: 'rm -rf ./build' } },
       'tu_1',
       { signal: controller.signal },
     ) as Promise<{ hookSpecificOutput?: { permissionDecision?: string } }>;

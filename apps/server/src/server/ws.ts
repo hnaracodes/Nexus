@@ -1,17 +1,37 @@
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { WebSocket } from 'ws';
-import type { AgentId, NexusEvent, UnsequencedEvent } from '@nexus/protocol/events';
-import { PRIMARY_AGENT_ID } from '@nexus/protocol/events';
-import type { ServerFrame } from '@nexus/protocol/wire';
+import type { AgentId, AgentProvider, NexusEvent, UnsequencedEvent } from '@nexus/protocol/events';
+import { PRIMARY_AGENT_ID, agentIdOf } from '@nexus/protocol/events';
+import type { DocPresenceEntry, ServerFrame } from '@nexus/protocol/wire';
 import { createSink } from '../log/index.js';
 import { projectAgents } from '../log/replay.js';
 import { redactEvent } from '../log/redact.js';
 import type { AgentDeps, AgentHandle } from './agent.js';
 import type { Decision } from './permissions.js';
-import { startAgent } from './agent.js';
+import { createDocRegistry } from './docs.js';
+import { createApprovalQueue } from './approvalQueue.js';
+import type { ApprovalQueue } from './approvalQueue.js';
+import { fleetSnapshot } from './fleet.js';
+import type { DocRegistry } from './docs.js';
+import { createRuntime } from './runtime/factory.js';
 import type { Room } from './rooms.js';
+import { readWorkspaceFile } from './workspace.js';
 import type { WorkspaceWatcherHandle } from './watcher.js';
 import { startWorkspaceWatcher } from './watcher.js';
+
+/**
+ * `doc_sync.from` when no single peer authored the payload being sent: the
+ * server's own full-history reply to a fresh `doc_open`, or an out-of-band
+ * reconciliation (an agent's whole-file write, or the workspace watcher
+ * noticing an external change). `docs.ts`'s `DocRegistryOptions.broadcastSync`
+ * hands its callback only `(room, path, payloadBase64)` — no attributable id —
+ * so this is the best available label for those two cases; see the session
+ * report for the exact signature change that would let a real one through.
+ * Deliberately NOT shaped like a real participant id (`p_…`) or a free-form
+ * agent id, so it can never collide with one and a client's self-echo check
+ * (`frame.from === selfId`) can never mistake it for "my own edit".
+ */
+const DOC_SYNC_NO_ORIGIN = 'server';
 
 /** Implemented durably by `src/log/` (plan phase-1a). */
 export interface EventSink {
@@ -76,7 +96,7 @@ export interface RoomRuntime {
    * coexist; a given agent is never re-instantiated, so no viewer and no second
    * attach can fork its context window.
    */
-  attachAgent(agentId: AgentId, deps?: AgentDeps): AgentHandle;
+  attachAgent(agentId: AgentId, deps?: AgentDeps, provider?: AgentProvider): AgentHandle;
   /**
    * Stored so a future teardown path has something to close. There is no
    * room-teardown mechanism in this codebase today (`runtimes` only grows;
@@ -84,6 +104,60 @@ export interface RoomRuntime {
    * avoids leaving the handle stranded nowhere if one is ever added.
    */
   workspaceWatcher: WorkspaceWatcherHandle;
+  /**
+   * The room-scoped collaborative document layer (phase 11). Exactly one
+   * instance per room, created inside `attachRoom` below — never
+   * module-level. `docs.ts`'s own module comment explains why: a shared
+   * instance keyed only by path would let two rooms that happen to share a
+   * relative path (both cloned the same starter repo) silently share one
+   * CRDT document.
+   */
+  docs: DocRegistry;
+  /**
+   * Open `path` for `participantId` over `socket`: creates the document if it
+   * doesn't exist yet, subscribes `socket` to its `doc_sync` stream, and sends
+   * the initial full-history payload directly to `socket` (never broadcast —
+   * every other socket with this path open already has this state).
+   */
+  docOpen(socket: WebSocket, participantId: string, path: string): Promise<void>;
+  /**
+   * Release `path` for `socket`/`participantId` alone. Other sockets or peers
+   * with this path open are untouched.
+   */
+  docClose(socket: WebSocket, participantId: string, path: string): void;
+  /**
+   * Apply one inbound `doc_sync` payload from `participantId` and fan the
+   * result out to every OTHER socket subscribed to `path` — never back to
+   * `socket`, which already applied this change locally before sending it.
+   */
+  docApplySync(
+    socket: WebSocket,
+    participantId: string,
+    path: string,
+    payloadBase64: string,
+  ): Promise<void>;
+  /**
+   * Record where `participantId`'s cursor sits in `path` and broadcast the
+   * full roster to every socket subscribed to it — `socket` itself included,
+   * since a second tab from the same person wants to see its own entry
+   * reflected back too.
+   */
+  docSetPresence(
+    socket: WebSocket,
+    participantId: string,
+    displayName: string,
+    path: string,
+    anchor: number,
+    head: number,
+  ): void;
+  /**
+   * Release every document subscription `socket` holds, across every path.
+   * Call this on disconnect: a socket that closes without a matching
+   * `doc_close` per path — the ordinary case, a closed tab — must not linger
+   * in a subscriber set forever. That is both a slow memory leak and, the
+   * next time the path syncs, a write to a closed socket.
+   */
+  docDisconnect(socket: WebSocket, participantId: string): void;
   sink: EventSink;
   broadcast(frame: ServerFrame): void;
   /** Seal an unsequenced event: assign seq + ts, append to the sink, broadcast. */
@@ -91,6 +165,10 @@ export interface RoomRuntime {
   /** `commit`, attributed to a specific agent. See the implementation for why
    *  the primary agent is deliberately left unstamped. */
   commitAs(agentId: AgentId, event: UnsequencedEvent): NexusEvent;
+  /** The room's shared approval queue (phase 12). */
+  approvals: ApprovalQueue;
+  /** Broadcast the transient `fleet` frame — liveness, never membership. */
+  broadcastFleet(): void;
   /**
    * Settle a pending approval on the agent that actually holds it.
    *
@@ -128,9 +206,99 @@ export function attachRoom(
 
   const agents = new Map<AgentId, AgentHandle>();
 
+  // Phase 11 document bookkeeping. Per room (these are local to this call),
+  // never module-level — see the `docs` field's own doc comment above.
+  //
+  // `docSubscribers` is keyed by the path exactly as a client spelled it in
+  // `doc_open`, NOT by `docs.ts`'s internal jailed-and-normalized key (that
+  // canonicalization is private to `docs.ts` and never returned to a caller).
+  // In practice every client reaches a path through the same source — the
+  // workspace tree / `useWorkspace` — so this never diverges; a client that
+  // opened the same file under two different spellings (`a.ts` vs `./a.ts`)
+  // would see two independent subscriber sets for what `docs.ts` treats as
+  // one document. Documented, not fixed, here: fixing it needs `docs.ts` to
+  // expose its canonical key, and that file belongs to a different owner.
+  const docSubscribers = new Map<string, Set<WebSocket>>();
+  // The inverse index: which paths a given SOCKET has open, so a disconnect
+  // can release exactly that socket's subscriptions in O(paths) rather than
+  // scanning every entry in `docSubscribers`.
+  const socketDocPaths = new Map<WebSocket, Set<string>>();
+  // Live cursor positions, per path. Not part of `docs.ts` — presence is a
+  // WS-layer concern (who is looking at this file right now), not a CRDT one.
+  const docPresence = new Map<string, Map<string, DocPresenceEntry>>();
+
+  /** Send `frame` to every socket subscribed to `path`, skipping `exclude`
+   *  (typically the frame's own origin, which already has this state). Mirrors
+   *  `broadcast()` below but scoped to one document's subscribers instead of
+   *  the whole room — the entire reason `doc_open` exists as a frame at all
+   *  (see wire.ts): a room with forty files must not fan every keystroke out
+   *  to everyone. */
+  function docBroadcastFrame(path: string, frame: ServerFrame, exclude?: WebSocket): void {
+    const subs = docSubscribers.get(path);
+    if (subs === undefined) return;
+    const payload = JSON.stringify(frame);
+    for (const socket of subs) {
+      if (socket === exclude) continue;
+      if (socket.readyState === socket.OPEN) socket.send(payload);
+    }
+  }
+
+  /** Remove `participantId`'s presence entry from `path`, returning the
+   *  remaining roster to broadcast — or `null` when there was nothing to
+   *  remove, so the caller can skip a pointless broadcast. */
+  function clearPresenceEntry(path: string, participantId: string): DocPresenceEntry[] | null {
+    const entries = docPresence.get(path);
+    if (entries === undefined || !entries.has(participantId)) return null;
+    entries.delete(participantId);
+      // Prune the path entry once its last cursor is gone, mirroring
+      // `docSubscribers` beside it. Without this the map only ever grows: a
+      // room that opens forty files over an hour keeps forty empty Maps
+      // forever. Found by the final audit.
+      if (entries.size === 0) docPresence.delete(path);
+    return [...entries.values()];
+  }
+
+  /**
+   * ONE approval queue per room, shared by every agent's gate — which is the
+   * whole point. The governance cap phase 12 needs is "how many agents may be
+   * simultaneously blocked on a HUMAN", and a human is a property of the room,
+   * not of an agent. A per-agent queue would let twenty agents each surface
+   * their own request and reproduce exactly the wall of cards this exists to
+   * prevent.
+   */
+  const approvals: ApprovalQueue = createApprovalQueue();
+
+  const docs: DocRegistry = createDocRegistry(
+    // Only `doc_snapshot` and `file_edited` ever reach this — see docs.ts's
+    // own `EmitFn` comment. Routed through `commitAs` when the event already
+    // carries an agentId (an agent's own whole-file write) and `commit`
+    // (the primary agent) otherwise, the same split `resolvePermission`
+    // above and every WS frame branch below already use.
+    (event) => {
+      const agentId = (event as { agentId?: AgentId }).agentId;
+      if (agentId !== undefined) runtime.commitAs(agentId, event);
+      else runtime.commit(event);
+    },
+    {
+      // Fires for an agent's own whole-file write or an external
+      // reconciliation (see the watcher hook below) — neither call site in
+      // docs.ts hands this callback an attributable id (see `DOC_SYNC_NO_ORIGIN`'s
+      // comment), so every out-of-band sync goes out under that sentinel.
+      broadcastSync: (_room, path, payloadBase64) => {
+        docBroadcastFrame(path, {
+          kind: 'doc_sync',
+          path,
+          payload: payloadBase64,
+          from: DOC_SYNC_NO_ORIGIN,
+        });
+      },
+    },
+  );
+
   const runtime: RoomRuntime = {
     room,
     sink,
+    approvals,
     agents,
     get agent(): AgentHandle {
       const primary = agents.get(PRIMARY_AGENT_ID);
@@ -147,23 +315,175 @@ export function attachRoom(
     getAgent(agentId: AgentId = PRIMARY_AGENT_ID): AgentHandle | undefined {
       return agents.get(agentId);
     },
-    attachAgent(agentId: AgentId, agentDeps: AgentDeps = {}): AgentHandle {
+    // Constructs through `createRuntime` (phase 10) rather than calling
+    // `startAgent` directly, so a room that ever names `openai`/`google` gets
+    // a real adapter instead of silently spending the room's Anthropic key —
+    // `createRuntime`'s own exhaustiveness check is what makes that a compile
+    // error rather than a runtime guess. `provider` defaults to `'anthropic'`
+    // so every existing caller (none of which name one) is unaffected
+    // byte-for-byte: `createRuntime({provider: 'anthropic', ...})` calls
+    // `startAgent` with the exact same three arguments this used to pass it
+    // directly.
+    attachAgent(agentId: AgentId, agentDeps: AgentDeps = {}, provider: AgentProvider = 'anthropic'): AgentHandle {
       const already = agents.get(agentId);
       if (already !== undefined) return already; // I1, per agent.
-      const handle = startAgent(room, (event) => runtime.commitAs(agentId, event), {
-        readEvents: () => sink.read(),
-        ...deps,
-        ...agentDeps,
+      const handle = createRuntime({
+        provider,
+        room,
+        emit: (event) => runtime.commitAs(agentId, event),
+        deps: {
+          readEvents: () => sink.read(),
+          // Bound per agent so the queue can attribute a waiting request to
+          // the agent that is blocked on it — `agentId` is captured here, not
+          // read off the request, because the gate has no idea which agent it
+          // belongs to.
+          visibility: {
+            admit: (requestId, toolName, surface) =>
+              approvals.admit(agentId, requestId, toolName, surface),
+            release: (requestId) => approvals.release(requestId),
+          },
+          ...deps,
+          ...agentDeps,
+        },
       });
       agents.set(agentId, handle);
+      // `agent_spawned` makes the fleet derivable from the log alone (I3) —
+      // but only the FIRST time this id is ever seen. The loop near the
+      // bottom of this function calls `attachAgent` for every id
+      // `projectAgents` finds on EVERY room attach, including a restart
+      // recovering a room that already has history; that is a reattach, not
+      // a spawn, and logging a fresh `agent_spawned` on every one of those
+      // would mean a room surviving N restarts carries N duplicate entries
+      // for the same agent forever — the log is append-only and can never
+      // take a bad one back (I3). An id with no prior event of ANY kind is
+      // genuinely new; `agentIdOf` already reads an absent `agentId` as the
+      // primary agent (the v1 convention), so this same check correctly
+      // recognises a v1 log's `room_created`/`participant_joined`/etc. as
+      // prior history for the primary agent and skips re-spawning it.
+      const seenBefore = sink
+        .read()
+        .some((event) => agentIdOf(event as { agentId?: AgentId }) === agentId);
+      if (!seenBefore) {
+        runtime.commitAs(agentId, {
+          type: 'agent_spawned',
+          provider,
+          model: null,
+          displayName: agentId === PRIMARY_AGENT_ID ? 'Agent' : agentId,
+          participantId: null,
+          spawnedByName: null,
+        });
+      }
       return handle;
     },
     workspaceWatcher: undefined as unknown as WorkspaceWatcherHandle,
+    docs,
+    async docOpen(socket: WebSocket, participantId: string, path: string): Promise<void> {
+      const { payload } = await docs.open(room, path, participantId);
+      let subs = docSubscribers.get(path);
+      if (subs === undefined) {
+        subs = new Set();
+        docSubscribers.set(path, subs);
+      }
+      subs.add(socket);
+      let paths = socketDocPaths.get(socket);
+      if (paths === undefined) {
+        paths = new Set();
+        socketDocPaths.set(socket, paths);
+      }
+      paths.add(path);
+      // Direct to this socket alone — every other subscriber already has
+      // whatever history this payload carries.
+      socket.send(
+        JSON.stringify({
+          kind: 'doc_sync',
+          path,
+          payload,
+          from: DOC_SYNC_NO_ORIGIN,
+        } satisfies ServerFrame),
+      );
+    },
+    docClose(socket: WebSocket, participantId: string, path: string): void {
+      docs.close(room, path, participantId);
+      const subs = docSubscribers.get(path);
+      subs?.delete(socket);
+      if (subs !== undefined && subs.size === 0) docSubscribers.delete(path);
+      socketDocPaths.get(socket)?.delete(path);
+      const remaining = clearPresenceEntry(path, participantId);
+      if (remaining !== null) {
+        docBroadcastFrame(path, { kind: 'doc_presence', path, entries: remaining });
+      }
+    },
+    async docApplySync(
+      socket: WebSocket,
+      participantId: string,
+      path: string,
+      payloadBase64: string,
+    ): Promise<void> {
+      const { broadcast } = await docs.applySync(room, path, payloadBase64, participantId);
+      if (broadcast !== null) {
+        // Never back to `socket` — it already applied this change locally
+        // before sending it, which is what `applySync`'s own "broadcast to
+        // every OTHER peer" contract (docs.ts) means here.
+        docBroadcastFrame(path, { kind: 'doc_sync', path, payload: broadcast, from: participantId }, socket);
+      }
+    },
+    docSetPresence(
+      socket: WebSocket,
+      participantId: string,
+      displayName: string,
+      path: string,
+      anchor: number,
+      head: number,
+    ): void {
+      let entries = docPresence.get(path);
+      if (entries === undefined) {
+        entries = new Map();
+        docPresence.set(path, entries);
+      }
+      entries.set(participantId, { participantId, displayName, anchor, head });
+      // Broadcast to EVERY subscriber, `socket` included — a second tab from
+      // the same person should see its own entry reflected back too.
+      docBroadcastFrame(path, { kind: 'doc_presence', path, entries: [...entries.values()] });
+    },
+    docDisconnect(socket: WebSocket, participantId: string): void {
+      const paths = socketDocPaths.get(socket);
+      if (paths === undefined) return;
+      socketDocPaths.delete(socket);
+      for (const path of paths) {
+        // NOTE: if this same participant has a second socket with `path`
+        // open (two tabs on one file), this releases their ONE shared
+        // `peers` entry in `docs.ts` and clears their presence row even
+        // though the other tab is still there. Tracking a per-socket
+        // reference count would fix it; not done here — real usage is
+        // overwhelmingly one tab per person per file, and `docs.ts`'s own
+        // `peers` set does not currently gate anything (see its module
+        // comment: flushing is decided by the `dirty` flag alone), so the
+        // only visible cost today is a cursor that vanishes a beat early.
+        docs.close(room, path, participantId);
+        const subs = docSubscribers.get(path);
+        subs?.delete(socket);
+        if (subs !== undefined && subs.size === 0) docSubscribers.delete(path);
+        const remaining = clearPresenceEntry(path, participantId);
+        if (remaining !== null) {
+          docBroadcastFrame(path, { kind: 'doc_presence', path, entries: remaining });
+        }
+      }
+    },
     broadcast(frame: ServerFrame): void {
       const payload = JSON.stringify(frame);
       for (const socket of sockets.keys()) {
         if (socket.readyState === socket.OPEN) socket.send(payload);
       }
+    },
+    /**
+     * Liveness, never membership. The fleet's MEMBERSHIP is derivable from the
+     * log (`agent_spawned` / `agent_stopped`) and survives a restart; what is
+     * not derivable is what each agent is doing this second, which is exactly
+     * the role `connected` plays for a human on `PresenceEntry`. So this frame
+     * is transient and unlogged, like `presence` beside it.
+     */
+    broadcastFleet(): void {
+      runtime.broadcast({ kind: 'fleet', agents: fleetSnapshot(runtime) });
     },
     commit(event: UnsequencedEvent): NexusEvent {
       return runtime.commitAs(PRIMARY_AGENT_ID, event);
@@ -255,6 +575,29 @@ export function attachRoom(
   // to broadcast() and nowhere near commit().
   runtime.workspaceWatcher = startWorkspaceWatcher(room, (paths, truncated) => {
     runtime.broadcast({ kind: 'workspace_changed', paths, truncated });
+    // Phase 11: a change from OUTSIDE the CRDT layer — a shell command, a git
+    // checkout, a formatter — to a path someone has open as a collaborative
+    // document must reach that document too, or the CRDT and disk silently
+    // diverge until something else forces a reconcile. Gated on
+    // `docSubscribers`, this room's own record of which paths currently have
+    // a live subscriber, rather than attempting every changed path: reading
+    // and diffing a file nobody has open would be pure waste on every watcher
+    // tick for the overwhelming majority of a repository.
+    for (const path of paths) {
+      if (!docSubscribers.has(path)) continue;
+      try {
+        const read = readWorkspaceFile(room, path);
+        if (read.kind !== 'text') continue; // binary / too_large: nothing a CRDT can merge
+        void docs.reconcileExternal(room, path, read.content).catch(() => {
+          // Never let a reconciliation failure take down the watcher's own
+          // callback — the next external change (or the next flush cycle)
+          // gets another chance.
+        });
+      } catch {
+        // Deleted, or escaped the jail since the watcher fired — nothing to
+        // reconcile into.
+      }
+    }
   });
   runtimes.set(room.id, runtime);
   // A room recovered from disk (plan phase-3a) already has `room_created` in
@@ -353,7 +696,17 @@ export function resolveParticipantId(
   return { participantId, resumeToken: issued };
 }
 
-/** Test-only. Never call from server code. */
+/**
+ * Test-only. Never call from server code.
+ *
+ * Disposes each room's document registry before dropping it — the closest
+ * thing to "torn down" this codebase has (there is still no production
+ * room-teardown path; see `workspaceWatcher`'s own comment above, which has
+ * the same gap and for the same reason). Without this, a test suite that
+ * calls `attachRoom` repeatedly leaks one set of live flush timers per room
+ * for the lifetime of the process.
+ */
 export function __resetRuntimes(): void {
+  for (const runtime of runtimes.values()) runtime.docs.disposeRoom(runtime.room.id);
   runtimes.clear();
 }

@@ -5,13 +5,40 @@
  */
 
 /**
- * 2 since phase 8b, when events learned to name the agent they belong to.
+ * 3 since the v2 studio work, when a room learned to hold a *fleet* of agents
+ * from more than one provider, and to hold documents that several people edit
+ * at once.
  *
- * The change is purely additive — every field is optional and every v1 log on
- * disk still replays — so this is a signal to future clients, not a
- * compatibility break. Nothing currently branches on it.
+ * Still purely additive, and still for the same reason: every field added since
+ * v1 is optional, so every JSONL line already on disk — including production's —
+ * replays unchanged. I3 forbids rewriting them, so backward compatibility is not
+ * a courtesy here, it is the only legal option.
+ *
+ * Nothing branches on this number. It is a signal to a future client, not a
+ * gate.
  */
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
+
+/**
+ * Which model provider is answering for an agent.
+ *
+ * Ratified 2026-09-06: Anthropic first (shipped), OpenAI second, Google third.
+ * Three, not two, on purpose — an interface designed against two providers
+ * acquires the first one's assumptions permanently, and the three tool-call
+ * surfaces differ in ways that only show up when all three are in view at once.
+ *
+ * Stored on `agent_spawned` rather than derived, because "what was this agent
+ * actually running" must survive a restart and a replay (I3), and the runtime
+ * that knew the answer is gone by then.
+ */
+export type AgentProvider = 'anthropic' | 'openai' | 'google';
+
+/** The providers, as data, so a validator and a UI cannot drift from the type. */
+export const AGENT_PROVIDERS: readonly AgentProvider[] = ['anthropic', 'openai', 'google'];
+
+export function isAgentProvider(value: unknown): value is AgentProvider {
+  return typeof value === 'string' && (AGENT_PROVIDERS as readonly string[]).includes(value);
+}
 
 /**
  * Which agent an event belongs to.
@@ -99,6 +126,18 @@ export interface ParticipantJoined extends EventEnvelope {
   type: 'participant_joined';
   participantId: string;
   displayName: string;
+  /**
+   * Set only when the participant signed in with GitHub (phase 13). OPTIONAL is
+   * load-bearing for the usual reason — every log already on disk lacks it — and
+   * for a second one: a guest who joined by link has no account and never will,
+   * and that is a supported way to be in a room, not a degraded one. Absence
+   * means "joined by link", never "we failed to look them up".
+   *
+   * A login is a public handle, so it is safe in a shareable log. Nothing
+   * derived from a token is stored here (I4).
+   */
+  githubLogin?: string;
+  avatarUrl?: string;
 }
 
 export interface ParticipantLeft extends EventEnvelope {
@@ -128,6 +167,17 @@ export interface AssistantMessage extends EventEnvelope, AgentScoped {
   type: 'assistant_message';
   messageId: string;
   text: string;
+  /**
+   * The tool call that spawned the agent producing this event, or null when it
+   * came from the top-level agent. Mirrors the SDK's own `parent_tool_use_id`.
+   *
+   * This is what makes a subagent VISIBLE (phase 13) rather than a black box:
+   * the transcript nests its activity under the call that created it, instead
+   * of interleaving it with the parent's at the same level. Optional, because
+   * logs predate it and because a provider with no subagent concept never sets
+   * it — absent means "top level".
+   */
+  parentToolUseId?: string | null;
 }
 
 export interface ToolStart extends EventEnvelope, AgentScoped {
@@ -136,6 +186,17 @@ export interface ToolStart extends EventEnvelope, AgentScoped {
   toolName: string;
   /** Already redacted at the log boundary. */
   input: unknown;
+  /**
+   * The tool call that spawned the agent producing this event, or null when it
+   * came from the top-level agent. Mirrors the SDK's own `parent_tool_use_id`.
+   *
+   * This is what makes a subagent VISIBLE (phase 13) rather than a black box:
+   * the transcript nests its activity under the call that created it, instead
+   * of interleaving it with the parent's at the same level. Optional, because
+   * logs predate it and because a provider with no subagent concept never sets
+   * it — absent means "top level".
+   */
+  parentToolUseId?: string | null;
 }
 
 export interface ToolResult extends EventEnvelope, AgentScoped {
@@ -145,6 +206,17 @@ export interface ToolResult extends EventEnvelope, AgentScoped {
   isError: boolean;
   /** Truncated to 4000 characters at the log boundary. */
   output: string;
+  /**
+   * The tool call that spawned the agent producing this event, or null when it
+   * came from the top-level agent. Mirrors the SDK's own `parent_tool_use_id`.
+   *
+   * This is what makes a subagent VISIBLE (phase 13) rather than a black box:
+   * the transcript nests its activity under the call that created it, instead
+   * of interleaving it with the parent's at the same level. Optional, because
+   * logs predate it and because a provider with no subagent concept never sets
+   * it — absent means "top level".
+   */
+  parentToolUseId?: string | null;
 }
 
 export interface AgentError extends EventEnvelope, AgentScoped {
@@ -285,6 +357,131 @@ export interface ContextUsage extends EventEnvelope, AgentScoped {
   compactedFromTokens: number | null;
 }
 
+/* -------------------------------------------------------------------------
+ * The fleet (phase 12) and its providers (phase 10).
+ * ---------------------------------------------------------------------- */
+
+/**
+ * An agent joined the room's fleet.
+ *
+ * Logged, and load-bearing that it is. Before this event a room's roster was
+ * *inferred* from which `agentId`s happened to appear on other events
+ * (`projectAgents` in the server's replay module) — which can tell you an agent
+ * existed but not what it was: not its provider, not its model, not the name a
+ * human gave it, not who started it. At one agent that gap was invisible because
+ * the answer was always "the room's Claude session". At twenty it is the roster.
+ *
+ * So the fleet is now derivable from the log alone (I3) with no second source of
+ * truth, and it survives a restart for the same reason the driver token does.
+ */
+export interface AgentSpawned extends EventEnvelope, AgentScoped {
+  type: 'agent_spawned';
+  provider: AgentProvider;
+  /** null means the provider's account default. Same convention as ModelChanged. */
+  model: string | null;
+  /** What the room calls this agent. Chosen by a human, so it is not an id. */
+  displayName: string;
+  /** Who spawned it. null for the primary agent, which the room starts itself. */
+  participantId: string | null;
+  spawnedByName: string | null;
+  /** Which saved configuration produced it, when one did (phase 13). */
+  configName?: string;
+  /** Set when this agent was launched as part of a crew (phase 13). */
+  crewId?: string;
+}
+
+/**
+ * An agent left the fleet. Terminal for that `agentId` — ids are never reused,
+ * because a reused id would make one transcript out of two agents' work.
+ */
+export interface AgentStopped extends EventEnvelope, AgentScoped {
+  type: 'agent_stopped';
+  /** 'stopped' | 'completed' | 'error' | 'room_closed' */
+  reason: string;
+  participantId: string | null;
+  stoppedByName: string | null;
+  /** Present when `reason` is 'error'. Redacted at the log boundary like any string. */
+  message?: string;
+}
+
+/**
+ * Several agents launched together from a saved crew template (phase 13).
+ * Logged so "what did this room actually run" is answerable after the fact,
+ * and so a crew can be reconstructed from a transcript someone shared.
+ */
+export interface CrewLaunched extends EventEnvelope {
+  type: 'crew_launched';
+  crewId: string;
+  crewName: string;
+  agentIds: AgentId[];
+  participantId: string;
+  displayName: string;
+}
+
+/* -------------------------------------------------------------------------
+ * Collaborative documents (phase 11).
+ *
+ * The shape here answers a contradiction the v2 design had to resolve. Logging
+ * every CRDT sync frame would turn each room's JSONL into a keystroke firehose;
+ * logging none of them would put authoritative document state OUTSIDE the log,
+ * which I3 forbids. The repo had already solved this exact shape once, one layer
+ * down: `assistant_delta` is transient and unlogged, and the completed
+ * `assistant_message` IS logged. The same split applies here — sync frames are
+ * transient `ServerFrame`s, and what the log carries is a periodic compacted
+ * snapshot plus a coarse semantic record of who changed what.
+ * ---------------------------------------------------------------------- */
+
+/**
+ * A compacted snapshot of one document's CRDT state.
+ *
+ * This is what makes a document reconstructible from the log alone. Written on a
+ * cadence and size trigger rather than per edit, so the log stays a history of
+ * the room rather than a transcript of typing.
+ *
+ * `snapshot` is base64 of the CRDT's own binary `save()`. Standard base64 shares
+ * no characters with any credential prefix the redactor looks for, so it passes
+ * through `redactEvent` untouched — but note the corollary: **a secret typed
+ * into a file and snapshotted here is NOT redacted**, because it is inside an
+ * opaque binary by then. That is a property of committing secrets to a shared
+ * workspace, not a new hole, and it is why `MAX_SNAPSHOT_BYTES` exists to keep
+ * the blast radius of a mistake bounded rather than unbounded.
+ */
+export interface DocSnapshot extends EventEnvelope {
+  type: 'doc_snapshot';
+  /** Workspace-relative and already jailed. Never absolute, never escaping root. */
+  path: string;
+  /** base64 of the CRDT binary save(). */
+  snapshot: string;
+  /** The CRDT heads this snapshot represents, so a peer can tell if it is behind. */
+  heads: string[];
+}
+
+/**
+ * Someone — a person or an agent — changed a file.
+ *
+ * Coarse and semantic on purpose: one event per settled edit burst, not per
+ * keystroke. This is the row a human reads in the transcript ("Ana edited
+ * src/app.ts"), and the join key between the document layer and the event log.
+ *
+ * Exactly one of `participantId` / `agentId` is set in practice: an edit has one
+ * author, and which KIND of author matters — an agent's write is governed, a
+ * human's is not. Both are optional rather than a discriminated union because
+ * `agentId` lives on `AgentScoped`, which every agent-scoped event already
+ * shares, and splitting it would mean two events for one fact.
+ */
+export interface FileEdited extends EventEnvelope, AgentScoped {
+  type: 'file_edited';
+  path: string;
+  /** Null when the author was an agent. */
+  participantId: string | null;
+  displayName: string | null;
+  /** Signed. Negative for a deletion. Enough to render "+42 −7" without the content. */
+  bytesDelta: number;
+}
+
+/** A snapshot larger than this is split or skipped rather than logged whole. */
+export const MAX_SNAPSHOT_BYTES = 512 * 1024;
+
 export type NexusEvent =
   | RoomCreated
   | ParticipantJoined
@@ -305,7 +502,12 @@ export type NexusEvent =
   | PromptBatchDiscarded
   | GithubPublished
   | ModelChanged
-  | ContextUsage;
+  | ContextUsage
+  | AgentSpawned
+  | AgentStopped
+  | CrewLaunched
+  | DocSnapshot
+  | FileEdited;
 
 export type NexusEventType = NexusEvent['type'];
 
@@ -339,6 +541,11 @@ const LOGGED_TYPES = new Set<string>([
   'github_published',
   'model_changed',
   'context_usage',
+  'agent_spawned',
+  'agent_stopped',
+  'crew_launched',
+  'doc_snapshot',
+  'file_edited',
 ]);
 
 /**

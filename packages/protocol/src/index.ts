@@ -6,3 +6,4 @@
  */
 export * from './events.js';
 export * from './wire.js';
+export * from './docsync.js';

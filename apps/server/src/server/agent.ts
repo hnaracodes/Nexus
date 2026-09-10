@@ -1,43 +1,33 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
-import type { CanUseTool, HookJSONOutput, ModelInfo, PermissionResult } from '@anthropic-ai/claude-agent-sdk';
+import type { CanUseTool, HookJSONOutput, PermissionResult } from '@anthropic-ai/claude-agent-sdk';
 import type { NexusEvent, UnsequencedEvent } from '@nexus/protocol/events';
 import type { Room } from './rooms.js';
 import { createGithubMcpServer } from './publishTool.js';
 import { AsyncQueue } from './queue.js';
 import { createPermissionGate } from './permissions.js';
-import type { PermissionGate } from './permissions.js';
+import type { AgentRuntime, Interrupter, ModelChoice } from './runtime/types.js';
+import type { Decision, PermissionGate, RequestVisibility } from './permissions.js';
 import { createTurnGate } from './turnGate.js';
+import { checkCommand, checkPath } from './sandbox.js';
+import { buildAgentEnv } from './subprocessEnv.js';
 import type { Batch, PendingPrompt } from './turnGate.js';
 import { toUserMessage } from './errors.js';
 
 export type EmitFn = (event: UnsequencedEvent) => void;
 
-/** Who pressed Stop. Needed to attribute a discarded batch in the log. */
-export interface Interrupter {
-  participantId: string;
-  displayName: string;
-}
-
-export interface AgentHandle {
-  /**
-   * Enqueue a prompt. Attribution is applied by the turn gate at flush time,
-   * not by the caller — a prompt held behind a running turn is rendered
-   * alongside whatever else arrived with it, and the driver marker reflects
-   * who held the token then.
-   */
-  submit(prompt: PendingPrompt): void;
-  interrupt(by: Interrupter): Promise<void>;
-  stop(): void;
-  /**
-   * Switch the room's model. `null` means "the account default" — the SDK's
-   * own `setModel(model?: string)` wants `undefined` for that, so this bridges
-   * the two rather than passing `null` straight through, which is a type
-   * error. Mutates the existing session; never calls `query()` again (I1).
-   */
-  setModel(model: string | null): Promise<void>;
-  listModels(): Promise<ModelInfo[]>;
-  gate: PermissionGate;
-}
+/**
+ * The Claude implementation's handle IS the provider-neutral contract — not a
+ * subtype of it, not a wrapper around it. Phase 10 found that `AgentHandle`'s
+ * shape was already right and only two things leaked: the SDK's `ModelInfo`
+ * (now `ModelChoice`) and an assumption that `interrupt` can promise the
+ * provider stopped working, which is false for Gemini. Both are documented on
+ * `AgentRuntime`.
+ *
+ * Aliasing rather than re-declaring is what prevents the two drifting: there is
+ * no second definition to forget to update.
+ */
+export type AgentHandle = AgentRuntime;
+export type { Interrupter, ModelChoice } from './runtime/types.js';
 
 /** Injection seam so tests can drive the loop without a live API key. */
 export interface AgentDeps {
@@ -50,6 +40,14 @@ export interface AgentDeps {
    * Supplied by `attachRoom`, which is the only place that holds the sink.
    */
   readEvents?: () => NexusEvent[];
+  /**
+   * The room's approval-queue seam (phase 12, D3). When supplied, this agent's
+   * gate does not start a request's timeout clock until the room's queue says
+   * the request is visible — so a request sitting behind others cannot expire
+   * before anyone has seen it. Absent, the gate surfaces every request
+   * immediately, which is exactly the pre-fleet behaviour.
+   */
+  visibility?: RequestVisibility;
 }
 
 /**
@@ -96,11 +94,42 @@ const ROOM_SYSTEM_PROMPT = [
 type PromptMessage =
   Parameters<typeof query>[0]['prompt'] extends string | AsyncIterable<infer M> ? M : never;
 
+
+/**
+ * Returns the refusal reason when a tool input names a path or command the
+ * sandbox forbids, or null when it is fine.
+ *
+ * Checks `file_path` as well as `path` because the Claude SDK's built-in tools
+ * use the former. Fails CLOSED on the key names this system actually uses to
+ * name a filesystem target: a tool that invents a third spelling is a gap, and
+ * saying so here is more useful than implying completeness.
+ */
+function sandboxDenial(input: unknown, roomCwd: string): string | null {
+  if (typeof input !== 'object' || input === null) return null;
+  const record = input as Record<string, unknown>;
+  for (const key of ['path', 'file_path', 'notebook_path']) {
+    const value = record[key];
+    if (typeof value !== 'string') continue;
+    const verdict = checkPath(value, roomCwd);
+    if (!verdict.allowed) return verdict.reason;
+  }
+  const command = record['command'];
+  if (typeof command === 'string') {
+    const verdict = checkCommand(command, roomCwd);
+    if (!verdict.allowed) return verdict.reason;
+  }
+  return null;
+}
+
 export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): AgentHandle {
   const runQuery = deps.runQuery ?? query;
   const idleTimeoutMs = deps.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
   const prompts = new AsyncQueue<PromptMessage>();
-  const gate = createPermissionGate(room, emit);
+  const gate = createPermissionGate(
+    room,
+    emit,
+    deps.visibility === undefined ? {} : { visibility: deps.visibility },
+  );
 
   /**
    * Bypass detection. The SDK gives Nexus no way to know when it has skipped a
@@ -117,6 +146,44 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
    */
   const gatedToolUses = new Set<string>();
   const seenToolUses = new Map<string, string>();
+
+  /**
+   * One decision per tool USE, shared by both gate seams.
+   *
+   * Nexus wires the gate into the SDK twice on purpose (see the options below),
+   * and a future SDK may honour both. Redundancy at the seam must not become
+   * redundancy at the human: without this, one tool call mints two requestIds
+   * and puts two approval cards in the room. Under `firstResponseWins` those two
+   * cards are decided INDEPENDENTLY, so the room could allow one and deny the
+   * other for the same call — and which one governs depends on the seam the SDK
+   * happens to read. It also trains people to click through duplicate cards,
+   * which is the habit the whole feature exists to prevent.
+   *
+   * Keyed by the SDK's tool-use id, never by tool name: two `Bash` calls in one
+   * turn are two decisions, and collapsing them would let a single approval
+   * carry a command the room never saw. When the SDK supplies no id there is no
+   * way to prove two calls are the same call, so the room is asked again —
+   * prompting twice is the safe failure, silently reusing an approval is not.
+   */
+  const decisions = new Map<string, Promise<Decision>>();
+
+  function decide(
+    toolUseId: string | undefined,
+    toolName: string,
+    input: unknown,
+    signal: AbortSignal,
+  ): Promise<Decision> {
+    if (typeof toolUseId !== 'string') return gate.request(toolName, input, signal);
+    const existing = decisions.get(toolUseId);
+    if (existing !== undefined) return existing;
+    // Recorded here rather than in the hook, so a call gated through EITHER seam
+    // counts as gated and the bypass detector below stays truthful.
+    gatedToolUses.add(toolUseId);
+    const pending = gate.request(toolName, input, signal);
+    decisions.set(toolUseId, pending);
+    return pending;
+  }
+
   const turns = createTurnGate();
 
   // Null for a room with no GitHub binding, so a plain room simply has no
@@ -191,7 +258,18 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
       ...(githubTools === null ? {} : { mcpServers: { nexus_github: githubTools } }),
       // The key is read here and nowhere else. It is never stored on anything
       // we serialize, never logged, never sent over the wire (I4).
-      env: { ...process.env, ANTHROPIC_API_KEY: room.getApiKey() },
+      /**
+       * An ALLOW-LIST, not the whole server environment (phase 15).
+       *
+       * This line used to be `{ ...process.env, ANTHROPIC_API_KEY: ... }`,
+       * which handed the agent every variable this process holds — and a
+       * participant can ask the agent to run `printenv`. The mitigation until
+       * now was `github.ts` deleting its own secrets at import, which covers
+       * exactly the secrets somebody remembered to delete. `buildAgentEnv`
+       * inverts that: the next deployment secret is dropped because it was
+       * never allowed, not because it matched a pattern.
+       */
+      env: buildAgentEnv(process.env, room.getApiKey()),
       /**
        * THE GATE. Not `canUseTool` — a PreToolUse hook.
        *
@@ -211,10 +289,10 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
        * session. Hook sources also merge additively, so nothing a user-supplied
        * agent config can carry removes this one.
        *
-       * Both paths funnel into the SAME `gate`, so approval semantics, the
-       * event log and the UI are unchanged whichever one the SDK decides to
-       * call. If a future SDK restores `canUseTool`, the gate de-duplicates by
-       * request rather than double-prompting.
+       * Both paths funnel into the SAME `gate` through `decide()`, so approval
+       * semantics, the event log and the UI are unchanged whichever one the SDK
+       * decides to call — and if a future SDK honours BOTH, `decide()` shares
+       * one decision per tool-use id so the room is still asked exactly once.
        */
       hooks: {
         PreToolUse: [
@@ -226,8 +304,32 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
                     ? ((hookInput as { tool_name: string }).tool_name)
                     : 'unknown';
                 const toolInput = (hookInput as { tool_input?: unknown }).tool_input;
-                if (typeof toolUseId === 'string') gatedToolUses.add(toolUseId);
-                const decision = await gate.request(toolName, toolInput, hookOptions.signal);
+
+                /**
+                 * THE SANDBOX RUNS BEFORE THE ROOM IS ASKED (phase 15), for
+                 * the same reason it does in `dispatchToolCall`: a denied path
+                 * must produce no card and no vote, because a boundary four
+                 * people can agree to cross is not a boundary.
+                 *
+                 * The SDK's own tools spell their target `file_path`, not
+                 * `path` — Read, Write and Edit all use it — so both spellings
+                 * are checked. Nexus's provider-neutral tools use `path` and
+                 * are covered at the other choke point; a tool reachable
+                 * through both is checked twice, which is harmless and cheaper
+                 * than reasoning about which one applies.
+                 */
+                const sandboxed = sandboxDenial(toolInput, room.cwd);
+                if (sandboxed !== null) {
+                  return {
+                    hookSpecificOutput: {
+                      hookEventName: 'PreToolUse',
+                      permissionDecision: 'deny',
+                      permissionDecisionReason: sandboxed,
+                    },
+                  };
+                }
+
+                const decision = await decide(toolUseId, toolName, toolInput, hookOptions.signal);
                 return {
                   hookSpecificOutput: {
                     hookEventName: 'PreToolUse',
@@ -247,7 +349,28 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
       canUseTool: (async (toolName, input, options): Promise<PermissionResult> => {
         // options: { signal: AbortSignal; suggestions?: PermissionUpdate[];
         //            blockedPath?: string; decisionReason?: string; toolUseID?: string }
-        const decision = await gate.request(toolName, input, options.signal);
+        // The sandbox runs here TOO, and this is not belt-and-braces.
+        //
+        // This repo's whole reason for keeping two gate seams is that the SDK
+        // decides which one it honours, and it has changed its mind before —
+        // `canUseTool` was silently dead in production for a whole phase. A
+        // sandbox check on only the hook would therefore be a boundary that
+        // holds exactly as long as the SDK keeps preferring the hook, which is
+        // not a property anyone can rely on. Both seams enforce it, for the
+        // same reason both route through `decide`.
+        const sandboxed = sandboxDenial(input, room.cwd);
+        if (sandboxed !== null) {
+          return { behavior: 'deny', message: sandboxed };
+        }
+
+        // Routed through `decide`, not `gate.request`, so that if a future SDK
+        // honours BOTH seams the room is still asked exactly once per call.
+        const decision = await decide(
+          (options as { toolUseID?: string }).toolUseID,
+          toolName,
+          input,
+          options.signal,
+        );
         return decision.decision === 'allow'
           ? { behavior: 'allow', updatedInput: input }
           : {
@@ -276,6 +399,11 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
           // was never seen at all is malformed input, not a bypass — alarming on
           // that would cry wolf and train people to ignore the alarm that counts.
           const toolName = seenToolUses.get(event.toolUseId);
+          // The call is over, so its shared decision can go. `gatedToolUses`
+          // deliberately does NOT get the same treatment: it is the bypass
+          // detector's evidence, and forgetting it would make a late or repeated
+          // result look ungoverned.
+          decisions.delete(event.toolUseId);
           if (toolName === undefined || gatedToolUses.has(event.toolUseId)) continue;
           emit({
             type: 'agent_error',
@@ -336,7 +464,7 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
       // async-iterable prompt (the `prompts` queue above), never a bare string.
       await session.setModel(model ?? undefined);
     },
-    listModels(): Promise<ModelInfo[]> {
+    listModels(): Promise<ModelChoice[]> {
       return session.supportedModels();
     },
     gate,
@@ -352,13 +480,24 @@ export function translate(message: unknown): UnsequencedEvent[] {
   const m = message as Record<string, unknown>;
   const events: UnsequencedEvent[] = [];
 
+  // Phase 13, D4: a subagent is visible or it is a hole. `parent_tool_use_id`
+  // sits beside `message`, not inside it — verified against the installed SDK
+  // (coreTypes.d.ts: SDKAssistantMessage, SDKUserMessageContent) — and is
+  // REQUIRED there, `null` at the top level. It is never written onto the
+  // logged event as `null`: protocol v3's own doc comment makes absent MEAN
+  // "top level", so materialising a `null` default for every ordinary message
+  // would be a no-op that still touches the object — exactly the kind of
+  // quiet rewrite I3 rules out. Spread it in only when there is a real id.
   if (m['type'] === 'assistant') {
     const inner = m['message'] as { id?: string; content?: unknown[] } | undefined;
     const messageId = typeof inner?.id === 'string' ? inner.id : 'msg_unknown';
+    const parentToolUseId = m['parent_tool_use_id'];
+    const parent: { parentToolUseId?: string } =
+      typeof parentToolUseId === 'string' ? { parentToolUseId } : {};
     for (const block of inner?.content ?? []) {
       const b = block as Record<string, unknown>;
       if (b['type'] === 'text' && typeof b['text'] === 'string') {
-        events.push({ type: 'assistant_message', messageId, text: b['text'] });
+        events.push({ type: 'assistant_message', messageId, text: b['text'], ...parent });
       }
       if (b['type'] === 'tool_use') {
         events.push({
@@ -366,6 +505,7 @@ export function translate(message: unknown): UnsequencedEvent[] {
           toolUseId: String(b['id']),
           toolName: String(b['name']),
           input: b['input'],
+          ...parent,
         });
       }
     }
@@ -373,6 +513,9 @@ export function translate(message: unknown): UnsequencedEvent[] {
 
   if (m['type'] === 'user') {
     const inner = m['message'] as { content?: unknown[] } | undefined;
+    const parentToolUseId = m['parent_tool_use_id'];
+    const parent: { parentToolUseId?: string } =
+      typeof parentToolUseId === 'string' ? { parentToolUseId } : {};
     for (const block of inner?.content ?? []) {
       const b = block as Record<string, unknown>;
       if (b['type'] !== 'tool_result') continue;
@@ -382,6 +525,7 @@ export function translate(message: unknown): UnsequencedEvent[] {
         toolName: '',
         isError: b['is_error'] === true,
         output: String(b['content'] ?? '').slice(0, 4000),
+        ...parent,
       });
     }
   }

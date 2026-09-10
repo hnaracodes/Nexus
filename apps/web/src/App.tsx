@@ -8,13 +8,22 @@ import { EMPTY_VIEW } from './store.js';
 import type { RoomView } from './store.js';
 import { connect } from './ws.js';
 import type { Connection, Status, WebSocketLike } from './ws.js';
-import type { NexusEvent } from '@nexus/protocol/events';
+import type { AgentId, NexusEvent } from '@nexus/protocol/events';
+import { PRIMARY_AGENT_ID, agentIdOf } from '@nexus/protocol/events';
 // phase-5a import anchor
 import { MalformedLink } from './pages/MalformedLink.js';
 // phase-7b import anchor
 import { WorkspacePane } from './components/WorkspacePane.js';
+import { FleetPane } from './components/FleetPane.js';
+import { ApprovalQueue } from './components/ApprovalQueue.js';
+import { Button } from './components/Button.js';
+import { Canvas } from './canvas/Canvas.js';
+import { RunOverlay } from './canvas/RunOverlay.js';
+import type { Graph } from './canvas/graph.js';
+import type { FleetApprovalRequest } from './components/ApprovalQueue.js';
 import { PaneErrorBoundary } from './components/PaneErrorBoundary.js';
 import { createWorkspaceApi } from './workspace/workspaceApi.js';
+import type { DocSession } from './workspace/docSession.js';
 // phase-7c import anchor
 import { PromptDock } from './components/PromptDock.js';
 import { JoinGate, readStoredName, storeName } from './components/JoinGate.js';
@@ -232,6 +241,16 @@ export default function App(): JSX.Element {
   const [view, setView] = useState<RoomView>(EMPTY_VIEW);
   const [status, setStatus] = useState<Status>('connecting');
   const [connection, setConnection] = useState<Connection | null>(null);
+  /**
+   * The room's collaborative document session, handed over by `connect()` once
+   * `replay_complete` supplies this client's own participant id (a session
+   * needs it to recognise its own edits echoed back).
+   *
+   * Held in state rather than a ref because the file pane must RE-RENDER when
+   * it arrives — a ref would leave the editor mounted read-only for the rest
+   * of the session, which is indistinguishable from the feature not shipping.
+   */
+  const [docSession, setDocSession] = useState<DocSession | null>(null);
   const [now, setNow] = useState(() => Date.now());
   // phase-3d: dismiss by count, not message text — "You are not driving" is
   // the most common error and a non-driver hits it repeatedly, so comparing
@@ -251,10 +270,18 @@ export default function App(): JSX.Element {
       ...params,
       onView: setView,
       onStatus: setStatus,
+      onDocSession: setDocSession,
       socketFactory: (url) => new CloseCodeTrackingSocket(url, setLastCloseCode),
     });
     setConnection(active);
-    return () => active.close();
+    return () => {
+      active.close();
+      // Cleared with the connection that owned it. `connect()` builds exactly
+      // one session per call and disposes it on close, so keeping the old
+      // reference across a room switch would hand the editor a session whose
+      // socket is gone — writable in appearance, inert in fact.
+      setDocSession(null);
+    };
   }, [params]);
 
   useEffect(() => {
@@ -307,6 +334,7 @@ export default function App(): JSX.Element {
       roomLink={roomLink}
       agentStatus={agentStatus}
       pendingApprovals={pendingApprovals}
+      docSession={docSession}
     />
   );
   // --- END phase-5b layout ---
@@ -335,6 +363,7 @@ function RoomShell({
   roomLink,
   agentStatus,
   pendingApprovals,
+  docSession,
 }: {
   params: { roomId: string; token: string; displayName: string };
   view: RoomView;
@@ -351,7 +380,30 @@ function RoomShell({
   roomLink: string;
   agentStatus: ReturnType<typeof deriveAgentStatus>;
   pendingApprovals: PendingApproval[];
+  /** The room's collaborative document session, or null before
+   *  `replay_complete` has arrived. Null keeps the file pane read-only. */
+  docSession: DocSession | null;
 }): JSX.Element {
+  /**
+   * Which agent's transcript is on screen. LOCAL UI state, like the workspace
+   * pane's pin/follow — no room state, no arbitration, no server round trip.
+   * `null` means the primary agent, which is what a solo room always shows.
+   */
+  const [focusedAgentId, setFocusedAgentId] = useState<AgentId | null>(null);
+  /**
+   * The workflow graph on screen, if any.
+   *
+   * The canvas lives INSIDE the room rather than on its own page, and that is
+   * the phase-14 claim made structural: it is a VIEW over the orchestration
+   * model, so it renders where the model actually is. A standalone page would
+   * have had no live `fleet` frame and could only ever have drawn a graph that
+   * was not running — which is a diagram, not a canvas.
+   */
+  const [canvasGraph, setCanvasGraph] = useState<Graph | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  /** Saved crews that actually carry a graph — the only ones the canvas can draw. */
+  const [graphCrews, setGraphCrews] = useState<Array<{ name: string; graph: Graph }>>([]);
+  const [runError, setRunError] = useState<string | null>(null);
   const [promptText, setPromptText] = useState('');
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [cheatsheetOpen, setCheatsheetOpen] = useState(false);
@@ -367,6 +419,83 @@ function RoomShell({
   // event log, so they are fetched over REST and cached inside useWorkspace.
   // This is the one piece of room-visible state in the app that is not
   // log-derived, and drawing that boundary explicitly is the point.
+  /**
+   * The room's pending approvals, re-shaped per agent for the fleet queue.
+   *
+   * Derived here rather than by widening `deriveApprovals`, because the
+   * single-agent card path below still consumes that function's existing
+   * shape and a solo room must keep rendering byte-identically. `expiresAt` is
+   * carried through as-is: a request the server has not yet SURFACED has no
+   * clock running (phase 12, D3), and the queue must not draw a countdown for
+   * something that is not counting down.
+   */
+  const fleetApprovals = useMemo<FleetApprovalRequest[]>(() => {
+    const settled = new Set(
+      view.events.filter((e) => e.type === 'permission_decided').map((e) => e.requestId),
+    );
+    const nameOf = new Map(view.fleet.map((entry) => [entry.agentId, entry.displayName]));
+    return view.events
+      .filter((e): e is Extract<NexusEvent, { type: 'permission_requested' }> =>
+        e.type === 'permission_requested' && !settled.has(e.requestId))
+      .map((e) => {
+        const agentId = agentIdOf(e);
+        return {
+          requestId: e.requestId,
+          agentId,
+          agentName: nameOf.get(agentId) ?? (agentId === PRIMARY_AGENT_ID ? 'Agent' : agentId),
+          toolName: e.toolName,
+          input: e.input,
+          expiresAt: e.expiresAt,
+        };
+      });
+  }, [view.events, view.fleet]);
+
+  /**
+   * The events the transcript shows. Unfiltered unless a fleet exists AND a
+   * specific agent is focused — a solo room, and a fleet room with nothing
+   * focused, both render exactly what they always did.
+   *
+   * Filtering by `agentIdOf` also drops room-level events (joins, driver
+   * hand-offs) from a non-primary agent's view, which is deliberate: you asked
+   * to look at one agent's work, and the primary transcript still holds the
+   * room's own history.
+   */
+  const focusedEvents = useMemo(
+    () =>
+      focusedAgentId === null
+        ? view.events
+        : view.events.filter(
+            // Cast for the same reason `replay.ts` does it server-side:
+            // `agentIdOf` reads an optional field that only the agent-scoped
+            // members of the union declare, and a room-level event simply
+            // reads as the primary agent — which is exactly the v1 convention
+            // this helper exists to centralise.
+            (event) => agentIdOf(event as { agentId?: AgentId }) === focusedAgentId,
+          ),
+    [view.events, focusedAgentId],
+  );
+
+  /** A solo room must not grow a sidebar it does not need. */
+  const hasFleet = view.fleet.length > 1;
+
+  useEffect(() => {
+    // Room-scoped and token-carrying, like every other write-capable route
+    // here — see ConfigLibrary.tsx for why an unscoped config endpoint was the
+    // wrong answer even though a config is not room state.
+    void fetch(`/api/rooms/${encodeURIComponent(params.roomId)}/configs`, {
+      headers: { 'X-Nexus-Token': params.token },
+    })
+      .then((r) => (r.ok ? r.json() : { crews: [] }))
+      .then((body: { crews?: Array<{ name: string; graph?: Graph }> }) => {
+        setGraphCrews(
+          (body.crews ?? [])
+            .filter((c): c is { name: string; graph: Graph } => c.graph !== undefined)
+            .map((c) => ({ name: c.name, graph: c.graph })),
+        );
+      })
+      .catch(() => setGraphCrews([]));
+  }, [params.roomId, params.token]);
+
   const workspaceApi = useMemo(
     () => createWorkspaceApi({ roomId: params.roomId, token: params.token }),
     [params.roomId, params.token],
@@ -515,7 +644,22 @@ function RoomShell({
           {/* A blocked room is the most urgent fact on the screen — these stay
               above the transcript in the main column, in addition to the
               pending count shown in the side rail. */}
-          {pendingApprovals.map((approval) => (
+          {hasFleet && (
+            <ApprovalQueue
+              requests={fleetApprovals}
+              now={now}
+              onDecide={(requestId, agentId, decision, reason) =>
+                connection?.send({
+                  kind: 'permission_decision',
+                  requestId,
+                  decision,
+                  agentId,
+                  ...(reason === undefined ? {} : { reason }),
+                })
+              }
+            />
+          )}
+          {!hasFleet && pendingApprovals.map((approval) => (
             <ApprovalCard
               key={approval.requestId}
               approval={approval}
@@ -531,8 +675,99 @@ function RoomShell({
           ))}
           {/* --- END phase-2d approval slot --- */}
 
+          {graphCrews.length > 0 && (
+            <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-fg-muted">
+              <span>Workflows:</span>
+              {graphCrews.map((crew) => (
+                <button
+                  key={crew.name}
+                  type="button"
+                  onClick={() => {
+                    setCanvasGraph(crew.graph);
+                    setRunError(null);
+                  }}
+                  className="rounded border border-border px-2 py-1 text-fg hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                >
+                  {crew.name}
+                </button>
+              ))}
+              {canvasGraph !== null && (
+                <>
+                  <Button
+                    onClick={() => {
+                      const crew = graphCrews.find((c) => c.graph === canvasGraph);
+                      if (crew === undefined) return;
+                      setRunError(null);
+                      void fetch(
+                        `/api/rooms/${encodeURIComponent(params.roomId)}/crews/${encodeURIComponent(crew.name)}/run`,
+                        {
+                          method: 'POST',
+                          headers: {
+                            'X-Nexus-Token': params.token,
+                            'content-type': 'application/json',
+                          },
+                          body: JSON.stringify({ prompt: promptText.trim() || 'Begin.' }),
+                        },
+                      )
+                        .then(async (r) => {
+                          if (r.ok) return;
+                          const body = (await r.json().catch(() => ({}))) as { error?: string };
+                          // Every node in a graph is an agent that will ask
+                          // permission; a refusal here is usually the fleet's
+                          // resource cap, and the person needs to be told
+                          // which rather than left guessing.
+                          setRunError(body.error ?? 'Could not start that workflow.');
+                        })
+                        .catch(() => setRunError('Could not reach the server.'));
+                    }}
+                  >
+                    Run
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => setCanvasGraph(null)}
+                    className="rounded border border-border px-2 py-1 hover:bg-surface-2"
+                  >
+                    Close
+                  </button>
+                </>
+              )}
+              {runError !== null && <span className="text-danger">{runError}</span>}
+            </div>
+          )}
+
+          {canvasGraph !== null && (
+            <div className="relative mb-3 h-72 overflow-hidden rounded-lg border border-border">
+              <Canvas
+                graph={canvasGraph}
+                selectedNodeId={selectedNodeId}
+                onSelect={setSelectedNodeId}
+                onNodeMove={(id, x, y) =>
+                  setCanvasGraph((g) =>
+                    g === null
+                      ? g
+                      : { ...g, nodes: g.nodes.map((n) => (n.id === id ? { ...n, x, y } : n)) },
+                  )
+                }
+              />
+              {/* Live status comes from the transient `fleet` frame; MEMBERSHIP
+                  still comes from the log. Not a third source of truth. */}
+              <RunOverlay graph={canvasGraph} fleet={view.fleet} />
+            </div>
+          )}
+
+          {hasFleet && (
+            <FleetPane
+              agents={view.fleet}
+              focusedAgentId={focusedAgentId}
+              onFocus={setFocusedAgentId}
+              onSpawn={(params) => connection?.send({ kind: 'spawn_agent', ...params })}
+              onStop={(agentId) => connection?.send({ kind: 'stop_agent', agentId })}
+            />
+          )}
+
           <div className="min-h-0 flex-1">
-            <MessageList events={view.events} pendingDeltas={view.pendingDeltas} />
+            <MessageList events={focusedEvents} pendingDeltas={view.pendingDeltas} />
           </div>
 
           {/*
@@ -573,7 +808,13 @@ function RoomShell({
 
         <div className="hidden min-h-0 flex-1 lg:flex">
           <PaneErrorBoundary label="The workspace panel">
-                <WorkspacePane events={view.events} api={workspaceApi} />
+                <WorkspacePane
+                  events={view.events}
+                  api={workspaceApi}
+                  externalChanges={view.externalChanges}
+                  {...(docSession === null ? {} : { docSession })}
+                  selfId={view.selfId}
+                />
               </PaneErrorBoundary>
         </div>
       </div>
@@ -613,7 +854,13 @@ function RoomShell({
             </div>
             <div className="flex min-h-0 flex-1">
               <PaneErrorBoundary label="The workspace panel">
-                <WorkspacePane events={view.events} api={workspaceApi} />
+                <WorkspacePane
+                  events={view.events}
+                  api={workspaceApi}
+                  externalChanges={view.externalChanges}
+                  {...(docSession === null ? {} : { docSession })}
+                  selfId={view.selfId}
+                />
               </PaneErrorBoundary>
             </div>
           </div>

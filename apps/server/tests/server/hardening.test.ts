@@ -2,9 +2,11 @@ import type { AddressInfo } from 'node:net';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Hono } from 'hono';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createServer } from '../../src/server/index.js';
 import { prepareWorkspace, validateRepoUrl } from '../../src/server/create.js';
+import { securityHeaders } from '../../src/server/hardening.js';
 import { __resetRateLimits, consumeRateLimit } from '../../src/server/rate-limit.js';
 import { createRoom, roomCount } from '../../src/server/rooms.js';
 
@@ -226,5 +228,86 @@ describe('GET /api/rooms/:id/workspace/file is jailed against traversal (phase-7
       { headers: { 'X-Nexus-Token': 'whatever' } },
     );
     expect(response.status).toBe(404);
+  });
+});
+
+// --- phase 15: HTTP security headers -------------------------------------
+//
+// A bare `new Hono()` with only `securityHeaders()` mounted, rather than the
+// full `createServer()` — the header set is a pure function of the request,
+// so exercising it through a real room, socket and workspace jail would only
+// add noise. `app.request()` is Hono's own testing entry point: it drives the
+// middleware exactly as `app.fetch` does for a live server, with no listening
+// socket required.
+describe('securityHeaders', () => {
+  function testApp(): Hono {
+    const app = new Hono();
+    app.use('*', securityHeaders());
+    app.get('/x', (c) => c.text('ok'));
+    return app;
+  }
+
+  it('sets X-Content-Type-Options and X-Frame-Options on a normal response', async () => {
+    const res = await testApp().request('/x');
+    expect(res.headers.get('X-Content-Type-Options')).toBe('nosniff');
+    // DENY, not SAMEORIGIN: nothing in this product legitimately frames a
+    // room page, and a room framed by a hostile page is a clickjacking
+    // surface onto the four-eyes approval buttons.
+    expect(res.headers.get('X-Frame-Options')).toBe('DENY');
+  });
+
+  it('sets Referrer-Policy to no-referrer, because the room URL carries the room TOKEN — ' +
+    'the product\'s entire credential (CLAUDE.md §11) — so a referrer leak is a room compromise',
+  async () => {
+    const res = await testApp().request('/x');
+    expect(res.headers.get('Referrer-Policy')).toBe('no-referrer');
+  });
+
+  it('omits Strict-Transport-Security on a plain HTTP request', async () => {
+    const res = await testApp().request('/x');
+    // Not "empty string" — genuinely absent. Sending it at all on plain HTTP
+    // is worse than useless: a real browser ignores an HSTS header that did
+    // not arrive over HTTPS, but a dev proxy or test harness that doesn't
+    // enforce that rule can wedge a developer's browser onto https:// for
+    // the whole of localhost.
+    expect(res.headers.has('Strict-Transport-Security')).toBe(false);
+  });
+
+  it('sets Strict-Transport-Security when the request arrives over HTTPS', async () => {
+    // This server sits behind Fly's proxy, which terminates TLS and forwards
+    // plain HTTP with X-Forwarded-Proto set — the same signal index.ts's
+    // publicOrigin() already trusts for the GitHub OAuth redirect_uri, so
+    // this is not a new trust boundary.
+    const res = await testApp().request('/x', { headers: { 'X-Forwarded-Proto': 'https' } });
+    const hsts = res.headers.get('Strict-Transport-Security');
+    expect(hsts).not.toBeNull();
+    expect(hsts).toMatch(/^max-age=\d+/);
+  });
+
+  it('recognises a direct HTTPS request (no proxy in front) from the request URL itself', async () => {
+    const res = await testApp().request('https://nexus.example/x');
+    expect(res.headers.has('Strict-Transport-Security')).toBe(true);
+  });
+
+  it('CSP allows a same-origin WebSocket connection — a policy that silently blocks the room\'s ' +
+    'own socket would look like a network fault, not a policy error, which is worse than no CSP at all',
+  async () => {
+    const res = await testApp().request('http://nexus.example/x');
+    const csp = res.headers.get('Content-Security-Policy');
+    expect(csp).not.toBeNull();
+    const connectSrc = (csp ?? '').split(';').map((d) => d.trim()).find((d) => d.startsWith('connect-src'));
+    expect(connectSrc).toBeDefined();
+    // Scoped to the request's own host, not a bare `ws:`/`wss:` scheme
+    // source — that would let an XSS payload open a socket to ANY host,
+    // which defeats the point of restricting connect-src at all.
+    expect(connectSrc).toContain('ws://nexus.example');
+    expect(connectSrc).toContain('wss://nexus.example');
+  });
+
+  it('CSP still permits the app\'s own bundle to load and run', async () => {
+    const res = await testApp().request('/x');
+    const csp = res.headers.get('Content-Security-Policy') ?? '';
+    expect(csp).toContain("script-src 'self'");
+    expect(csp).toContain("default-src 'self'");
   });
 });

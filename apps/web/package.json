@@ -2,6 +2,10 @@
   "name": "@nexus/web",
   "version": "0.0.1",
   "private": true,
+  "//files": "Only the built bundle ships. @nexus/desktop depends on this package so electron-builder places it at node_modules/@nexus/web/dist, which is exactly where the server's serveStatic already looks. Without this field the whole package would be bundled including its node_modules — React and CodeMirror twice over, since Vite has already compiled them INTO dist.",
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "scripts": {
     "predev": "npm run protocol:build --prefix ../..",
@@ -13,11 +17,23 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@automerge/automerge": "^3.4.1",
+    "@codemirror/collab": "^6.1.1",
+    "@codemirror/lang-css": "^6.3.1",
+    "@codemirror/lang-html": "^6.4.12",
+    "@codemirror/lang-javascript": "^6.2.5",
+    "@codemirror/lang-json": "^6.0.2",
+    "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/lang-python": "^6.2.1",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/state": "^6.7.2",
+    "@codemirror/view": "^6.43.11",
+    "@lezer/highlight": "^1.2.3",
     "@nexus/protocol": "*",
+    "codemirror": "^6.0.2",
     "lucide-react": "^1.28.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "shiki": "^4.4.1"
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.5.0",

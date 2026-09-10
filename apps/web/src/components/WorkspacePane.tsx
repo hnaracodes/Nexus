@@ -2,18 +2,44 @@ import { useEffect, useMemo, useState } from 'react';
 import { FolderTree, GitCompare, Pin, PinOff, Rows3 } from 'lucide-react';
 import type { NexusEvent } from '@nexus/protocol/events';
 import { deriveCurrentFile, deriveLatestEditSeqByPath, deriveTouchedFiles } from '../derive/workspaceFiles.js';
+import { withExternalChanges } from '../derive/externalChanges.js';
 import { useWorkspace } from '../workspace/useWorkspace.js';
+import type { DocSession } from '../workspace/docSession.js';
 import type { WorkspaceApi } from '../workspace/workspaceApi.js';
 import type { GitStatusEntry } from '../workspace/types.js';
 import { WorkspaceError } from '../workspace/types.js';
 import { ChangesTab } from './ChangesTab.js';
 import type { GitStatusState } from './ChangesTab.js';
-import { CodeViewer } from './CodeViewer.js';
+import { CodeEditor } from './CodeEditor.js';
 import { FileTree } from './FileTree.js';
 
 export interface WorkspacePaneProps {
   events: NexusEvent[];
   api: WorkspaceApi;
+  /**
+   * Paths changed OUTSIDE the agent, from the transient `workspace_changed`
+   * frame. Optional so the many tests that render this pane without a room
+   * behind it keep working, and because a client that never receives one should
+   * behave exactly as before.
+   */
+  externalChanges?: { paths: string[]; nonce: number };
+  /**
+   * The room's collaborative document session (phase 11). Optional, and its
+   * absence is meaningful rather than merely tolerated: with no session the
+   * pane stays exactly as read-only as 11a, which is what every test that
+   * renders this component without a room behind it depends on.
+   *
+   * This prop is the LAST MILE of the CRDT work. Everything below it —
+   * `CodeEditor`'s writability switches, `cmCollab`'s binding, the socket's
+   * session construction — can be complete and green while the pane a human
+   * actually types into stays read-only, because this component sits between
+   * them. That gap existed and shipped once; `WorkspacePane.collab.test.tsx`
+   * asserts the rendered surface, not the forwarded prop, so it cannot come
+   * back unnoticed.
+   */
+  docSession?: DocSession;
+  /** This client's own participant id, for remote-cursor attribution only. */
+  selfId?: string | null;
 }
 
 type WorkspaceTab = 'files' | 'changes' | 'preview';
@@ -32,7 +58,13 @@ const TABS: Array<{ id: WorkspaceTab; label: string; Icon: typeof FolderTree }> 
  * — `events` arrives as plain `NexusEvent[]`, and file contents are cached
  * locally by `useWorkspace`, entirely outside the room's log-derived view.
  */
-export function WorkspacePane({ events, api }: WorkspacePaneProps): JSX.Element {
+export function WorkspacePane({
+  events,
+  api,
+  externalChanges = { paths: [], nonce: 0 },
+  docSession,
+  selfId,
+}: WorkspacePaneProps): JSX.Element {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('files');
   const [pinned, setPinned] = useState(false);
   const [manualPath, setManualPath] = useState<string | null>(null);
@@ -41,7 +73,15 @@ export function WorkspacePane({ events, api }: WorkspacePaneProps): JSX.Element 
 
   const touchedFiles = useMemo(() => deriveTouchedFiles(events), [events]);
   const currentFile = useMemo(() => deriveCurrentFile(events), [events]);
-  const editSeqByPath = useMemo(() => deriveLatestEditSeqByPath(events), [events]);
+  const loggedEditSeq = useMemo(() => deriveLatestEditSeqByPath(events), [events]);
+  // Log-derived edits and watcher-reported ones are folded into ONE freshness
+  // map, so `useWorkspace` keeps its single staleness path and cannot tell the
+  // two apart. Keyed on the nonce, not the array, since the paths are frequently
+  // identical between frames.
+  const editSeqByPath = useMemo(
+    () => withExternalChanges(loggedEditSeq, externalChanges),
+    [loggedEditSeq, externalChanges.nonce],
+  );
 
   const selectedPath = pinned && manualPath !== null ? manualPath : currentFile;
 
@@ -135,10 +175,12 @@ export function WorkspacePane({ events, api }: WorkspacePaneProps): JSX.Element 
         {activeTab === 'files' && (
           <>
             <FileTree api={api} selectedPath={selectedPath} touchedPaths={touchedFiles} onSelect={selectFile} />
-            <CodeViewer
+            <CodeEditor
               path={selectedPath}
               cached={selectedPath !== null ? workspace.files.get(selectedPath) : undefined}
               onRefresh={workspace.refetchFile}
+              {...(docSession === undefined ? {} : { docSession })}
+              {...(selfId === null || selfId === undefined ? {} : { selfId })}
             />
           </>
         )}

@@ -1,5 +1,6 @@
 import type { Server } from 'node:http';
 import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { createAdaptorServer } from '@hono/node-server';
 import { getConnInfo } from '@hono/node-server/conninfo';
 import { serveStatic } from '@hono/node-server/serve-static';
@@ -8,7 +9,7 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { WebSocketServer } from 'ws';
 import type { GithubRepoRef } from '@nexus/protocol/events';
-import { PROTOCOL_VERSION } from '@nexus/protocol/events';
+import { PRIMARY_AGENT_ID, PROTOCOL_VERSION } from '@nexus/protocol/events';
 import { parseClientFrame } from '@nexus/protocol/wire';
 // STATIC import, deliberately. Evaluating github.ts is what reads the App
 // secrets and DELETES them from process.env, and that has to happen before any
@@ -44,6 +45,11 @@ import {
 } from './rooms.js';
 import type { AgentDeps } from './agent.js';
 import { attachRoom, getRuntime, resolveParticipantId } from './ws.js';
+import { spawnAgent, stopAgent } from './fleet.js';
+import { securityHeaders } from './hardening.js';
+import { launchCrew } from './crews.js';
+import { hasCycle, startWorkflowRun } from './workflowRunner.js';
+import { deleteConfig, deleteCrew, readConfigs, readCrew, readCrews, saveConfig, saveCrew } from './configStore.js';
 import {
   cancelAutoRelease,
   claimIfVacant,
@@ -110,10 +116,26 @@ function githubCallbackUrl(c: Context): string {
   return `${publicOrigin(c)}/api/github/callback`;
 }
 
+/** The data root every room-scoped store hangs off. Mirrors `recovery.ts`'s
+ *  own default so a room's configs land beside its log and its meta sidecar. */
+const DATA_DIR_ROOT = process.env['NEXUS_DATA_DIR'] ?? './data';
+
 export function createServer(
   opts: { agentDeps?: AgentDeps } = {},
 ): { app: Hono; server: Server } {
   const app = new Hono();
+
+  /**
+   * Registered FIRST, so it covers every route including the 404s and the
+   * static bundle (phase 15).
+   *
+   * The highest-value header here is `Referrer-Policy: no-referrer`, and it is
+   * worth knowing why in this app specifically: the room URL contains the room
+   * TOKEN, which is the product's entire credential (CLAUDE.md §11). A referrer
+   * leaking to any third-party resource would be a room compromise, not a
+   * privacy nit.
+   */
+  app.use('*', securityHeaders());
 
   // A room link is "/?room=…&token=…", and the token IS the credential. Without
   // this, following any outbound link from a room page — including the GitHub
@@ -340,6 +362,135 @@ export function createServer(
     return c.json({ error: 'Could not read the workspace.' }, 500);
   }
 
+  /**
+   * Where THIS room's saved configs and crews live.
+   *
+   * The routes below were originally guarded by `requireRoom` alone, which
+   * proves the caller holds a valid token for SOME room — while the store
+   * itself was process-global. A participant in room A could therefore read,
+   * overwrite or delete room B's configs, and a config is executable input
+   * that another room will later launch. Authentication without scoping is not
+   * authorization.
+   *
+   * Namespacing by room id is the safe default while accounts are deferred
+   * (CLAUDE.md §7). It does cost the "share a crew between rooms" half of
+   * phase 13's demo bar — that is a genuine, deliberate narrowing, and sharing
+   * belongs with the account identity that can express WHO may share, rather
+   * than with "anyone holding any room token".
+   */
+  function roomScope(roomId: string): string {
+    return join(DATA_DIR_ROOT, 'roomdata', roomId);
+  }
+
+  // --- BEGIN phase-13 config + crew routes ---
+  // Scoped under a room and guarded by `requireRoom`, which calls
+  // `authorize()`. Configs are not strictly room state — they are user assets
+  // (phase-13-crews-and-accounts.md, D3) — but the room TOKEN is the only
+  // credential this system has, and CLAUDE.md §11 is explicit that the room ID
+  // is not one: it is 64 bits and appears in every URL, referrer and
+  // screenshot, while the token is 256. Leaving these ungated because "a
+  // config isn't room state" is exactly the reasoning that produced a
+  // room-hijack hole here once already.
+  app.get('/api/rooms/:id/configs', (c) => {
+    const guarded = requireRoom(c);
+    if (guarded instanceof Response) return guarded;
+    const scope = roomScope(guarded.room.id);
+    return c.json({ configs: readConfigs(scope), crews: readCrews(scope) });
+  });
+
+  app.post('/api/rooms/:id/configs', async (c) => {
+    const guarded = requireRoom(c);
+    if (guarded instanceof Response) return guarded;
+    const result = saveConfig(await c.req.json().catch(() => null), roomScope(guarded.room.id));
+    // `problems` is written to be read by a human and is surfaced verbatim —
+    // `agentConfig.ts` goes to real trouble to name the offending field,
+    // because a rejection nobody can act on is a support ticket.
+    return result.ok ? c.json({ config: result.config }) : c.json({ problems: result.problems }, 400);
+  });
+
+  app.post('/api/rooms/:id/crews', async (c) => {
+    const guarded = requireRoom(c);
+    if (guarded instanceof Response) return guarded;
+    const body = (await c.req.json().catch(() => null)) as { graph?: unknown } | null;
+
+    // ACYCLICITY IS CHECKED AT SAVE TIME, not at run time (phase 14). Refusing
+    // at run time would mean a saved workflow that can never run, discovered by
+    // a user who has already drawn it. Checked HERE rather than inside
+    // `configStore.saveCrew`, because `hasCycle` lives in `workflowRunner.ts`,
+    // which reaches `crews.ts`, which reaches `configStore.ts` — importing it
+    // there would close a real cycle in the module graph while looking for one
+    // in the data.
+    const graph = body?.graph;
+    if (graph !== undefined && hasCycle(graph as Parameters<typeof hasCycle>[0])) {
+      return c.json({ problems: ['This workflow has a cycle, so it could never finish.'] }, 400);
+    }
+
+    const result = saveCrew(body, roomScope(guarded.room.id));
+    return result.ok ? c.json({ crew: result.crew }) : c.json({ problems: result.problems }, 400);
+  });
+
+  app.delete('/api/rooms/:id/configs/:name', (c) => {
+    const guarded = requireRoom(c);
+    if (guarded instanceof Response) return guarded;
+    return deleteConfig(c.req.param('name') ?? '', roomScope(guarded.room.id))
+      ? c.json({ deleted: true })
+      : c.json({ error: 'No such config.' }, 404);
+  });
+
+  app.delete('/api/rooms/:id/crews/:name', (c) => {
+    const guarded = requireRoom(c);
+    if (guarded instanceof Response) return guarded;
+    return deleteCrew(c.req.param('name') ?? '', roomScope(guarded.room.id))
+      ? c.json({ deleted: true })
+      : c.json({ error: 'No such crew.' }, 404);
+  });
+
+  /**
+   * Start a saved crew's graph as a real fleet run.
+   *
+   * A REST route rather than a new wire frame on purpose: a run's PROGRESS is
+   * already observable through the transient `fleet` frame and the event log,
+   * which is the whole claim of this phase — the canvas is a view over the
+   * orchestration model, not a second one. A new frame would be a second
+   * channel carrying facts that already have one.
+   */
+  app.post('/api/rooms/:id/crews/:name/run', async (c) => {
+    const guarded = requireRoom(c);
+    if (guarded instanceof Response) return guarded;
+    const runtime = getRuntime(guarded.room.id);
+    if (runtime === undefined) return c.json({ error: 'That room is not attached.' }, 409);
+
+    const crew = readCrew(c.req.param('name') ?? '', roomScope(guarded.room.id));
+    if (crew === null) return c.json({ error: 'No such crew.' }, 404);
+    if (crew.graph === undefined) {
+      return c.json({ error: 'That crew has no workflow graph. Launch it as a crew instead.' }, 400);
+    }
+
+    const body = (await c.req.json().catch(() => ({}))) as { prompt?: unknown };
+    const prompt = typeof body.prompt === 'string' ? body.prompt : '';
+    if (prompt.trim() === '') return c.json({ error: 'A run needs a prompt.' }, 400);
+
+    const driverId = guarded.room.driverId;
+    const result = startWorkflowRun({
+      runtime,
+      graph: crew.graph,
+      prompt,
+      // Attributed to whoever holds the driver token. A run is started by a
+      // person, and every node's `agent_spawned` and synthetic `user_prompt`
+      // carries that attribution server-side (I2').
+      by: {
+        participantId: driverId ?? 'unknown',
+        displayName:
+          (driverId === null ? undefined : guarded.room.participants.get(driverId)?.displayName) ??
+          'Someone',
+      },
+    });
+    if (!result.ok) return c.json({ error: result.reason }, 400);
+    runtime.broadcastFleet();
+    return c.json({ nodes: [...result.run.nodeAgentIds.entries()] });
+  });
+  // --- END phase-13 config + crew routes ---
+
   app.get('/api/rooms/:id/workspace/tree', (c) => {
     const guarded = requireRoom(c);
     if (guarded instanceof Response) return guarded;
@@ -441,7 +592,7 @@ export function createServer(
   // Adding a page means adding its path here; that friction is intentional.
   // A room link is "/?room=…&token=…" (and now also "/room?…"), so "/"
   // serves the shell either way and the client decides which view to mount.
-  const PAGE_ROUTES = ['/', '/new', '/privacy', '/terms', '/security', '/room'] as const;
+  const PAGE_ROUTES = ['/', '/new', '/privacy', '/terms', '/security', '/room', '/configs'] as const;
   // Anchored to this module, NOT to process.cwd(). Before the monorepo move
   // the default was the cwd-relative 'apps/web/dist', which worked only because
   // every invocation path happened to run from the repo root. Under workspaces
@@ -652,10 +803,26 @@ export function createServer(
             );
             return;
           }
-          void runtime.agent
+          // Routed per agent (phase 12). Absent `agentId` means the primary
+          // agent, which is what every pre-fleet client sends — so a v1 client
+          // is byte-identical. An id naming no live agent is refused rather
+          // than silently falling back: switching the wrong agent's model is a
+          // steering failure, and `getAgent` deliberately does not default.
+          const modelTarget = runtime.getAgent(frame.agentId);
+          if (modelTarget === undefined) {
+            ws.send(JSON.stringify({ kind: 'error', message: 'That agent is not in this room.' }));
+            return;
+          }
+          void modelTarget
             .setModel(frame.model)
             .then(() => {
-              runtime.commit({ type: 'model_changed', participantId, displayName, model: frame.model });
+              runtime.commitAs(frame.agentId ?? PRIMARY_AGENT_ID, {
+                type: 'model_changed',
+                participantId,
+                displayName,
+                model: frame.model,
+              });
+              runtime.broadcastFleet();
             })
             .catch(() => {
               // Never interpolate the raw error: it can carry the API key, and
@@ -682,10 +849,21 @@ export function createServer(
           // running with its batch undiscarded. Of all the operations still
           // addressed per-room, Stop is the one that must not be partial — it
           // is the safety valve.
+          // Phase 12: an explicit `agentId` stops exactly that agent; an ABSENT
+          // one still fans out to every agent, unchanged. That asymmetry is
+          // deliberate. Stop is the safety valve, and the `interrupted` event
+          // committed just above is room-wide — so the default must keep
+          // meaning "stop everything", or the log would claim the room stopped
+          // while agents kept running. Naming an agent is an opt-in narrowing,
+          // never the default.
+          const stopTargets =
+            frame.agentId === undefined
+              ? [...runtime.agents.values()]
+              : [runtime.getAgent(frame.agentId)].filter(
+                  (handle): handle is NonNullable<typeof handle> => handle !== undefined,
+                );
           void Promise.all(
-            [...runtime.agents.values()].map((handle) =>
-              handle.interrupt({ participantId, displayName }),
-            ),
+            stopTargets.map((handle) => handle.interrupt({ participantId, displayName })),
           ).catch(() => {
             // Never interpolate the raw error: it can carry the API key, and
             // this text is committed to the durable log (I4). The SDK rejecting
@@ -698,9 +876,122 @@ export function createServer(
           return;
         }
         // --- END phase-3b interrupt slot ---
+
+        // --- BEGIN phase-12 fleet frames ---
+        // Gated on the driver token with EXACTLY `set_model`'s semantics —
+        // refused when someone holds it, open when the floor is open. Adding
+        // or killing an agent reshapes the room more than switching a model
+        // does, so it cannot be looser than the thing it is stricter than.
+        if (frame.kind === 'spawn_agent' || frame.kind === 'stop_agent') {
+          if (room.driverId !== null && !isDriver(room, participantId)) {
+            ws.send(
+              JSON.stringify({ kind: 'error', message: 'Only the driver can change the fleet.' }),
+            );
+            return;
+          }
+          const by = { participantId, displayName };
+          const result =
+            frame.kind === 'spawn_agent'
+              ? spawnAgent({
+                  runtime,
+                  displayName: frame.displayName,
+                  provider: frame.provider,
+                  model: frame.model,
+                  by,
+                  ...(frame.configName === undefined ? {} : { configName: frame.configName }),
+                })
+              : stopAgent({ runtime, agentId: frame.agentId, by });
+          if (!result.ok) {
+            // `reason` is written to be shown — a refusal a human cannot act on
+            // is a support ticket, and "the fleet is full" is exactly the thing
+            // a person needs to be told rather than left guessing at.
+            ws.send(JSON.stringify({ kind: 'error', message: result.reason }));
+            return;
+          }
+          runtime.broadcastFleet();
+          return;
+        }
+        // --- END phase-12 fleet frames ---
+        // --- BEGIN phase-13 launch_crew frame ---
+        // Same driver semantics as spawn/stop above: a crew IS a spawn, several
+        // at once, and is exactly how a person will first meet the fleet's
+        // resource cap.
+        if (frame.kind === 'launch_crew') {
+          if (room.driverId !== null && !isDriver(room, participantId)) {
+            ws.send(
+              JSON.stringify({ kind: 'error', message: 'Only the driver can launch a crew.' }),
+            );
+            return;
+          }
+          const result = launchCrew({
+            runtime,
+            crewName: frame.crewName,
+            by: { participantId, displayName },
+            // Same room-scoped store the REST routes use — a crew launched
+            // over the socket must resolve to the same configs a person just
+            // saved over HTTP, and must not reach another room's.
+            dataDir: join(DATA_DIR_ROOT, 'roomdata', room.id),
+          });
+          if (!result.ok) {
+            ws.send(JSON.stringify({ kind: 'error', message: result.reason }));
+            return;
+          }
+          runtime.broadcastFleet();
+          return;
+        }
+        // --- END phase-13 launch_crew frame ---
+
+
+        // --- BEGIN phase-11 collaborative document frames ---
+        // Deliberately NOT gated on the driver token, for every one of the
+        // four frames below — see wire.ts's own comment on `doc_sync`: the
+        // token arbitrates who steers the AGENT (I2'), and a multiplayer
+        // editor where only one person may type is a screen share. Any
+        // participant may open, edit, watch or close any file.
+        if (frame.kind === 'doc_open') {
+          runtime.docOpen(ws, participantId, frame.path).catch((error: unknown) => {
+            // WorkspacePathError's messages are already written to be shown
+            // (the same "never surface the raw error" discipline used
+            // elsewhere in this file) — anything else is unexpected and gets
+            // a generic message instead of a raw stack trace over the wire.
+            ws.send(
+              JSON.stringify({
+                kind: 'error',
+                message: error instanceof WorkspacePathError ? error.message : 'Could not open that file.',
+              }),
+            );
+          });
+          return;
+        }
+
+        if (frame.kind === 'doc_close') {
+          runtime.docClose(ws, participantId, frame.path);
+          return;
+        }
+
+        if (frame.kind === 'doc_sync') {
+          void runtime.docApplySync(ws, participantId, frame.path, frame.payload).catch(() => {
+            // A malformed or corrupt payload (bad base64, truncated JSON, a
+            // change bundle Automerge rejects) — never surface the raw
+            // decode error, and never let it take the socket down.
+            ws.send(JSON.stringify({ kind: 'error', message: 'Could not apply that edit.' }));
+          });
+          return;
+        }
+
+        if (frame.kind === 'doc_presence') {
+          runtime.docSetPresence(ws, participantId, displayName, frame.path, frame.anchor, frame.head);
+          return;
+        }
+        // --- END phase-11 collaborative document frames ---
       });
 
       ws.on('close', () => {
+        // Every path THIS socket opened, regardless of whether other sockets
+        // (this participant's other tabs, or other people) still have it —
+        // see `docDisconnect`'s own comment for the one-tab-per-file
+        // simplification this accepts.
+        runtime.docDisconnect(ws, participantId);
         runtime.removeSocket(ws);
         // Two tabs can share one identity now that ids survive a reconnect.
         // Closing one of them is not the person leaving, and must not arm the
