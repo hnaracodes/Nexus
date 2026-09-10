@@ -30,3 +30,33 @@ describe('isAllowedNavigation', () => {
     expect(isAllowedNavigation('not a url', appOrigin)).toBe(false);
   });
 });
+
+describe('phase 16a — a joined remote room is a second allowed origin', () => {
+  const local = 'http://127.0.0.1:54312';
+  const joined = 'https://nexus-mvp.fly.dev';
+
+  it('allows the joined origin once the app has joined a room', () => {
+    expect(isAllowedNavigation('https://nexus-mvp.fly.dev/room', local, joined)).toBe(true);
+  });
+
+  it('still allows the app\'s own origin', () => {
+    expect(isAllowedNavigation('http://127.0.0.1:54312/', local, joined)).toBe(true);
+  });
+
+  it('refuses a THIRD origin — joining one room is not a licence to browse', () => {
+    // The whole risk of widening the guard: a joined room's page could try to
+    // walk the window somewhere else, and the window carries the user's trust.
+    expect(isAllowedNavigation('https://evil.example/', local, joined)).toBe(false);
+    expect(isAllowedNavigation('https://nexus-mvp.fly.dev.evil.example/', local, joined)).toBe(false);
+  });
+
+  it('refuses the joined origin when no room has been joined', () => {
+    // Absent second argument must not mean "allow anything".
+    expect(isAllowedNavigation('https://nexus-mvp.fly.dev/', local)).toBe(false);
+  });
+
+  it('refuses a scheme downgrade on the joined origin', () => {
+    // Same host, different protocol — a token in the URL must not travel plain.
+    expect(isAllowedNavigation('http://nexus-mvp.fly.dev/', local, joined)).toBe(false);
+  });
+});

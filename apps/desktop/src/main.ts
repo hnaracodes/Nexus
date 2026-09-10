@@ -1,9 +1,10 @@
 import { fileURLToPath } from 'node:url';
 import { join as joinPath } from 'node:path';
 import type { Server } from 'node:http';
-import { BrowserWindow, app, shell } from 'electron';
+import { BrowserWindow, app, ipcMain, shell } from 'electron';
 import { resolveListenPort, serverOrigin } from './serverHost.js';
 import { isAllowedNavigation } from './navigationGuard.js';
+import { parseRoomLink } from './launcher.js';
 
 // One process, one server, one room — this file never calls createServer()
 // more than once. Invariant I1 is about a room owning exactly one live
@@ -102,7 +103,7 @@ async function startBackend(): Promise<string> {
   return serverOrigin(resolveListenPort(server.address()));
 }
 
-function createWindow(origin: string): void {
+function createWindow(origin: string, joinedOrigin?: string): void {
   const window = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -132,12 +133,12 @@ function createWindow(origin: string): void {
   // is a pure predicate (navigationGuard.ts) precisely so this same check can
   // be exercised by a test without launching Electron at all.
   window.webContents.on('will-navigate', (event, url) => {
-    if (isAllowedNavigation(url, origin)) return;
+    if (isAllowedNavigation(url, origin, joinedOrigin)) return;
     event.preventDefault();
     void shell.openExternal(url);
   });
   window.webContents.setWindowOpenHandler(({ url }) => {
-    if (!isAllowedNavigation(url, origin)) void shell.openExternal(url);
+    if (!isAllowedNavigation(url, origin, joinedOrigin)) void shell.openExternal(url);
     // Always 'deny': even a same-origin window.open() gets nothing special
     // here. Nothing in the room UI currently opens same-origin popups, and
     // the moment one does, it should get a deliberate decision, not a
@@ -146,20 +147,128 @@ function createWindow(origin: string): void {
     return { action: 'deny' };
   });
 
+  /**
+   * NAME THE HOST IN THE TITLE BAR when the app has joined someone else's
+   * room.
+   *
+   * This window is chrome-less: there is no address bar, so once it has loaded
+   * a remote origin the user has no way to see WHERE they are. A pasted link to
+   * `https://nexus-mvp.fly.dev.evil.example` is a well-formed room link to a
+   * host we cannot refuse — Nexus is self-hostable, so there is no allow-list
+   * of legitimate hosts to check against — and a page there could imitate the
+   * room UI and ask for an Anthropic API key.
+   *
+   * The navigation guard already stops that page walking the window onward.
+   * What it cannot do is tell the user which house they are standing in. A
+   * title bar is the browser's address bar for a window that has none, and it
+   * costs one line.
+   *
+   * Local rooms keep the plain product name: there is no host worth naming when
+   * the server is this process.
+   */
+  if (joinedOrigin !== undefined) {
+    // `setTitle` rather than letting the page's <title> win — a hostile page
+    // would happily title itself whatever it liked.
+    const host = (() => {
+      try {
+        return new URL(joinedOrigin).host;
+      } catch {
+        return joinedOrigin;
+      }
+    })();
+    window.setTitle(`Nexus — connected to ${host}`);
+    window.on('page-title-updated', (event) => {
+      event.preventDefault();
+    });
+  }
+
   void window.loadURL(origin);
+}
+
+
+/**
+ * The first window the app shows: a local page asking where to go.
+ *
+ * Loaded with `loadFile` from inside the bundle, NEVER from a server. The page
+ * that decides which origin to trust must not itself be served by a candidate
+ * origin, or a hostile room controls the screen that vets it.
+ */
+function createJoinWindow(): BrowserWindow {
+  const window = new BrowserWindow({
+    width: 640,
+    height: 560,
+    resizable: false,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      // A DIFFERENT preload from the room window's. See joinPreload.cts: this
+      // one exposes a single channel, because this page ships with the app.
+      // The room window keeps the zero-capability preload.
+      preload: fileURLToPath(new URL('./joinPreload.cjs', import.meta.url)),
+    },
+  });
+  void window.loadFile(fileURLToPath(new URL('../join.html', import.meta.url)));
+  return window;
+}
+
+/**
+ * Wire the join screen's two choices.
+ *
+ * Registered once, in `main()`, before any window exists. `parseRoomLink` is
+ * the security boundary and runs HERE, in the main process — the renderer
+ * hands over a string and gets a verdict; it never decides what is loaded.
+ */
+function registerJoinHandlers(getJoinWindow: () => BrowserWindow | null): void {
+  ipcMain.handle('nexus:join', (_event, raw: unknown): string | null => {
+    if (typeof raw !== 'string') return 'That does not look like a room link.';
+    const parsed = parseRoomLink(raw);
+    if (!parsed.ok) return parsed.problem;
+
+    // The joined origin is fixed HERE, once, and handed to the window as the
+    // single extra destination its guard will permit.
+    createWindow(parsed.target.url, parsed.target.origin);
+    getJoinWindow()?.close();
+    return null;
+  });
+
+  ipcMain.handle('nexus:work-locally', async (): Promise<void> => {
+    // Today's behaviour, unchanged — and only reached down THIS branch. A join
+    // must never start the in-process server: two servers means two room
+    // registries and a user who cannot tell which room they are in.
+    const origin = await startBackend();
+    createWindow(origin);
+    getJoinWindow()?.close();
+  });
 }
 
 async function main(): Promise<void> {
   await app.whenReady();
-  const origin = await startBackend();
-  createWindow(origin);
+
+  /**
+   * The app now OPENS ON A CHOICE rather than on a local room (phase 16a).
+   *
+   * Before this, `main()` started the in-process server unconditionally and
+   * loaded it — which is why the desktop app could only ever be an island. It
+   * now asks first, and the server starts only down the "work on this machine"
+   * branch. That is the whole shape of the fix: joining is not a mode bolted
+   * onto a local server, it is the absence of one.
+   */
+  let joinWindow: BrowserWindow | null = createJoinWindow();
+  joinWindow.on('closed', () => {
+    joinWindow = null;
+  });
+  registerJoinHandlers(() => joinWindow);
 
   app.on('activate', () => {
-    // macOS convention: the app (and this process, and the one HTTP server
-    // it started) stays alive after every window closes, and clicking the
-    // dock icon should bring a window back rather than starting a second
-    // server on a second port.
-    if (BrowserWindow.getAllWindows().length === 0) createWindow(origin);
+    // macOS convention: the app stays alive after every window closes, and
+    // clicking the dock icon should bring a window back. With no room chosen
+    // yet, the thing to bring back is the choice.
+    if (BrowserWindow.getAllWindows().length > 0) return;
+    joinWindow = createJoinWindow();
+    joinWindow.on('closed', () => {
+      joinWindow = null;
+    });
   });
 }
 
