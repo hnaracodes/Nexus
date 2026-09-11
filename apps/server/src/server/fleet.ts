@@ -396,8 +396,10 @@ export function buildRosterView(runtime: FleetRuntime, selfId: AgentId): Roster 
     // doesn't know about. Still better than throwing — a wrong-but-legible
     // name beats crashing a turn over a roster line.
     selfDisplayName: self?.displayName ?? selfId,
+    selfAgentId: selfId,
     others: others.map((entry) => ({
       displayName: entry.displayName,
+      agentId: entry.agentId,
       provider: entry.provider,
       status: entry.status,
     })),

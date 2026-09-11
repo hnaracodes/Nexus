@@ -39,6 +39,19 @@ export interface Batch {
  */
 export interface RosterPeer {
   displayName: string;
+  /**
+   * The peer's agent id, and the reason this interface carries one.
+   *
+   * A display name is whatever a driver typed into `spawn_agent`; nothing makes
+   * it unique, and `agentId` is the identity everywhere else in the system.
+   * A live room proved the difference: it held two agents both named "Beta"
+   * plus a second "Alpha" beside the Alpha being prompted, and the real agent,
+   * asked to list its siblings, flagged "Beta (appears twice)" and silently
+   * dropped the namesake Alpha — reading that line as itself. A roster nobody
+   * can act on is decoration, and the moment an agent may address a sibling
+   * this field becomes the address.
+   */
+  agentId: string;
   provider: string;
   status: string;
 }
@@ -55,6 +68,10 @@ export interface Roster {
   /** This agent's own display name, so the turn can say which one it is — an
    *  agent that knows others exist but not which one it is will guess. */
   selfDisplayName: string;
+  /** And its own id, for the same reason the peers carry theirs: a namesake in
+   *  the list is otherwise indistinguishable from itself. Required, not
+   *  optional — an identity that can be omitted is one that will be. */
+  selfAgentId: string;
   /** Every OTHER live (non-stopped) agent in the room. An empty list means
    *  "alone" and is treated exactly like passing no roster at all: no
    *  preamble, because a lone agent has no siblings to be told about. */
@@ -151,11 +168,13 @@ function renderBody(batch: PendingPrompt[]): string {
 function renderRosterPreamble(roster: Roster | null): string {
   if (roster === null || roster.others.length === 0) return '';
   const lines = roster.others.map(
-    (peer) => `  - ${peer.displayName} (${peer.provider}, ${peer.status})`,
+    (peer) => `  - ${peer.displayName} [${peer.agentId}] (${peer.provider}, ${peer.status})`,
   );
   return [
     'Other agents are working in this room right now:',
     ...lines,
-    `You are ${roster.selfDisplayName}. You share the working directory with them.`,
+    `You are ${roster.selfDisplayName} [${roster.selfAgentId}]. You share the working`,
+    'directory with them. Display names are not unique — the bracketed id is the',
+    'only thing that identifies an agent, including which one is you.',
   ].join('\n');
 }

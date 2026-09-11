@@ -136,7 +136,7 @@ describe('turn gate — sibling roster preamble (phase 17d)', () => {
   it('omits the roster when one is supplied but names no one else', () => {
     const batch = gate.submit(
       { seq: 1, displayName: 'Ada', text: 'go', wasDriver: true },
-      { selfDisplayName: 'Agent', others: [] },
+      { selfDisplayName: 'Agent', selfAgentId: 'primary', others: [] },
     );
     expect(batch?.text).toBe('[Ada]: go');
   });
@@ -144,37 +144,41 @@ describe('turn gate — sibling roster preamble (phase 17d)', () => {
   it('prefixes the turn with a roster naming every other agent and this one', () => {
     const batch = gate.submit(
       { seq: 1, displayName: 'Ada', text: 'go', wasDriver: true },
-      { selfDisplayName: 'Scout', others: [{ displayName: 'Alpha', provider: 'anthropic', status: 'idle' }] },
+      {
+        selfDisplayName: 'Scout',
+        selfAgentId: 'agent_scout00000000',
+        others: [{ displayName: 'Alpha', agentId: 'agent_alpha00000000', provider: 'anthropic', status: 'idle' }],
+      },
     );
     expect(batch?.text).toContain('Other agents are working in this room right now:');
-    expect(batch?.text).toContain('- Alpha (anthropic, idle)');
-    expect(batch?.text).toContain('You are Scout.');
+    expect(batch?.text).toContain('- Alpha [agent_alpha00000000] (anthropic, idle)');
+    expect(batch?.text).toContain('You are Scout [agent_scout00000000].');
     // The roster comes BEFORE the prompt body, not after.
     expect(batch?.text.endsWith('[Ada]: go')).toBe(true);
   });
 
   it('names the RECIPIENT correctly — same fleet, opposite self, seen from each side', () => {
-    const alpha = { displayName: 'Alpha', provider: 'anthropic', status: 'idle' };
-    const beta = { displayName: 'Beta', provider: 'anthropic', status: 'working' };
+    const alpha = { displayName: 'Alpha', agentId: 'agent_alpha00000000', provider: 'anthropic', status: 'idle' };
+    const beta = { displayName: 'Beta', agentId: 'agent_beta000000000', provider: 'anthropic', status: 'working' };
     const alphaGate = createTurnGate();
     const betaGate = createTurnGate();
 
     const alphaBatch = alphaGate.submit(
       { seq: 1, displayName: 'Ada', text: 'go', wasDriver: true },
-      { selfDisplayName: 'Alpha', others: [beta] },
+      { selfDisplayName: 'Alpha', selfAgentId: 'agent_alpha00000000', others: [beta] },
     );
     const betaBatch = betaGate.submit(
       { seq: 1, displayName: 'Ada', text: 'go', wasDriver: true },
-      { selfDisplayName: 'Beta', others: [alpha] },
+      { selfDisplayName: 'Beta', selfAgentId: 'agent_beta000000000', others: [alpha] },
     );
 
-    expect(alphaBatch?.text).toContain('You are Alpha.');
-    expect(alphaBatch?.text).toContain('- Beta (anthropic, working)');
-    expect(alphaBatch?.text).not.toContain('You are Beta.');
+    expect(alphaBatch?.text).toContain('You are Alpha [agent_alpha00000000].');
+    expect(alphaBatch?.text).toContain('- Beta [agent_beta000000000] (anthropic, working)');
+    expect(alphaBatch?.text).not.toContain('You are Beta [agent_beta000000000].');
 
-    expect(betaBatch?.text).toContain('You are Beta.');
-    expect(betaBatch?.text).toContain('- Alpha (anthropic, idle)');
-    expect(betaBatch?.text).not.toContain('You are Alpha.');
+    expect(betaBatch?.text).toContain('You are Beta [agent_beta000000000].');
+    expect(betaBatch?.text).toContain('- Alpha [agent_alpha00000000] (anthropic, idle)');
+    expect(betaBatch?.text).not.toContain('You are Alpha [agent_alpha00000000].');
   });
 
   it('carries a supplied roster through onIdle too, not just the first-prompt path', () => {
@@ -182,10 +186,11 @@ describe('turn gate — sibling roster preamble (phase 17d)', () => {
     gate.submit({ seq: 2, displayName: 'Bob', text: 'queued', wasDriver: false });
     const batch = gate.onIdle({
       selfDisplayName: 'Agent',
-      others: [{ displayName: 'Runner', provider: 'google', status: 'idle' }],
+      selfAgentId: 'primary',
+      others: [{ displayName: 'Runner', agentId: 'agent_runner0000000', provider: 'google', status: 'idle' }],
     });
-    expect(batch?.text).toContain('You are Agent.');
-    expect(batch?.text).toContain('- Runner (google, idle)');
+    expect(batch?.text).toContain('You are Agent [primary].');
+    expect(batch?.text).toContain('- Runner [agent_runner0000000] (google, idle)');
   });
 
   it('still marks the driver correctly in a multi-prompt batch that also carries a roster', () => {
@@ -193,9 +198,64 @@ describe('turn gate — sibling roster preamble (phase 17d)', () => {
     gate.submit({ seq: 2, displayName: 'Ada', text: 'do X', wasDriver: true });
     gate.submit({ seq: 3, displayName: 'Bob', text: 'do Y', wasDriver: false });
 
-    const batch = gate.onIdle({ selfDisplayName: 'Agent', others: [{ displayName: 'Beta', provider: 'anthropic', status: 'idle' }] });
-    expect(batch?.text).toContain('You are Agent.');
+    const batch = gate.onIdle({
+      selfDisplayName: 'Agent',
+      selfAgentId: 'primary',
+      others: [{ displayName: 'Beta', agentId: 'agent_beta000000000', provider: 'anthropic', status: 'idle' }],
+    });
+    expect(batch?.text).toContain('You are Agent [primary].');
     expect(batch?.text).toContain('[Ada — driver] do X');
     expect(batch?.text).toContain('[Bob] do Y');
+  });
+});
+
+/**
+ * Display names are NOT unique, and the roster was treating them as identity.
+ *
+ * Found by running it, not by reading it. A live room held two agents both
+ * named "Beta" (one recovered from the log, one freshly spawned) plus a second
+ * "Alpha" alongside the Alpha being prompted. Asked to list its siblings, the
+ * real agent answered: "I am Alpha. The others are: Agent, Beta (appears twice
+ * in the roster), Scout, Runner" — it flagged the duplicate Beta as odd and
+ * silently omitted the second Alpha altogether, almost certainly reading that
+ * line as itself.
+ *
+ * Nothing about the fleet forbids duplicate names: `spawn_agent` takes any
+ * displayName a driver types, and `agentId` is the identity everywhere else in
+ * the system. A roster that identifies peers by a non-unique field cannot be
+ * acted on — and the moment an agent can address a sibling, that field becomes
+ * an address. Carry the id.
+ */
+describe('the roster distinguishes agents that share a display name', () => {
+  const peer = (displayName: string, agentId: string) => ({
+    displayName, agentId, provider: 'anthropic', status: 'idle',
+  });
+
+  it('names the id of every peer, so two agents called Beta are distinguishable', () => {
+    const gate = createTurnGate();
+    const roster = {
+      selfDisplayName: 'Alpha',
+      selfAgentId: 'agent_aaaaaaaaaaaa',
+      others: [peer('Beta', 'agent_bbbbbbbbbbbb'), peer('Beta', 'agent_cccccccccccc')],
+    };
+
+    const batch = gate.submit({ seq: 1, displayName: 'Ada', text: 'go', wasDriver: true }, roster);
+
+    expect(batch?.text).toContain('agent_bbbbbbbbbbbb');
+    expect(batch?.text).toContain('agent_cccccccccccc');
+  });
+
+  it('names the recipient by id too, so an agent cannot mistake a namesake for itself', () => {
+    const gate = createTurnGate();
+    const roster = {
+      selfDisplayName: 'Alpha',
+      selfAgentId: 'agent_aaaaaaaaaaaa',
+      others: [peer('Alpha', 'agent_dddddddddddd')],
+    };
+
+    const batch = gate.submit({ seq: 1, displayName: 'Ada', text: 'go', wasDriver: true }, roster);
+
+    expect(batch?.text).toContain('agent_aaaaaaaaaaaa');
+    expect(batch?.text).toContain('agent_dddddddddddd');
   });
 });

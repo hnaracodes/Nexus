@@ -401,13 +401,14 @@ describe('sibling roster preamble (phase 17d)', () => {
     const h = harnessCapturingPrompt(neverEndingSession, {
       roster: () => ({
         selfDisplayName: 'Agent',
-        others: [{ displayName: 'Beta', provider: 'anthropic', status: 'idle' }],
+      selfAgentId: 'agent_agent0000000',
+        others: [{ displayName: 'Beta', agentId: 'agent_beta00000000', provider: 'anthropic', status: 'idle' }],
       }),
     });
     h.handle.submit(prompt('hello'));
     const text = await h.nextDelivered();
-    expect(text).toContain('You are Agent.');
-    expect(text).toContain('- Beta (anthropic, idle)');
+    expect(text).toContain('You are Agent [agent_agent0000000].');
+    expect(text).toContain('- Beta [agent_beta00000000] (anthropic, idle)');
     expect(text.endsWith('[Ada]: hello')).toBe(true);
   });
 
@@ -439,7 +440,8 @@ describe('sibling roster preamble (phase 17d)', () => {
             ? null
             : {
                 selfDisplayName: 'Agent',
-                others: [{ displayName: 'Beta', provider: 'anthropic', status: 'working' }],
+      selfAgentId: 'agent_agent0000000',
+                others: [{ displayName: 'Beta', agentId: 'agent_beta00000000', provider: 'anthropic', status: 'working' }],
               };
         },
       },
@@ -451,8 +453,8 @@ describe('sibling roster preamble (phase 17d)', () => {
     h.handle.submit(prompt('second', false));
     endTurn();
     const second = await h.nextDelivered();
-    expect(second).toContain('You are Agent.');
-    expect(second).toContain('- Beta (anthropic, working)');
+    expect(second).toContain('You are Agent [agent_agent0000000].');
+    expect(second).toContain('- Beta [agent_beta00000000] (anthropic, working)');
     expect(calls).toBeGreaterThanOrEqual(2);
   });
 });

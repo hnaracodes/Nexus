@@ -363,9 +363,9 @@ describe('buildRosterView', () => {
       betaView,
     )?.text;
 
-    expect(alphaText).toContain('You are Alpha.');
-    expect(alphaText).toContain('- Beta (anthropic, idle)');
-    expect(betaText).toContain('You are Beta.');
-    expect(betaText).toContain('- Alpha (anthropic, idle)');
+    expect(alphaText).toContain(`You are Alpha [${alpha.agentId}].`);
+    expect(alphaText).toContain(`- Beta [${beta.agentId}] (anthropic, idle)`);
+    expect(betaText).toContain(`You are Beta [${beta.agentId}].`);
+    expect(betaText).toContain(`- Alpha [${alpha.agentId}] (anthropic, idle)`);
   });
 });
