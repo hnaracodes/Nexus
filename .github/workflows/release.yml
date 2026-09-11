@@ -1,0 +1,126 @@
+# Builds the desktop app on all three platforms and attaches the results to
+# a GitHub Release, on every `v*` tag push. This is phase 17e — see
+# electron-builder.yml for the `publish:` block this reads, and
+# apps/web/src/pages/Download.tsx / scripts/install.sh for the two consumers
+# of what this workflow produces.
+#
+# Nothing here signs anything. The dmg/exe this produces are UNSIGNED and
+# un-notarized (CLAUDE.md §11: that is a deferred decision, not an oversight)
+# — the download page and install script both say so to the person receiving
+# the file; this workflow's only job is to build it and get it onto a release.
+#
+# `npm run verify` runs in its own job and every build job depends on it, so
+# nothing is published unless typecheck + both builds + both suites are
+# green in THIS run — CLAUDE.md records a `tsc -b` failure shipping behind a
+# green vitest run twice, the second time breaking a deploy. This closes
+# that gap for a tagged release the same way verify.yml closes it for a push.
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run verify
+
+  build:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # electron-builder auto-targets the host OS when given no platform
+          # flag, but the flags are passed explicitly anyway so a reader does
+          # not have to know that default to see what each job builds.
+          - os: macos-latest
+            flag: --mac
+          - os: windows-latest
+            flag: --win
+          - os: ubuntu-latest
+            flag: --linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+
+      # electron-builder substitutes `${version}` (electron-builder.yml's
+      # artifactName) from apps/desktop/package.json, and by default looks
+      # for a GitHub release tagged `v${version}` to publish to. Both need to
+      # be the tag that triggered this run, not whatever is committed.
+      - name: Set the desktop package version from the pushed tag
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          (cd apps/desktop && npm pkg set version="$tag")
+
+      # Builds the protocol package, the server, the web client (via
+      # apps/desktop's own prebuild hook) and then apps/desktop/dist itself.
+      - name: Build
+        shell: bash
+        run: npm run build -w @nexus/desktop
+
+      # `--publish always` reads electron-builder.yml's `publish:` block.
+      # electron-builder's GitHub provider defaults to a DRAFT release, which
+      # is deliberate here: three OS jobs publish to the same tag
+      # concurrently, and a shared draft is what lets electron-builder
+      # find-or-create the one release and append this job's assets to it
+      # without a race. The `finalize` job below flips it to a real,
+      # non-draft release only after all three have succeeded.
+      - name: Package and publish to the (draft) GitHub release
+        shell: bash
+        working-directory: apps/desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder ${{ matrix.flag }} --publish always
+
+      # electron-builder's own publish also uploads its update-metadata
+      # (*.yml/*.blockmap) — sha512, meant for a future electron-updater feed
+      # this app does not have. scripts/install.sh and the download page
+      # verify a plain "<hash>  <filename>" sha256 sidecar instead, so it is
+      # generated and uploaded here, once per artifact this job produced.
+      - name: Publish a sha256 checksum for each artifact
+        shell: bash
+        working-directory: apps/desktop/release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          shopt -s nullglob
+          for f in *.dmg *.exe *.AppImage; do
+            if command -v sha256sum >/dev/null 2>&1; then
+              sha256sum "$f" > "$f.sha256"
+            else
+              shasum -a 256 "$f" > "$f.sha256"
+            fi
+            gh release upload "$GITHUB_REF_NAME" "$f.sha256" --clobber
+          done
+
+  # Runs once, after every platform has uploaded its build, and turns the
+  # shared draft into the real release. Kept as a separate last step instead
+  # of having any one matrix job finalize it, so finalization cannot race
+  # against a still-uploading sibling.
+  finalize:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "$GITHUB_REF_NAME" --draft=false
