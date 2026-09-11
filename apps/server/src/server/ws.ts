@@ -7,6 +7,7 @@ import { createSink } from '../log/index.js';
 import { projectAgents } from '../log/replay.js';
 import { redactEvent } from '../log/redact.js';
 import type { AgentDeps, AgentHandle } from './agent.js';
+import { buildRosterView } from './fleet.js';
 import type { Decision } from './permissions.js';
 import { createDocRegistry } from './docs.js';
 import { createApprovalQueue } from './approvalQueue.js';
@@ -342,6 +343,28 @@ export function attachRoom(
               approvals.admit(agentId, requestId, toolName, surface),
             release: (requestId) => approvals.release(requestId),
           },
+          /**
+           * The sibling roster (phase 17d). Bound per agent, for the same
+           * reason `visibility` above is: the roster an agent is shown is
+           * "everyone EXCEPT me", so it can only be built once `agentId` is
+           * known.
+           *
+           * A FUNCTION, not a value, and deliberately not memoized. `agent.ts`
+           * calls it fresh at every turn boundary because the fleet changes
+           * underneath a long-lived session — I1 means this agent's `query()`
+           * lives as long as the room does, so anything captured here at
+           * construction time would describe the room as it was the moment
+           * this agent spawned and never again.
+           *
+           * This line is the ENTIRE production path for phase 17d. Without it
+           * `buildRosterView` is unreachable code with a full test suite of
+           * its own: the unit that wrote it did not own this file, stopped at
+           * the boundary, and said so in its report. A dep that is merely
+           * present is not the same as a dep that is wired — an integration
+           * test (`roster-wiring.test.ts`) asserts on the text an agent is
+           * actually handed, not on whether this property exists.
+           */
+          roster: () => buildRosterView(runtime, agentId),
           ...deps,
           ...agentDeps,
         },

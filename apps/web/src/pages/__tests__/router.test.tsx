@@ -43,3 +43,31 @@ describe('resolveRoute', () => {
     expect(resolveRoute('/nope', '')).toBe('landing');
   });
 });
+
+/**
+ * THE DISPATCH, not just the resolver.
+ *
+ * Everything above tests `resolveRoute`, which is a pure function — and
+ * `resolveRoute('/download', '')` returned `'download'` correctly while the
+ * page was unreachable in the running app, because `router.tsx`'s switch had
+ * no `case 'download'` and its `default` is the landing page. A missing case
+ * in a switch with a default fails SILENTLY: no crash, no 404, just the wrong
+ * page. The unit that added the route did not own `router.tsx` and correctly
+ * stopped at the boundary; this test is what makes the boundary observable.
+ *
+ * Asserting "is not the landing page" as well as "is the download page",
+ * because the failure mode being guarded against renders a perfectly valid
+ * page — just not this one.
+ */
+describe('the router actually dispatches each route', () => {
+  it('renders the download page at /download rather than falling through to the landing page', async () => {
+    const { render, screen } = await import('@testing-library/react');
+    const { Router } = await import('../../router.js');
+
+    globalThis.history.replaceState({}, '', '/download');
+    render(<Router />);
+
+    expect(await screen.findByRole('heading', { name: /download nexus/i })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: /one agent, one context window/i })).toBeNull();
+  });
+});
