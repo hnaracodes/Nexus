@@ -28,6 +28,7 @@ export const PAGE_PATHS = [
   '/room',
   '/configs',
   '/download',
+  '/usage',
   '/privacy',
   '/terms',
   '/security',

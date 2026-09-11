@@ -113,3 +113,28 @@ describe('every shared page path resolves in the client', () => {
     }
   });
 });
+
+/**
+ * The direction the test above does NOT cover. `PAGE_PATHS -> resolves` says
+ * nothing about a path the client added to `PATHS` without anyone adding it
+ * to `PAGE_PATHS` — which is exactly how `/usage` shipped in the same commit
+ * that fixed this failure class for `/download`: the client resolved it, the
+ * page rendered in dev (vite's catch-all), and it would have 404'd in
+ * production silently. `/room` is deliberately excluded — it is a static
+ * path in `PATHS` but is not itself a distinct served page (a bare `/room`
+ * without credentials falls back to landing by design, per the test above),
+ * and it is separately present in `PAGE_PATHS` regardless.
+ */
+describe('every client-resolvable path is a known page path', () => {
+  it('has a PAGE_PATHS entry for every static path in routing.ts', async () => {
+    const { PAGE_PATHS } = await import('@nexus/protocol/pages');
+    const { PATHS } = await import('../../routing.js');
+
+    for (const path of Object.keys(PATHS)) {
+      expect(
+        (PAGE_PATHS as readonly string[]).includes(path),
+        `${path} resolves in the client but is missing from @nexus/protocol/pages PAGE_PATHS — it will 404 in production`,
+      ).toBe(true);
+    }
+  });
+});
