@@ -19,6 +19,17 @@ contextBridge.exposeInMainWorld('nexusJoin', {
   /** Hand main a pasted room link. Resolves to null on success (the window is
    *  replaced), or a human-readable problem to display. */
   submit: (link: string): Promise<string | null> => ipcRenderer.invoke('nexus:join', link),
-  /** Start the in-process server and open a local room, today's behaviour. */
-  workLocally: (): Promise<void> => ipcRenderer.invoke('nexus:work-locally'),
+  /**
+   * Phase 17c, step 1 of "Open a folder": ask main to show the native folder
+   * picker. Resolves to null if the user cancels, or to the consent text to
+   * display — never to the path itself. This page never learns, and never
+   * gets to name, which folder was picked; see main.ts's `pendingFolderPath`.
+   */
+  pickFolder: (): Promise<{ consent: string } | null> => ipcRenderer.invoke('nexus:pick-folder'),
+  /**
+   * Step 2: create the room from the folder already picked, using this API
+   * key. Resolves to null on success (the window is replaced), or a
+   * human-readable problem to display.
+   */
+  openFolder: (apiKey: string): Promise<string | null> => ipcRenderer.invoke('nexus:open-folder', apiKey),
 });
