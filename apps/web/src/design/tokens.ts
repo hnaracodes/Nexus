@@ -44,3 +44,32 @@ export const COLORS = {
  * 15-35 (--accent, hue 25) and 340-360 (--danger, hue 351).
  */
 export const AVATAR_HUES = [52, 78, 100, 168, 190, 210, 235, 262, 288, 312] as const;
+
+/**
+ * Pixel dimensions for the VS Code-shaped shell (phase 17a): the activity
+ * bar, side bar and bottom panel. These are numbers, not Tailwind classes,
+ * because the panel's height is user-resizable by drag — that state has to
+ * live in JS and drive an inline style, so its bounds belong beside it
+ * rather than scattered across `App.tsx` as magic numbers. `activityBarWidth`
+ * and `statusBarHeight` are fixed today (Tailwind's own `w-12`/`h-6`
+ * utilities already match them) but are named here too, so the whole
+ * shell's proportions read as one system rather than half tokens and half
+ * literals.
+ */
+export const LAYOUT = {
+  /** Region A — the icon rail. Fixed; VS Code's activity bar never resizes. */
+  activityBarWidth: 48,
+  /** Region B — the side bar's width. Fixed for now (drag-resize is a later
+   *  phase's problem) — the constant exists so that phase has one number to
+   *  change rather than a class hunted down across the tree. */
+  sideBarWidth: 260,
+  /** Region D — the panel, drag-resizable between these bounds. */
+  panelDefaultHeight: 260,
+  panelMinHeight: 120,
+  panelMaxHeight: 640,
+  /** Collapsed, the panel still shows its header bar — never zero, so the
+   *  control to reopen it is always reachable. */
+  panelCollapsedHeight: 36,
+  /** Region E — the status bar. */
+  statusBarHeight: 24,
+} as const;
