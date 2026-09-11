@@ -27,7 +27,9 @@
     "typecheck:desktop": "npm run typecheck -w @nexus/desktop",
     "build:desktop": "npm run build -w @nexus/desktop",
     "test:desktop": "npm run test -w @nexus/desktop",
-    "test:install": "node scripts/install.test.mjs"
+    "test:install": "node scripts/install.test.mjs",
+    "clean": "node -e \"const{rmSync}=require('fs');for(const d of ['apps/server/dist','apps/web/dist','apps/desktop/dist','packages/protocol/dist'])rmSync(d,{recursive:true,force:true})\"",
+    "verify:clean": "npm run clean && npm run verify"
   },
   "devDependencies": {
     "typescript": "^5.6.0"

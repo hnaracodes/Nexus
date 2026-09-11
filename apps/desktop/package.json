@@ -13,7 +13,7 @@
     "dev": "npm run build && electron .",
     "prebuild": "npm run protocol:build --prefix ../.. && npm run build -w @nexus/server --prefix ../.. && npm run build:client --prefix ../..",
     "build": "tsc -p tsconfig.build.json",
-    "pretypecheck": "npm run protocol:build --prefix ../..",
+    "pretypecheck": "npm run protocol:build --prefix ../.. && npm run build -w @nexus/server --prefix ../..",
     "typecheck": "tsc -p tsconfig.json",
     "prestart": "npm run build",
     "start": "electron .",
