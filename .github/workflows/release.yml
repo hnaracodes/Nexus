@@ -70,7 +70,33 @@ permissions:
   contents: write
 
 jobs:
+  # Fails fast, before anything is built, if the tag is not a shape the rest of
+  # this workflow can use.
+  #
+  # This is not hypothetical. The `v*` trigger above matches far more than
+  # semver, and this repository already carries a tag named `v.1.0.0` — with a
+  # dot after the v. The build job derives the package version as
+  # `${GITHUB_REF_NAME#v}`, which turns that into `.1.0.0`, and `npm pkg set
+  # version` rejects it. Without this gate the failure lands three jobs deep,
+  # after `npm run verify` and two full platform builds have already run, with
+  # an error about npm versions that says nothing about the tag that caused it.
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the tag is a version this workflow can build
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          case "${tag#v}" in
+            [0-9]*.[0-9]*.[0-9]*) ;;
+            *)
+              echo "::error::Tag '$tag' is not usable. Releases must be tagged vMAJOR.MINOR.PATCH — for example v1.0.0 (note: no dot after the v; this repo already has a 'v.1.0.0' tag that this workflow cannot build). The tag becomes the app version via \`npm pkg set version\`, so it has to be valid semver."
+              exit 1
+              ;;
+          esac
+          echo "Building release $tag (version ${tag#v})"
+
   verify:
+    needs: tag
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
