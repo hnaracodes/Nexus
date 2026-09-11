@@ -20,6 +20,15 @@ import type { ErrorInfo, ReactNode } from 'react';
 interface Props {
   /** Human name for the failed region, e.g. "Workspace". Shown to the room. */
   label: string;
+  /**
+   * What is still working, in the reader's terms. Overridable because the
+   * default is a CLAIM, and a claim that is false where it matters most is
+   * worse than no claim: when the pane that died IS the approval queue,
+   * telling someone "any approval you are being asked for is still live" is
+   * precisely wrong. Callers that can host a governance surface pass their
+   * own. See `SideBar.tsx`.
+   */
+  reassurance?: string;
   children: ReactNode;
 }
 
@@ -47,8 +56,8 @@ export class PaneErrorBoundary extends Component<Props, State> {
       >
         <p className="text-sm font-medium text-fg">{this.props.label} stopped responding.</p>
         <p className="max-w-xs text-xs text-fg-muted">
-          The rest of the room — the transcript, and any approval you are being asked for — is
-          still live. Reload to bring this panel back.
+          {this.props.reassurance ??
+            'The rest of the room — the transcript, and any approval you are being asked for — is still live. Reload to bring this panel back.'}
         </p>
         <button
           type="button"

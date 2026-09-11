@@ -98,3 +98,53 @@ describe('isTabDirty', () => {
     expect(isTabDirty('on disk', 'on disk plus an edit')).toBe(true);
   });
 });
+
+/**
+ * The rule two tabs cannot distinguish.
+ *
+ * With `['a','b']` and `b` active, "prefer the left neighbour" and "prefer the
+ * right neighbour" both answer `a` — so the two-tab test that shipped with
+ * 17a passed under either rule and documented neither. Three tabs, closing the
+ * middle one, is the smallest case that tells them apart.
+ */
+describe('closeTabState — which tab takes focus', () => {
+  it('activates the tab to the RIGHT when the closed one had a right neighbour', async () => {
+    const { closeTabState } = await import('../../App.js');
+
+    expect(closeTabState({ paths: ['a', 'b', 'c'], active: 'b' }, 'b')).toEqual({
+      paths: ['a', 'c'],
+      active: 'c',
+    });
+  });
+
+  it('falls back to the left when the closed tab was the last one', async () => {
+    const { closeTabState } = await import('../../App.js');
+
+    expect(closeTabState({ paths: ['a', 'b', 'c'], active: 'c' }, 'c')).toEqual({
+      paths: ['a', 'b'],
+      active: 'b',
+    });
+  });
+
+  it('leaves focus alone when a background tab is closed', async () => {
+    const { closeTabState } = await import('../../App.js');
+
+    expect(closeTabState({ paths: ['a', 'b', 'c'], active: 'a' }, 'c')).toEqual({
+      paths: ['a', 'b'],
+      active: 'a',
+    });
+  });
+
+  it('clears the active tab when the last one closes', async () => {
+    const { closeTabState } = await import('../../App.js');
+
+    expect(closeTabState({ paths: ['a'], active: 'a' }, 'a')).toEqual({ paths: [], active: null });
+  });
+
+  it('ignores a path that is not open', async () => {
+    const { closeTabState } = await import('../../App.js');
+    const state = { paths: ['a'], active: 'a' };
+
+    expect(closeTabState(state, 'zzz')).toBe(state);
+  });
+});

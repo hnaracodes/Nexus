@@ -13,6 +13,7 @@ import { ChangesTab } from './ChangesTab.js';
 import type { GitStatusState } from './ChangesTab.js';
 import { FileTree } from './FileTree.js';
 import { FleetPane } from './FleetPane.js';
+import { PaneErrorBoundary } from './PaneErrorBoundary.js';
 
 const TITLES: Record<SideBarView, string> = {
   explorer: 'Explorer',
@@ -136,7 +137,41 @@ export function SideBar(props: SideBarProps): JSX.Element {
         </div>
       )}
 
+      {/**
+        * The boundary lives HERE, inside the side bar and KEYED BY VIEW —
+        * not once around the whole `<SideBar>` in App.tsx, which is where
+        * 17a first put it.
+        *
+        * React error boundaries never reset on a prop change: once
+        * `getDerivedStateFromError` flips, that instance renders its fallback
+        * forever. One boundary around the whole side bar therefore meant a
+        * throw in the Explorer ALSO hid the Approvals view the person switched
+        * to next — the approval surface moved into this pane in 17a, so a
+        * cosmetic file-tree bug could hide a governance decision behind a
+        * panel that (accurately, for its own state) said nothing was wrong.
+        *
+        * `key={view}` is the whole fix: switching view unmounts this boundary
+        * and mounts a fresh one, so a crash is scoped to the view that caused
+        * it and clears when you leave. The label names the view that actually
+        * died rather than "the side bar", and `reassurance` tells the truth
+        * for the approvals case, where the comforting default would be false.
+        *
+        * What does NOT change either way: the server-side gate. An agent
+        * blocked on a decision stays blocked and nothing is approved — the
+        * cost of this bug was a person who could not SEE the decision, which
+        * for this product is quite bad enough.
+        */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
+        <PaneErrorBoundary
+          key={view}
+          label={TITLES[view]}
+          {...(view === 'approvals'
+            ? {
+                reassurance:
+                  'Nothing has been approved — the agent is still blocked waiting for this room to decide. Reload to bring the queue back.',
+              }
+            : {})}
+        >
         {view === 'explorer' && (
           <FileTree
             api={props.workspaceApi}
@@ -176,6 +211,7 @@ export function SideBar(props: SideBarProps): JSX.Element {
         )}
 
         {view === 'changes' && <ChangesTab events={props.changesEvents} gitStatus={props.gitStatus} />}
+        </PaneErrorBoundary>
       </div>
     </div>
   );

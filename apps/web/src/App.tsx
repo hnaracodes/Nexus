@@ -317,6 +317,35 @@ function QuickOpenDialog({
   );
 }
 
+/**
+ * Which tab is active after closing one — the whole of `closeTab`'s logic,
+ * pulled out as a pure function so it can actually be tested.
+ *
+ * It was inline in the component, which meant the only coverage was a
+ * two-tab "close one, the other stays" case — and with two tabs, "prefer the
+ * left neighbour" and "prefer the right neighbour" give the same answer, so
+ * that test could not tell the two rules apart. The comment claimed left; the
+ * arithmetic does right. A reviewer caught it by tracing the expression by
+ * hand, which is exactly the work a test is supposed to save someone.
+ *
+ * The rule, stated honestly: `Math.min(idx, paths.length - 1)` reads the index
+ * the closed tab occupied out of the ALREADY-SHORTENED array, so it lands on
+ * the tab that was to the closed one's RIGHT, and falls back to the left only
+ * when the closed tab was the last one. That is what every editor does.
+ */
+export function closeTabState(
+  current: { paths: string[]; active: string | null },
+  path: string,
+): { paths: string[]; active: string | null } {
+  const idx = current.paths.indexOf(path);
+  if (idx === -1) return current;
+  const paths = current.paths.filter((p) => p !== path);
+  // Closing a background tab never moves focus.
+  if (current.active !== path) return { paths, active: current.active };
+  const active = paths.length === 0 ? null : (paths[Math.min(idx, paths.length - 1)] ?? null);
+  return { paths, active };
+}
+
 export default function App(): JSX.Element {
   const linkParams = useMemo(readParams, []);
   // A name from the link wins; otherwise one this browser already chose for
@@ -668,17 +697,8 @@ function RoomShell({
     }));
   }
 
-  /** Closing the active tab activates its former neighbour (preferring the
-   *  one to its left), never silently jumping to an unrelated tab. */
   function closeTab(path: string): void {
-    setTabState((current) => {
-      const idx = current.paths.indexOf(path);
-      if (idx === -1) return current;
-      const paths = current.paths.filter((p) => p !== path);
-      if (current.active !== path) return { paths, active: current.active };
-      const active = paths.length === 0 ? null : (paths[Math.min(idx, paths.length - 1)] ?? null);
-      return { paths, active };
-    });
+    setTabState((current) => closeTabState(current, path));
   }
 
   // Auto-follow: every time the agent's current file changes, open (or
@@ -867,7 +887,10 @@ function RoomShell({
 
       {/* --- BEGIN phase-17a VS Code shell --- */}
       {/* Five regions: activity bar, side bar, editor (tab strip + CodeEditor),
-          bottom panel (transcript), status bar. Below ~900px the side bar is
+          bottom panel (transcript), status bar. Below Tailwind's `lg`
+          breakpoint (1024px — this project defines no custom breakpoints, so
+          `lg:` is the stock value, not the ~900px an earlier comment claimed)
+          the side bar is
           positioned as an overlay rather than taking permanent horizontal
           space (`lg:` below) — see the phase-17a plan's "responsive floor". */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -888,7 +911,14 @@ function RoomShell({
 
         {sideBarOpen && (
           <div className="fixed inset-y-0 left-12 z-20 lg:static lg:z-auto">
-            <PaneErrorBoundary label="The side bar">
+            {/* A last-resort boundary for anything in the side bar OUTSIDE the
+                per-view boundary `SideBar` now owns (its header, its own
+                layout). Keyed by view for the same reason that one is: an
+                error boundary never resets itself, so without a key a single
+                throw would freeze this region for the rest of the session.
+                View content is caught deeper and never reaches here — see the
+                long comment in SideBar.tsx. */}
+            <PaneErrorBoundary key={sideBarView} label="The side bar">
               <SideBar
                 view={sideBarView}
                 workspaceApi={workspaceApi}
