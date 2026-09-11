@@ -112,6 +112,51 @@ esac
   writeFileSync(unamePath, fakeUname);
   chmodSync(unamePath, 0o755);
 
+  // A fake `hdiutil` so the macOS branch (mount -> find .app -> cp -> detach)
+  // can run all the way through in a test: the real `hdiutil` cannot mount
+  // arbitrary bytes as a disk image, so without this the macOS branch always
+  // dies at `hdiutil attach` before reaching the code that prints the
+  // unsigned-build warning. `attach` drops a fake Nexus.app into the
+  // already-created mountpoint dir instead of actually mounting anything;
+  // `detach` is a no-op. Harmless on the Linux tests, which never invoke it.
+  const fakeHdiutil = `#!/bin/sh
+set -eu
+cmd="\${1:-}"
+shift || true
+case "$cmd" in
+  attach)
+    mountpoint=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        -mountpoint)
+          mountpoint="$2"
+          shift 2
+          ;;
+        *)
+          shift
+          ;;
+      esac
+    done
+    if [ -z "$mountpoint" ]; then
+      echo "fake hdiutil attach: no -mountpoint given" >&2
+      exit 1
+    fi
+    mkdir -p "$mountpoint/Nexus.app/Contents/MacOS"
+    exit 0
+    ;;
+  detach)
+    exit 0
+    ;;
+  *)
+    echo "fake hdiutil: unsupported subcommand '$cmd'" >&2
+    exit 1
+    ;;
+esac
+`;
+  const hdiutilPath = join(bin, 'hdiutil');
+  writeFileSync(hdiutilPath, fakeHdiutil);
+  chmodSync(hdiutilPath, 0o755);
+
   return { root, bin, scratch, assetName, checksumName, assetPath, checksumPath, releaseJsonPath };
 }
 
@@ -227,16 +272,23 @@ test('installs to the overridden directory when the checksum matches', () => {
 });
 
 // --- honesty: prints the unsigned warning even on a clean install ------------
+// A fake `hdiutil` (see makeSandbox) stands in for the real one so this test
+// can drive the macOS branch all the way to a successful install instead of
+// stopping at the checksum stage — the point of this test is specifically
+// the warning that prints AFTER a successful hdiutil attach/detach, and a
+// green exit status alongside it.
 test('prints the unsigned-build warning even when everything succeeds', () => {
   const assetBytes = Buffer.from('macOS-shaped build bytes');
   const sandbox = makeSandbox({ platformOs: 'Darwin', platformArch: 'arm64', assetBytes });
   try {
-    // The macOS branch calls the real hdiutil, which cannot mount our fake
-    // bytes as a disk image — so this test only asserts on the checksum
-    // stage, which is platform-independent and runs before hdiutil.
     const result = runInstallSh(sandbox);
+    assert.equal(result.status, 0, `expected success, got:\n${result.stdout}\n${result.stderr}`);
     const output = `${result.stdout}\n${result.stderr}`;
     assert.match(output, /checksum verified/i);
+    assert.match(output, /this build is unsigned and not notarized/i);
+    assert.match(output, /Apple could not verify that 'Nexus' is free of malware/);
+    const installed = join(sandbox.scratch, 'Nexus.app');
+    assert.ok(existsSync(installed), 'expected Nexus.app in the overridden install dir');
   } finally {
     cleanup(sandbox);
   }
