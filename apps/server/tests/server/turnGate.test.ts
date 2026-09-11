@@ -118,3 +118,84 @@ describe('turn gate', () => {
     expect(gate.submit({ seq: 3, displayName: 'Cara', text: 'three', wasDriver: false })).toBeNull();
   });
 });
+
+/**
+ * Phase 17d — agents know their siblings exist. `render` (private) gains a
+ * roster preamble, passed IN by the caller rather than fetched — this module
+ * stays exactly as pure as its own doc comment claims. `submit`/`onIdle` both
+ * take an optional `roster`, defaulting to none, so every caller (and every
+ * test above) that never passes one keeps the pre-17d behaviour byte for
+ * byte — that is the whole test bar for a single-agent room.
+ */
+describe('turn gate — sibling roster preamble (phase 17d)', () => {
+  it('omits the roster entirely when none is supplied — the existing behaviour, untouched', () => {
+    const batch = gate.submit({ seq: 1, displayName: 'Ada', text: 'go', wasDriver: true });
+    expect(batch?.text).toBe('[Ada]: go');
+  });
+
+  it('omits the roster when one is supplied but names no one else', () => {
+    const batch = gate.submit(
+      { seq: 1, displayName: 'Ada', text: 'go', wasDriver: true },
+      { selfDisplayName: 'Agent', others: [] },
+    );
+    expect(batch?.text).toBe('[Ada]: go');
+  });
+
+  it('prefixes the turn with a roster naming every other agent and this one', () => {
+    const batch = gate.submit(
+      { seq: 1, displayName: 'Ada', text: 'go', wasDriver: true },
+      { selfDisplayName: 'Scout', others: [{ displayName: 'Alpha', provider: 'anthropic', status: 'idle' }] },
+    );
+    expect(batch?.text).toContain('Other agents are working in this room right now:');
+    expect(batch?.text).toContain('- Alpha (anthropic, idle)');
+    expect(batch?.text).toContain('You are Scout.');
+    // The roster comes BEFORE the prompt body, not after.
+    expect(batch?.text.endsWith('[Ada]: go')).toBe(true);
+  });
+
+  it('names the RECIPIENT correctly — same fleet, opposite self, seen from each side', () => {
+    const alpha = { displayName: 'Alpha', provider: 'anthropic', status: 'idle' };
+    const beta = { displayName: 'Beta', provider: 'anthropic', status: 'working' };
+    const alphaGate = createTurnGate();
+    const betaGate = createTurnGate();
+
+    const alphaBatch = alphaGate.submit(
+      { seq: 1, displayName: 'Ada', text: 'go', wasDriver: true },
+      { selfDisplayName: 'Alpha', others: [beta] },
+    );
+    const betaBatch = betaGate.submit(
+      { seq: 1, displayName: 'Ada', text: 'go', wasDriver: true },
+      { selfDisplayName: 'Beta', others: [alpha] },
+    );
+
+    expect(alphaBatch?.text).toContain('You are Alpha.');
+    expect(alphaBatch?.text).toContain('- Beta (anthropic, working)');
+    expect(alphaBatch?.text).not.toContain('You are Beta.');
+
+    expect(betaBatch?.text).toContain('You are Beta.');
+    expect(betaBatch?.text).toContain('- Alpha (anthropic, idle)');
+    expect(betaBatch?.text).not.toContain('You are Alpha.');
+  });
+
+  it('carries a supplied roster through onIdle too, not just the first-prompt path', () => {
+    gate.submit({ seq: 1, displayName: 'Ada', text: 'occupy', wasDriver: true });
+    gate.submit({ seq: 2, displayName: 'Bob', text: 'queued', wasDriver: false });
+    const batch = gate.onIdle({
+      selfDisplayName: 'Agent',
+      others: [{ displayName: 'Runner', provider: 'google', status: 'idle' }],
+    });
+    expect(batch?.text).toContain('You are Agent.');
+    expect(batch?.text).toContain('- Runner (google, idle)');
+  });
+
+  it('still marks the driver correctly in a multi-prompt batch that also carries a roster', () => {
+    gate.submit({ seq: 1, displayName: 'Ada', text: 'occupy', wasDriver: true });
+    gate.submit({ seq: 2, displayName: 'Ada', text: 'do X', wasDriver: true });
+    gate.submit({ seq: 3, displayName: 'Bob', text: 'do Y', wasDriver: false });
+
+    const batch = gate.onIdle({ selfDisplayName: 'Agent', others: [{ displayName: 'Beta', provider: 'anthropic', status: 'idle' }] });
+    expect(batch?.text).toContain('You are Agent.');
+    expect(batch?.text).toContain('[Ada — driver] do X');
+    expect(batch?.text).toContain('[Bob] do Y');
+  });
+});

@@ -10,7 +10,7 @@ import type { Decision, PermissionGate, RequestVisibility } from './permissions.
 import { createTurnGate } from './turnGate.js';
 import { checkCommand, checkPath } from './sandbox.js';
 import { buildAgentEnv } from './subprocessEnv.js';
-import type { Batch, PendingPrompt } from './turnGate.js';
+import type { Batch, PendingPrompt, Roster } from './turnGate.js';
 import { toUserMessage } from './errors.js';
 
 export type EmitFn = (event: UnsequencedEvent) => void;
@@ -48,6 +48,23 @@ export interface AgentDeps {
    * immediately, which is exactly the pre-fleet behaviour.
    */
   visibility?: RequestVisibility;
+  /**
+   * This agent's current view of its siblings, or null when it is alone —
+   * phase 17d. Called fresh at EVERY turn boundary (both call sites below),
+   * never cached: `turnGate.ts`'s `render` is a pure function of whatever
+   * this returns, so a value going stale between two turns is the only way
+   * the preamble can go stale, and it should be able to — a spawn or a stop
+   * that happens mid-turn reaches the very next turn with no restart, exactly
+   * as I1 requires (one `query()` for an agent's whole life; nothing here
+   * ever opens a second one).
+   *
+   * Absent for every room that has not wired a fleet — in particular every
+   * existing single-agent room, and every test above that does not inject
+   * it — in which case a turn renders exactly as it did before this phase.
+   * The production implementation is `fleet.ts`'s `buildRosterView`, which a
+   * caller closes over its own agent id to produce.
+   */
+  roster?: () => Roster | null;
 }
 
 /**
@@ -84,6 +101,20 @@ const ROOM_SYSTEM_PROMPT = [
   'aside and why, so its author can re-send it or take the driver token. Never',
   'silently drop one. If no prompt in the batch is tagged as driver, say that the',
   'instructions conflict and ask the room to resolve it rather than picking one.',
+  '',
+  'You may also be one of several AGENTS working in this room at once, each with',
+  'its own independent context and its own conversation with the people here.',
+  'When that is true, a turn may open with a roster naming the others and saying',
+  'which one you are. Treat it as informational, not as a guarantee: it is a',
+  'snapshot from the moment this turn began, so another agent can have spawned,',
+  'stopped, or changed since — never assume it is still accurate. You share the',
+  'working directory with every agent named there, so a file may already differ',
+  'from what you last read it as, including one you are mid-edit on. There is no',
+  'channel on which to message another agent or wait for it to finish — you',
+  'cannot pause a turn to coordinate. If your instructions might overlap with',
+  'what a sibling is doing, say so plainly to the room and proceed on the best',
+  'information you have; do not stall waiting for a coordination step that',
+  'does not exist.',
 ].join('\n');
 
 /**
@@ -418,7 +449,7 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
           clearWatchdog();
           // The turn boundary. Anything typed while that turn ran goes now,
           // as one batch, and re-arms the watchdog via deliver().
-          const next = turns.onIdle();
+          const next = turns.onIdle(deps.roster?.() ?? null);
           if (next !== null) deliver(next);
         }
       }
@@ -430,7 +461,7 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
 
   return {
     submit(prompt: PendingPrompt): void {
-      const batch = turns.submit(prompt);
+      const batch = turns.submit(prompt, deps.roster?.() ?? null);
       if (batch !== null) deliver(batch);
     },
     async interrupt(by: Interrupter): Promise<void> {
