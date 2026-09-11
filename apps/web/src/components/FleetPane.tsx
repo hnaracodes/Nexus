@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { AlertOctagon, Circle, Loader2, Plus, ShieldAlert, XCircle } from 'lucide-react';
-import type { AgentId, AgentProvider } from '@nexus/protocol/events';
-import { AGENT_PROVIDERS } from '@nexus/protocol/events';
-import type { AgentStatus, FleetEntry } from '@nexus/protocol/wire';
+import type { AgentId, AgentProvider } from '@syncode/protocol/events';
+import { AGENT_PROVIDERS } from '@syncode/protocol/events';
+import type { AgentStatus, FleetEntry } from '@syncode/protocol/wire';
 import { Button } from './Button.js';
 
 /**

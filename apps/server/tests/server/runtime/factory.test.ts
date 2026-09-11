@@ -2,7 +2,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { AgentProvider, UnsequencedEvent } from '@nexus/protocol/events';
+import type { AgentProvider, UnsequencedEvent } from '@syncode/protocol/events';
 import { __resetRooms, createRoom } from '../../../src/server/rooms.js';
 import type { Room } from '../../../src/server/rooms.js';
 import { createRuntime } from '../../../src/server/runtime/factory.js';

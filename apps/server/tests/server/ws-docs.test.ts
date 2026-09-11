@@ -26,7 +26,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 import * as Automerge from '@automerge/automerge';
-import type { ServerFrame } from '@nexus/protocol/wire';
+import type { ServerFrame } from '@syncode/protocol/wire';
 import { createServer } from '../../src/server/index.js';
 import { createRoom } from '../../src/server/rooms.js';
 import { attachRoom } from '../../src/server/ws.js';

@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import type { AgentId, GithubRepoRef, NexusEvent } from '@nexus/protocol/events';
+import type { AgentId, GithubRepoRef, NexusEvent } from '@syncode/protocol/events';
 import { openLog } from '../log/event-log.js';
 import { projectFleet, reconstruct } from '../log/replay.js';
 import { claimLocalPath } from './localHost.js';

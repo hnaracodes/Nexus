@@ -1,7 +1,7 @@
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
-import type { ServerFrame } from '@nexus/protocol/wire';
+import type { ServerFrame } from '@syncode/protocol/wire';
 import { createServer } from '../../src/server/index.js';
 import { createRoom } from '../../src/server/rooms.js';
 import type { Room } from '../../src/server/rooms.js';

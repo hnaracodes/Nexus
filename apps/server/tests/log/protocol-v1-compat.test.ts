@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import type { NexusEvent } from '@nexus/protocol/events';
-import { PRIMARY_AGENT_ID, isLoggedEvent, loggedEventTypes } from '@nexus/protocol/events';
+import type { NexusEvent } from '@syncode/protocol/events';
+import { PRIMARY_AGENT_ID, isLoggedEvent, loggedEventTypes } from '@syncode/protocol/events';
 import { projectAgents, reconstruct } from '../../src/log/replay.js';
 
 /**

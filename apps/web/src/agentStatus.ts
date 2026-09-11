@@ -1,4 +1,4 @@
-import type { NexusEvent } from '@nexus/protocol/events';
+import type { NexusEvent } from '@syncode/protocol/events';
 
 export type AgentStatus =
   | { state: 'idle' }

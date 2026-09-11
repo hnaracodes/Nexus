@@ -508,7 +508,7 @@ Three npm workspaces, declared once at the root:
 ```
 (`package.json:10-13`)
 
-`packages/protocol` (`@nexus/protocol`) is not a types-only package — its `package.json` exports three built entry points, and nothing else:
+`packages/protocol` (`@syncode/protocol`) is not a types-only package — its `package.json` exports three built entry points, and nothing else:
 
 ```json
 "exports": {
@@ -520,7 +520,7 @@ Three npm workspaces, declared once at the root:
 ```
 (`packages/protocol/package.json:6-11`)
 
-There is no `"main": "src/index.ts"` fallback. If `dist/` doesn't exist, resolving `@nexus/protocol/events` from either app fails at the module-resolution step, not at type-check — Node can't find the file. `apps/server` and `apps/web` both depend on it as `"@nexus/protocol": "*"`, which npm workspaces resolves to a symlink into `node_modules/@nexus/protocol` pointing back at `packages/protocol`. The symlink target is real, but `dist/` inside it is a build artifact that only exists after `tsc -p tsconfig.build.json` has run (`packages/protocol/package.json:13`).
+There is no `"main": "src/index.ts"` fallback. If `dist/` doesn't exist, resolving `@syncode/protocol/events` from either app fails at the module-resolution step, not at type-check — Node can't find the file. `apps/server` and `apps/web` both depend on it as `"@syncode/protocol": "*"`, which npm workspaces resolves to a symlink into `node_modules/@syncode/protocol` pointing back at `packages/protocol`. The symlink target is real, but `dist/` inside it is a build artifact that only exists after `tsc -p tsconfig.build.json` has run (`packages/protocol/package.json:13`).
 
 This is why every entry point in both apps carries a `pre*` hook that shells back out to the root and rebuilds the protocol package before doing anything else:
 
@@ -532,7 +532,7 @@ This is why every entry point in both apps carries a `pre*` hook that shells bac
 ```
 (`apps/server/package.json:16,18,20,23`, and the same four hooks minus `pretypecheck` in `apps/web/package.json:7,9,12`)
 
-npm's lifecycle convention runs `pre<script>` automatically whenever `<script>` is invoked, so `npm run dev -w @nexus/server` silently rebuilds `@nexus/protocol` first every time, with no orchestration file needed. **Aside:** these hooks are the only thing standing between "edit an event shape in the protocol package" and "both apps silently keep compiling against the stale `dist/`." There is no file-watcher wiring the two together outside of `npm run protocol:watch` (`package.json:16`), which nothing runs automatically — if you're iterating on the protocol without one of `dev`/`build`/`test` re-triggering the hook (e.g. running `tsc` directly inside `packages/protocol`), the apps will happily typecheck and build against last build's protocol shapes.
+npm's lifecycle convention runs `pre<script>` automatically whenever `<script>` is invoked, so `npm run dev -w @syncode/server` silently rebuilds `@syncode/protocol` first every time, with no orchestration file needed. **Aside:** these hooks are the only thing standing between "edit an event shape in the protocol package" and "both apps silently keep compiling against the stale `dist/`." There is no file-watcher wiring the two together outside of `npm run protocol:watch` (`package.json:16`), which nothing runs automatically — if you're iterating on the protocol without one of `dev`/`build`/`test` re-triggering the hook (e.g. running `tsc` directly inside `packages/protocol`), the apps will happily typecheck and build against last build's protocol shapes.
 
 ### 6.2 Two server tsconfigs, one relationship
 
@@ -562,19 +562,19 @@ If you merged the two — e.g. dropped `tsconfig.build.json` and just flipped `n
 
 ### 6.3 What `npm test` cannot see
 
-`npm run test -w @nexus/server` runs `vitest run`, and Vitest's default transform for `.ts` files is esbuild — which strips TypeScript types syntactically and does not run the type checker at all. A file with a real type error (wrong argument count, a property that doesn't exist on a type, a broken generic) transforms cleanly to JS and executes; Vitest only ever sees a runtime failure if the *value-level* behavior is wrong, which a type error frequently isn't. CLAUDE.md records this as having shipped twice — a `tsc -b` failure behind a fully green suite, the second time reaching a deploy (`CLAUDE.md` §8, "gotchas"). This is also why `npm run verify` runs `typecheck` *and* `build` *and* `test` as separate steps rather than trusting the suite alone (`package.json:26`):
+`npm run test -w @syncode/server` runs `vitest run`, and Vitest's default transform for `.ts` files is esbuild — which strips TypeScript types syntactically and does not run the type checker at all. A file with a real type error (wrong argument count, a property that doesn't exist on a type, a broken generic) transforms cleanly to JS and executes; Vitest only ever sees a runtime failure if the *value-level* behavior is wrong, which a type error frequently isn't. CLAUDE.md records this as having shipped twice — a `tsc -b` failure behind a fully green suite, the second time reaching a deploy (`CLAUDE.md` §8, "gotchas"). This is also why `npm run verify` runs `typecheck` *and* `build` *and* `test` as separate steps rather than trusting the suite alone (`package.json:26`):
 
 ```json
 "verify": "npm run typecheck && npm run typecheck:desktop && npm run build && npm run build:client && npm run build:desktop && npm test && npm run test:client && npm run test:desktop",
 ```
 
-`typecheck` (`tsc -p tsconfig.json`, `src`+`tests`, `noEmit`) is the only step that type-checks the server's test files at all — `build` deliberately excludes them. On the web side there's no separate typecheck script; `apps/web/tsconfig.json` sets `noEmit: true` even though `npm run build -w @nexus/web` is `tsc -b && vite build` (`apps/web/package.json:10`) — `tsc -b` still walks and errors on type problems, it just emits nothing, leaving `vite build`'s esbuild-based bundler to do the actual output. That makes `build:client` the only command in the whole graph that type-checks TSX; Vitest's jsdom test run for the client (`apps/web/vite.config.ts:13-24`) has exactly the same blind spot as the server's.
+`typecheck` (`tsc -p tsconfig.json`, `src`+`tests`, `noEmit`) is the only step that type-checks the server's test files at all — `build` deliberately excludes them. On the web side there's no separate typecheck script; `apps/web/tsconfig.json` sets `noEmit: true` even though `npm run build -w @syncode/web` is `tsc -b && vite build` (`apps/web/package.json:10`) — `tsc -b` still walks and errors on type problems, it just emits nothing, leaving `vite build`'s esbuild-based bundler to do the actual output. That makes `build:client` the only command in the whole graph that type-checks TSX; Vitest's jsdom test run for the client (`apps/web/vite.config.ts:13-24`) has exactly the same blind spot as the server's.
 
 ### 6.4 The Dockerfile's three stages
 
 | Stage | Base | Does |
 |---|---|---|
-| `deps` | `node:22-slim` | Copies only the five `package.json` manifests + lockfile, `npm ci` — one install for the whole workspace, so the `@nexus/protocol` symlink exists before any source lands (`Dockerfile:8-14`) |
+| `deps` | `node:22-slim` | Copies only the five `package.json` manifests + lockfile, `npm ci` — one install for the whole workspace, so the `@syncode/protocol` symlink exists before any source lands (`Dockerfile:8-14`) |
 | `build` | `FROM deps` | Copies `tsconfig.base.json`, `packages/`, `apps/`; runs `protocol:build && build && build:client` **in that explicit order** (`Dockerfile:25-27`) |
 | `runtime` | fresh `node:22-slim` | Copies only the three `dist/` trees out of `build`, re-runs `npm ci --omit=dev --ignore-scripts`, installs `git`, sets `CMD ["node", "apps/server/dist/server/index.js"]` |
 
@@ -809,7 +809,7 @@ Every "surprise / latent bug" aside the seven authors flagged while reading the 
 
 7. **The permission gate's `settle()` is documented as the sole place that clears the timer, deletes the pending entry, and resolves the promise — but one of its three call sites bypasses it.** The timeout-firing path inlines the same three effects by hand instead of calling `entry.settle`. Harmless today, but a future change to `settle()` (e.g. adding a side effect) would silently miss the timeout path. — `apps/server/src/server/permissions.ts:101-112` (timeout path) vs. `permissions.ts:114-123` (`settle`).
 
-8. **Nothing rebuilds `@nexus/protocol` automatically outside of `dev`/`build`/`test`/`typecheck`.** `protocol:watch` exists but nothing runs it automatically, so iterating on the protocol package directly (e.g. running `tsc` inside `packages/protocol` by hand) leaves both apps typechecking and building against a stale `dist/` with no warning. — `package.json:16` (`protocol:watch`), `apps/server/package.json:16,18,20,23`.
+8. **Nothing rebuilds `@syncode/protocol` automatically outside of `dev`/`build`/`test`/`typecheck`.** `protocol:watch` exists but nothing runs it automatically, so iterating on the protocol package directly (e.g. running `tsc` inside `packages/protocol` by hand) leaves both apps typechecking and building against a stale `dist/` with no warning. — `package.json:16` (`protocol:watch`), `apps/server/package.json:16,18,20,23`.
 
 9. **The workspace path jail doesn't actually widen the room's security boundary.** Since `Read` is auto-approved, any participant can already get any file's bytes by asking the agent — so a jail bypass here is closer to a UX bug than a confidentiality one. Noted explicitly by the module's own header comment. — `apps/server/src/server/workspace.ts` (header, near `workspace.ts:62-66`).
 

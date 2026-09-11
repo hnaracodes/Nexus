@@ -1,6 +1,6 @@
-import type { AgentId, AgentProvider, NexusEvent } from '@nexus/protocol/events';
-import { PRIMARY_AGENT_ID, agentIdOf } from '@nexus/protocol/events';
-import type { PresenceEntry } from '@nexus/protocol/wire';
+import type { AgentId, AgentProvider, NexusEvent } from '@syncode/protocol/events';
+import { PRIMARY_AGENT_ID, agentIdOf } from '@syncode/protocol/events';
+import type { PresenceEntry } from '@syncode/protocol/wire';
 import { projectPresence } from '../server/presence.js';
 
 export interface ReconstructedRoom {

@@ -1,4 +1,4 @@
-import type { Interrupted, NexusEvent } from '@nexus/protocol/events';
+import type { Interrupted, NexusEvent } from '@syncode/protocol/events';
 
 function isInterrupted(event: NexusEvent): event is Interrupted {
   return event.type === 'interrupted';

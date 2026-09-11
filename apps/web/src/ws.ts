@@ -1,4 +1,4 @@
-import type { ClientFrame, ServerFrame } from '@nexus/protocol/wire';
+import type { ClientFrame, ServerFrame } from '@syncode/protocol/wire';
 import { EMPTY_VIEW, reduce } from './store.js';
 import type { RoomView } from './store.js';
 import { createDocSession } from './workspace/docSession.js';

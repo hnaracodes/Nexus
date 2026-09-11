@@ -84,7 +84,7 @@ one. `v0.2.0` died on a twelve-day-old CI break (the desktop typecheck needed a
 server build that only existed on machines that had already built once).
 `v0.2.1` died on a flaky test that has never reproduced locally. `v0.2.2` died
 on the first Linux package ever attempted — `executableName` defaulted to the
-npm scope `@nexus/desktop`, which electron-builder refuses. All three are fixed;
+npm scope `@syncode/desktop`, which electron-builder refuses. All three are fixed;
 the flake is not understood and may recur, so **a failed release can be re-run
 from the Actions tab** (`workflow_dispatch`) without spending a version number.
 
@@ -123,7 +123,7 @@ Set `NEXUS_INSTALL_APPLICATIONS_DIR` to install somewhere other than
 
 ```bash
 npm install
-npm run package -w @nexus/desktop
+npm run package -w @syncode/desktop
 open apps/desktop/release/mac-arm64/Nexus.app
 ```
 

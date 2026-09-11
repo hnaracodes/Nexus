@@ -112,7 +112,7 @@ CI runs it too (`.github/workflows/verify.yml`).
 <summary><strong>Hot-reload client development</strong></summary>
 
 ```bash
-npm run dev -w @nexus/web   # :5173, hot reload
+npm run dev -w @syncode/web   # :5173, hot reload
 ```
 
 Its Vite proxy is hardcoded to `http://localhost:8080` (see
@@ -220,11 +220,11 @@ interleaved" bugs. It also produces semantically meaningful events to log,
 replay, and attribute, which a byte stream cannot.
 
 ```
-packages/protocol/    the frozen event union and wire frames (@nexus/protocol)
+packages/protocol/    the frozen event union and wire frames (@syncode/protocol)
 apps/server/src/server/   rooms, the single query() instance, WebSocket transport,
                           driver token, permission gate
 apps/server/src/log/      append-only JSONL, redaction, replay
-apps/web/            React projection of the event stream (@nexus/web)
+apps/web/            React projection of the event stream (@syncode/web)
 docs/plans/          the implementation plans this was built from
 ```
 

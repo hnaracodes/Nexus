@@ -1,5 +1,5 @@
 {
-  "name": "@nexus/desktop",
+  "name": "@syncode/desktop",
   "productName": "Nexus",
   "version": "0.0.1",
   "private": true,
@@ -9,11 +9,11 @@
   },
   "main": "dist/main.js",
   "scripts": {
-    "predev": "npm run protocol:build --prefix ../.. && npm run build -w @nexus/server --prefix ../..",
+    "predev": "npm run protocol:build --prefix ../.. && npm run build -w @syncode/server --prefix ../..",
     "dev": "npm run build && electron .",
-    "prebuild": "npm run protocol:build --prefix ../.. && npm run build -w @nexus/server --prefix ../.. && npm run build:client --prefix ../..",
+    "prebuild": "npm run protocol:build --prefix ../.. && npm run build -w @syncode/server --prefix ../.. && npm run build:client --prefix ../..",
     "build": "tsc -p tsconfig.build.json",
-    "pretypecheck": "npm run protocol:build --prefix ../.. && npm run build -w @nexus/server --prefix ../..",
+    "pretypecheck": "npm run protocol:build --prefix ../.. && npm run build -w @syncode/server --prefix ../..",
     "typecheck": "tsc -p tsconfig.json",
     "prestart": "npm run build",
     "start": "electron .",
@@ -23,8 +23,8 @@
     "package": "npm run build && electron-builder"
   },
   "dependencies": {
-    "@nexus/server": "*",
-    "@nexus/web": "*"
+    "@syncode/server": "*",
+    "@syncode/web": "*"
   },
   "devDependencies": {
     "@types/node": "^22.7.0",

@@ -1,7 +1,7 @@
 // tests/log/replay.test.ts
 import { describe, expect, it } from 'vitest';
 import { reconstruct } from '../../src/log/replay.js';
-import type { NexusEvent } from '@nexus/protocol/events';
+import type { NexusEvent } from '@syncode/protocol/events';
 
 function log(...partials: Record<string, unknown>[]): NexusEvent[] {
   return partials.map(

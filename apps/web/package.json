@@ -1,8 +1,8 @@
 {
-  "name": "@nexus/web",
+  "name": "@syncode/web",
   "version": "0.0.1",
   "private": true,
-  "//files": "Only the built bundle ships. @nexus/desktop depends on this package so electron-builder places it at node_modules/@nexus/web/dist, which is exactly where the server's serveStatic already looks. Without this field the whole package would be bundled including its node_modules — React and CodeMirror twice over, since Vite has already compiled them INTO dist.",
+  "//files": "Only the built bundle ships. @syncode/desktop depends on this package so electron-builder places it at node_modules/@syncode/web/dist, which is exactly where the server's serveStatic already looks. Without this field the whole package would be bundled including its node_modules — React and CodeMirror twice over, since Vite has already compiled them INTO dist.",
   "files": [
     "dist"
   ],
@@ -29,7 +29,7 @@
     "@codemirror/state": "^6.7.2",
     "@codemirror/view": "^6.43.11",
     "@lezer/highlight": "^1.2.3",
-    "@nexus/protocol": "*",
+    "@syncode/protocol": "*",
     "codemirror": "^6.0.2",
     "lucide-react": "^1.28.0",
     "react": "^18.3.1",

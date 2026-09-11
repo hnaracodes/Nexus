@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { AgentId } from '@nexus/protocol/events';
-import type { FleetEntry } from '@nexus/protocol/wire';
+import type { AgentId } from '@syncode/protocol/events';
+import type { FleetEntry } from '@syncode/protocol/wire';
 import type { Graph, Node } from '../graph.js';
 import { RunOverlay } from '../RunOverlay.js';
 

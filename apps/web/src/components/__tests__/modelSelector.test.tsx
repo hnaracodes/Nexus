@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { NexusEvent } from '@nexus/protocol/events';
+import type { NexusEvent } from '@syncode/protocol/events';
 import { ModelSelector } from '../ModelSelector.js';
 
 const MODELS_PAYLOAD = {

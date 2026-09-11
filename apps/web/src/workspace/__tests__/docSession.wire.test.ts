@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as Automerge from '@automerge/automerge';
-import { decodeChangeBundle, encodeChangeBundle } from '@nexus/protocol/docsync';
-import type { ClientFrame } from '@nexus/protocol/wire';
+import { decodeChangeBundle, encodeChangeBundle } from '@syncode/protocol/docsync';
+import type { ClientFrame } from '@syncode/protocol/wire';
 import { createDocSession } from '../docSession.js';
 
 /**

@@ -15,9 +15,9 @@
  */
 import { randomUUID } from 'node:crypto';
 import { totalmem } from 'node:os';
-import type { AgentId, AgentProvider, NexusEvent, UnsequencedEvent } from '@nexus/protocol/events';
-import { agentIdOf } from '@nexus/protocol/events';
-import type { AgentStatus, FleetEntry } from '@nexus/protocol/wire';
+import type { AgentId, AgentProvider, NexusEvent, UnsequencedEvent } from '@syncode/protocol/events';
+import { agentIdOf } from '@syncode/protocol/events';
+import type { AgentStatus, FleetEntry } from '@syncode/protocol/wire';
 import { projectAgents } from '../log/replay.js';
 import type { AgentDeps, AgentHandle, Interrupter } from './agent.js';
 import type { Roster } from './turnGate.js';

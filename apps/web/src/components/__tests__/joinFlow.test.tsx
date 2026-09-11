@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { JoinGate, readStoredName, storeName } from '../JoinGate.js';
 import { JoinToasts, deriveJoinsAfter } from '../JoinToasts.js';
-import type { NexusEvent } from '@nexus/protocol/events';
+import type { NexusEvent } from '@syncode/protocol/events';
 
 const joined = (seq: number, displayName: string): NexusEvent => ({
   seq,

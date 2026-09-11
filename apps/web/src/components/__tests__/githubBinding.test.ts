@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { GithubRepoRef, NexusEvent } from '@nexus/protocol/events';
+import type { GithubRepoRef, NexusEvent } from '@syncode/protocol/events';
 import { deriveGithubBinding } from '../../githubBinding.js';
 
 const ROOM = 'room_fixture';

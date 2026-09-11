@@ -3,8 +3,8 @@ import { useState } from 'react';
 // lucide-react 1.x. `GitPullRequest` is the better signifier anyway — the chip
 // says where a publish lands, not which vendor hosts it.
 import { Check, Command, GitPullRequest, Link2 } from 'lucide-react';
-import type { GithubRepoRef } from '@nexus/protocol/events';
-import type { PresenceEntry } from '@nexus/protocol/wire';
+import type { GithubRepoRef } from '@syncode/protocol/events';
+import type { PresenceEntry } from '@syncode/protocol/wire';
 // Sibling of Task 1 (docs/plans/phase-5b-room-ui-redesign.md). Not present on
 // disk at the time this file was written under parallel dispatch — imported
 // by its documented path and `{ status, now }` props per the plan. Expected

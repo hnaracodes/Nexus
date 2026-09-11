@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { Pin, PinOff } from 'lucide-react';
-import type { AgentId, AgentProvider, NexusEvent } from '@nexus/protocol/events';
-import type { FleetEntry } from '@nexus/protocol/wire';
+import type { AgentId, AgentProvider, NexusEvent } from '@syncode/protocol/events';
+import type { FleetEntry } from '@syncode/protocol/wire';
 import type { PendingApproval } from '../approvals.js';
 import { useHotkeys } from '../hooks/useHotkeys.js';
 import type { WorkspaceApi } from '../workspace/workspaceApi.js';

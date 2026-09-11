@@ -8,8 +8,8 @@
  */
 
 import { afterEach, describe, expect, it } from 'vitest';
-import type { AgentSpawned, NexusEvent } from '@nexus/protocol/events';
-import { PRIMARY_AGENT_ID } from '@nexus/protocol/events';
+import type { AgentSpawned, NexusEvent } from '@syncode/protocol/events';
+import { PRIMARY_AGENT_ID } from '@syncode/protocol/events';
 import { createRoom } from '../../src/server/rooms.js';
 import { MemorySink, __resetRuntimes, attachRoom } from '../../src/server/ws.js';
 

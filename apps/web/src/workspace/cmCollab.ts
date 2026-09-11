@@ -1,7 +1,7 @@
 import { Annotation, type Extension, type Range } from '@codemirror/state';
 import { Decoration, EditorView, ViewPlugin, WidgetType } from '@codemirror/view';
 import type { DecorationSet, PluginValue, ViewUpdate } from '@codemirror/view';
-import type { DocPresenceEntry } from '@nexus/protocol/wire';
+import type { DocPresenceEntry } from '@syncode/protocol/wire';
 import { avatarFor } from '../identity.js';
 import type { DocSession } from './docSession.js';
 

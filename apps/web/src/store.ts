@@ -1,5 +1,5 @@
-import type { NexusEvent } from '@nexus/protocol/events';
-import type { FleetEntry, PresenceEntry, ServerFrame } from '@nexus/protocol/wire';
+import type { NexusEvent } from '@syncode/protocol/events';
+import type { FleetEntry, PresenceEntry, ServerFrame } from '@syncode/protocol/wire';
 
 export interface Message {
   id: string;

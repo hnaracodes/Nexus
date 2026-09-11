@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { GithubRepoRef } from '@nexus/protocol/events';
+import type { GithubRepoRef } from '@syncode/protocol/events';
 import { RoomHeader, type RoomHeaderProps } from '../RoomHeader.js';
 
 const BINDING: GithubRepoRef = {

@@ -1,6 +1,6 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { CanUseTool, HookJSONOutput, PermissionResult } from '@anthropic-ai/claude-agent-sdk';
-import type { NexusEvent, UnsequencedEvent } from '@nexus/protocol/events';
+import type { NexusEvent, UnsequencedEvent } from '@syncode/protocol/events';
 import type { Room } from './rooms.js';
 import { createGithubMcpServer } from './publishTool.js';
 import { AsyncQueue } from './queue.js';

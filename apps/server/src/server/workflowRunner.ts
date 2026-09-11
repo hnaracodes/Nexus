@@ -42,8 +42,8 @@
  * `startWorkflowRun` still spawns every ready node once, synchronously,
  * before returning — the graph's root set needs no event to become ready.
  */
-import type { AgentId, AgentProvider, NexusEvent, UnsequencedEvent } from '@nexus/protocol/events';
-import { agentIdOf } from '@nexus/protocol/events';
+import type { AgentId, AgentProvider, NexusEvent, UnsequencedEvent } from '@syncode/protocol/events';
+import { agentIdOf } from '@syncode/protocol/events';
 import type { Interrupter } from './agent.js';
 import type { FleetRuntime } from './fleet.js';
 import { spawnAgent } from './fleet.js';
@@ -51,8 +51,8 @@ import type { RuntimeDeps } from './runtime/factory.js';
 
 /** A node's saved-config identity plus the provider metadata `spawnAgent`
  *  needs — deliberately NOT `apps/web/src/canvas/graph.ts`'s node shape
- *  imported directly: that package belongs to `@nexus/web`, this one to
- *  `@nexus/server`, and `x`/`y` (canvas position) have no execution meaning.
+ *  imported directly: that package belongs to `@syncode/web`, this one to
+ *  `@syncode/server`, and `x`/`y` (canvas position) have no execution meaning.
  *  A structural echo of the same fields, kept independently, the same way
  *  `FleetRuntime` echoes `RoomRuntime` rather than importing it. */
 export interface WorkflowNode {

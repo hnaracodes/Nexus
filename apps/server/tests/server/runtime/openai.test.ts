@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { ResponseStreamEvent } from 'openai/resources/responses/responses';
-import type { UnsequencedEvent } from '@nexus/protocol/events';
+import type { UnsequencedEvent } from '@syncode/protocol/events';
 import type { Decision, PermissionGate } from '../../../src/server/permissions.js';
 import { __resetRooms, createRoom } from '../../../src/server/rooms.js';
 import type { Room } from '../../../src/server/rooms.js';

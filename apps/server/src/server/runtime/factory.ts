@@ -23,7 +23,7 @@
  * legitimately wants a second, independent agent of the same provider — the
  * exact fork I1 forbids, reintroduced by a caching layer nobody asked for.
  */
-import type { AgentProvider } from '@nexus/protocol/events';
+import type { AgentProvider } from '@syncode/protocol/events';
 import type { AgentDeps, EmitFn } from '../agent.js';
 import { startAgent } from '../agent.js';
 import type { Room } from '../rooms.js';

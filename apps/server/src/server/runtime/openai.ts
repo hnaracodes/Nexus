@@ -5,7 +5,7 @@ import type {
   ResponseInputItem,
   ResponseStreamEvent,
 } from 'openai/resources/responses/responses';
-import type { NexusEvent } from '@nexus/protocol/events';
+import type { NexusEvent } from '@syncode/protocol/events';
 import type { Room } from '../rooms.js';
 import { createPermissionGate } from '../permissions.js';
 import type { PermissionGate, RequestVisibility } from '../permissions.js';

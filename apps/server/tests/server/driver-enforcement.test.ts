@@ -3,8 +3,8 @@ import { WebSocket } from 'ws';
 import { createServer } from '../../src/server/index.js';
 import { createRoom } from '../../src/server/rooms.js';
 import { attachRoom } from '../../src/server/ws.js';
-import type { ServerFrame } from '@nexus/protocol/wire';
-import type { UserPrompt } from '@nexus/protocol/events';
+import type { ServerFrame } from '@syncode/protocol/wire';
+import type { UserPrompt } from '@syncode/protocol/events';
 
 /**
  * This file used to assert I2 — that a non-driver's prompt is rejected at the

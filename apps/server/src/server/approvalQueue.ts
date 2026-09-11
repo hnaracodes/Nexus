@@ -1,4 +1,4 @@
-import type { AgentId } from '@nexus/protocol/events';
+import type { AgentId } from '@syncode/protocol/events';
 
 /**
  * The room-level approval queue (phase 12, decisions D3 and D4 in

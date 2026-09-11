@@ -2,7 +2,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { PRIMARY_AGENT_ID, agentIdOf } from '@nexus/protocol/events';
+import { PRIMARY_AGENT_ID, agentIdOf } from '@syncode/protocol/events';
 import { createRoom } from '../../src/server/rooms.js';
 import { MemorySink, __resetRuntimes, attachRoom } from '../../src/server/ws.js';
 

@@ -1,4 +1,4 @@
-import { PAGE_PATHS } from '@nexus/protocol/pages';
+import { PAGE_PATHS } from '@syncode/protocol/pages';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';

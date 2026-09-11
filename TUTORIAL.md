@@ -51,7 +51,7 @@ Then open `http://localhost:8099`, paste an Anthropic **Console** key
 For the desktop app:
 
 ```bash
-npm run build -w @nexus/desktop
+npm run build -w @syncode/desktop
 npx electron apps/desktop/dist/main.js
 ```
 
@@ -155,13 +155,13 @@ Written out in `CLAUDE.md §5`. In one line each:
 The repo is now an npm workspace with one lockfile:
 
 ```
-packages/protocol/   @nexus/protocol — the frozen event + wire types
-apps/server/         @nexus/server   — rooms, agent, log, gate
-apps/web/            @nexus/web      — the React room
-apps/desktop/        @nexus/desktop  — the Electron shell
+packages/protocol/   @syncode/protocol — the frozen event + wire types
+apps/server/         @syncode/server   — rooms, agent, log, gate
+apps/web/            @syncode/web      — the React room
+apps/desktop/        @syncode/desktop  — the Electron shell
 ```
 
-`@nexus/protocol` is imported by everything and is **not types-only** —
+`@syncode/protocol` is imported by everything and is **not types-only** —
 `isLoggedEvent` and `parseClientFrame` are real runtime code. It must be built
 before anything resolves it, which is why every package has a `prebuild`/`pretest`
 hook that builds it first.
@@ -518,7 +518,7 @@ never shown.
 flat Automerge change bundles; the browser spoke Automerge's sync protocol. Two
 incompatible formats. Every test passed because no test crossed the boundary —
 each side proved it could talk to itself. The format now lives in
-`@nexus/protocol/docsync` and both sides import it. The new test deliberately
+`@syncode/protocol/docsync` and both sides import it. The new test deliberately
 uses the *server's* codec in both directions, because one that used the client's
 would pass against exactly this bug.
 
@@ -682,8 +682,8 @@ not exercising the shape the server actually delivers.
   undiscovered since 9a wired the config without ever running it: electron's
   version was a *range* (unresolvable, and it hoists to the repo root where
   electron-builder does not look), and the web bundle was not packaged, so the
-  app booted and served a missing-bundle error. Declaring `@nexus/web` as a
-  dependency of `@nexus/desktop` puts it exactly where the server already looks,
+  app booted and served a missing-bundle error. Declaring `@syncode/web` as a
+  dependency of `@syncode/desktop` puts it exactly where the server already looks,
   so no server code changed.
 - **"Blocked on certificates" was wrong** and had been repeated for several
   sessions. Only signing and notarization need certificates. Packaging never

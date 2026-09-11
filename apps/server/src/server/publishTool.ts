@@ -17,7 +17,7 @@
 
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
-import type { NexusEvent, UnsequencedEvent } from '@nexus/protocol/events';
+import type { NexusEvent, UnsequencedEvent } from '@syncode/protocol/events';
 import { publishToGithub } from './publish.js';
 import type { Room } from './rooms.js';
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { NexusEvent } from '@nexus/protocol/events';
+import type { NexusEvent } from '@syncode/protocol/events';
 import { NexusBlob } from './NexusBlob.js';
 
 /**

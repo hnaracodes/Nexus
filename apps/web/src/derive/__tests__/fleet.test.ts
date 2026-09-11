@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { NexusEvent } from '@nexus/protocol/events';
-import { PRIMARY_AGENT_ID } from '@nexus/protocol/events';
+import type { NexusEvent } from '@syncode/protocol/events';
+import { PRIMARY_AGENT_ID } from '@syncode/protocol/events';
 import { deriveAgentTranscripts, deriveFleetRoster, routeDeltas } from '../fleet.js';
 
 const ROOM = 'room_fixture';

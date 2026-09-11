@@ -1,4 +1,4 @@
-import type { NexusEvent } from '@nexus/protocol/events';
+import type { NexusEvent } from '@syncode/protocol/events';
 import { JsonlEventLog } from './event-log.js';
 
 /** Structurally identical to the EventSink interface in src/server/ws.ts. */

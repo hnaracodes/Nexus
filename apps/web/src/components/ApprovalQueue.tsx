@@ -1,4 +1,4 @@
-import type { AgentId } from '@nexus/protocol/events';
+import type { AgentId } from '@syncode/protocol/events';
 import { ApprovalPrompt } from './ApprovalPrompt.js';
 
 /**

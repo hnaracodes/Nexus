@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { Crown } from 'lucide-react';
-import type { NexusEvent } from '@nexus/protocol/events';
+import type { NexusEvent } from '@syncode/protocol/events';
 import { ScrollAnchor } from './ScrollAnchor.js';
 import { ToolCallRow } from './ToolCallRow.js';
 import { Markdown } from '../markdown.js';

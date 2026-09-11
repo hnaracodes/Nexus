@@ -30,7 +30,7 @@ const DEFAULT_DATA_DIR = process.env['NEXUS_DATA_DIR'] ?? './data';
 /**
  * The single audited predicate for "this process is the desktop app's
  * in-process backend, not a hosted deployment". Set by `startBackend()` in
- * `apps/desktop/src/main.ts`, BEFORE it dynamically imports `@nexus/server`
+ * `apps/desktop/src/main.ts`, BEFORE it dynamically imports `@syncode/server`
  * (the same ordering constraint `useWritablePaths()` documents there).
  * `fly.toml` never sets this — a hosted Nexus must always read false here.
  */

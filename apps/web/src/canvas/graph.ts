@@ -1,4 +1,4 @@
-import type { AgentProvider } from '@nexus/protocol/events';
+import type { AgentProvider } from '@syncode/protocol/events';
 
 /**
  * The workflow graph model (phase 14, plan §"Shape"). Pure, no DOM, no React —

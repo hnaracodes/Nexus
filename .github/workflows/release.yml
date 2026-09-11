@@ -160,7 +160,7 @@ jobs:
       # apps/desktop's own prebuild hook) and then apps/desktop/dist itself.
       - name: Build
         shell: bash
-        run: npm run build -w @nexus/desktop
+        run: npm run build -w @syncode/desktop
 
       # `--publish never`: this job only produces the dmg/exe/AppImage on
       # disk. It never talks to the GitHub Releases API, so it needs no

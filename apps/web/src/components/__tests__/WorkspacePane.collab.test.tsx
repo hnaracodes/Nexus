@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { NexusEvent } from '@nexus/protocol/events';
+import type { NexusEvent } from '@syncode/protocol/events';
 import { WorkspacePane } from '../WorkspacePane.js';
 import type { DocSession } from '../../workspace/docSession.js';
 import type { WorkspaceApi } from '../../workspace/workspaceApi.js';

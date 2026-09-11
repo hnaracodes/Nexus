@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { startAgent } from '../../src/server/agent.js';
 import { __resetRooms, createRoom } from '../../src/server/rooms.js';
-import type { UnsequencedEvent } from '@nexus/protocol/events';
+import type { UnsequencedEvent } from '@syncode/protocol/events';
 
 // Matches installed SDK 0.1.77 — three parameters. A two-parameter stub here
 // would let a callback the SDK cannot accept pass its own tests.

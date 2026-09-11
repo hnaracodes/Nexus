@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { UnsequencedEvent } from '@nexus/protocol/events';
+import type { UnsequencedEvent } from '@syncode/protocol/events';
 import { createPermissionGate } from '../../src/server/permissions.js';
 import { createApprovalQueue } from '../../src/server/approvalQueue.js';
 import { __resetRooms, createRoom } from '../../src/server/rooms.js';

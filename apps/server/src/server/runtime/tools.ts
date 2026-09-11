@@ -39,7 +39,7 @@ import { exec } from 'node:child_process';
 import { statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, resolve as resolvePath } from 'node:path';
 import { promisify } from 'node:util';
-import type { NexusEvent, UnsequencedEvent } from '@nexus/protocol/events';
+import type { NexusEvent, UnsequencedEvent } from '@syncode/protocol/events';
 import type { Room } from '../rooms.js';
 import type { Decision, PermissionGate } from '../permissions.js';
 import { lastPublishedSha } from '../publishTool.js';

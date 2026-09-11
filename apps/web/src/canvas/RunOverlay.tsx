@@ -7,8 +7,8 @@ import {
   ShieldAlert,
   XCircle,
 } from 'lucide-react';
-import type { AgentId } from '@nexus/protocol/events';
-import type { AgentStatus, FleetEntry } from '@nexus/protocol/wire';
+import type { AgentId } from '@syncode/protocol/events';
+import type { AgentStatus, FleetEntry } from '@syncode/protocol/wire';
 import type { Graph } from './graph.js';
 
 /**

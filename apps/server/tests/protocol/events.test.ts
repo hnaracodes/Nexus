@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { PROTOCOL_VERSION, isLoggedEvent } from '@nexus/protocol/events';
-import type { NexusEvent } from '@nexus/protocol/events';
-import { parseClientFrame } from '@nexus/protocol/wire';
+import { PROTOCOL_VERSION, isLoggedEvent } from '@syncode/protocol/events';
+import type { NexusEvent } from '@syncode/protocol/events';
+import { parseClientFrame } from '@syncode/protocol/wire';
 
 describe('protocol', () => {
   it('pins the protocol version', () => {

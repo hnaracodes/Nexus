@@ -1,5 +1,5 @@
 import { GitBranch, GitPullRequest } from 'lucide-react';
-import type { NexusEvent } from '@nexus/protocol/events';
+import type { NexusEvent } from '@syncode/protocol/events';
 import { deriveGithubBinding } from '../githubBinding.js';
 
 /**

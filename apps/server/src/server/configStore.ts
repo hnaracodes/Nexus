@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import type { AgentProvider } from '@nexus/protocol/events';
-import { isAgentProvider } from '@nexus/protocol/events';
+import type { AgentProvider } from '@syncode/protocol/events';
+import { isAgentProvider } from '@syncode/protocol/events';
 import type { AgentConfig, AgentConfigResult } from './agentConfig.js';
 import { parseAgentConfig } from './agentConfig.js';
 

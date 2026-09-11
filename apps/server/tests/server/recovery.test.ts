@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { openLog } from '../../src/log/event-log.js';
 import { readRoomMetas, recoverRooms, writeRoomMeta } from '../../src/server/recovery.js';
 import { __resetRooms, authorize, getRoom } from '../../src/server/rooms.js';
-import type { NexusEvent } from '@nexus/protocol/events';
+import type { NexusEvent } from '@syncode/protocol/events';
 
 const TOKEN = 'a'.repeat(64);
 

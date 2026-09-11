@@ -1,4 +1,4 @@
-import type { NexusEvent, UserPrompt } from '@nexus/protocol/events';
+import type { NexusEvent, UserPrompt } from '@syncode/protocol/events';
 
 export interface PendingPrompt {
   seq: number;

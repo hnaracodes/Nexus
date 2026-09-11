@@ -16,7 +16,7 @@
  * `agentId` key onto the event at all.
  */
 import { randomUUID } from 'node:crypto';
-import type { AgentId, CrewLaunched, NexusEvent, UnsequencedEvent } from '@nexus/protocol/events';
+import type { AgentId, CrewLaunched, NexusEvent, UnsequencedEvent } from '@syncode/protocol/events';
 import type { AgentDeps, Interrupter } from './agent.js';
 import { readConfig, readCrew } from './configStore.js';
 import type { FleetRuntime } from './fleet.js';

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { deriveApprovals, summarizeInput } from '../src/approvals.js';
-import type { NexusEvent } from '@nexus/protocol/events';
+import type { NexusEvent } from '@syncode/protocol/events';
 
 function log(...partials: Record<string, unknown>[]): NexusEvent[] {
   return partials.map(

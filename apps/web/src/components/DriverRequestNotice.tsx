@@ -1,5 +1,5 @@
 import { Hand } from 'lucide-react';
-import type { NexusEvent } from '@nexus/protocol/events';
+import type { NexusEvent } from '@syncode/protocol/events';
 import { Avatar } from './Avatar.js';
 
 export interface PendingDriverRequest {

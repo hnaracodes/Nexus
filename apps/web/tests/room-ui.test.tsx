@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ConnectionStatus } from '../src/components/ConnectionStatus.js';
 import { MessageList } from '../src/components/MessageList.js';
 import { PromptInput } from '../src/components/PromptInput.js';
-import type { NexusEvent } from '@nexus/protocol/events';
+import type { NexusEvent } from '@syncode/protocol/events';
 
 function log(...partials: Record<string, unknown>[]): NexusEvent[] {
   return partials.map(

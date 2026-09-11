@@ -1,4 +1,4 @@
-import type { AgentProvider } from '@nexus/protocol/events';
+import type { AgentProvider } from '@syncode/protocol/events';
 import type { Node } from './graph.js';
 
 /**

@@ -1,6 +1,6 @@
 import { GitBranch, User, Users } from 'lucide-react';
-import type { NexusEvent } from '@nexus/protocol/events';
-import type { PresenceEntry } from '@nexus/protocol/wire';
+import type { NexusEvent } from '@syncode/protocol/events';
+import type { PresenceEntry } from '@syncode/protocol/wire';
 import type { Status } from '../ws.js';
 import { deriveGithubBinding } from '../githubBinding.js';
 import { ConnectionStatus } from './ConnectionStatus.js';

@@ -9,7 +9,7 @@ import {
   restoreRoom,
 } from '../../src/server/rooms.js';
 import { MemorySink, attachRoom } from '../../src/server/ws.js';
-import type { NexusEvent } from '@nexus/protocol/events';
+import type { NexusEvent } from '@syncode/protocol/events';
 
 const KEY = 'sk-ant-api03-TESTONLY-not-a-real-key';
 

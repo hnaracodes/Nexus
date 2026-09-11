@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AUTO_APPROVE, createPermissionGate } from '../../src/server/permissions.js';
 import { __resetRooms, createRoom } from '../../src/server/rooms.js';
 import type { Room } from '../../src/server/rooms.js';
-import type { UnsequencedEvent } from '@nexus/protocol/events';
+import type { UnsequencedEvent } from '@syncode/protocol/events';
 
 let room: Room;
 let events: UnsequencedEvent[];

@@ -1,5 +1,5 @@
-import type { AgentId, AgentProvider, NexusEvent } from '@nexus/protocol/events';
-import { PRIMARY_AGENT_ID, agentIdOf } from '@nexus/protocol/events';
+import type { AgentId, AgentProvider, NexusEvent } from '@syncode/protocol/events';
+import { PRIMARY_AGENT_ID, agentIdOf } from '@syncode/protocol/events';
 
 /**
  * Pure derivations over the event log for the fleet (phase 12) — zero React,
@@ -36,7 +36,7 @@ export interface Message {
  * — that module is server-internal (`apps/server/src/log/`) and this is
  * `apps/web`, so the shape is re-derived here rather than imported across the
  * app boundary. Named `AgentDescriptor`, not `FleetEntry`, to avoid colliding
- * with `@nexus/protocol/wire`'s `FleetEntry`, which is the LIVE transient
+ * with `@syncode/protocol/wire`'s `FleetEntry`, which is the LIVE transient
  * status (idle/working/awaiting_approval) this type deliberately omits: that
  * is presence, not history, and only the server can say it (I3 — liveness is
  * not in the log).

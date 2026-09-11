@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ClientFrame, ServerFrame } from '@nexus/protocol/wire';
+import type { ClientFrame, ServerFrame } from '@syncode/protocol/wire';
 import type { DocSession } from '../docSession.js';
 import { createDocSession } from '../docSession.js';
 

@@ -106,8 +106,8 @@ function useWritablePaths(): void {
    * Name the app BEFORE asking for its userData path.
    *
    * `app.getName()` falls back to package.json's `name`, which here is the npm
-   * scope `@nexus/desktop` — and Electron joins that straight into the path, so
-   * a user's rooms landed in `~/Library/Application Support/@nexus/desktop/`.
+   * scope `@syncode/desktop` — and Electron joins that straight into the path, so
+   * a user's rooms landed in `~/Library/Application Support/@syncode/desktop/`.
    * Writable, so nothing broke, but a scoped npm name is an implementation
    * detail leaking into a directory a person will actually open in Finder.
    *
@@ -126,12 +126,12 @@ async function startBackend(): Promise<{ origin: string; port: number }> {
   useWritablePaths();
 
   /**
-   * Phase 17b/17c: the ONE flag that lets `@nexus/server` accept a
+   * Phase 17b/17c: the ONE flag that lets `@syncode/server` accept a
    * `localPath` room-creation request at all (`isLocalHostMode()` in
    * `localHost.ts`) — and, like `useWritablePaths()` immediately above, it
    * MUST be set before the dynamic import below, for the exact same reason
    * documented at length there: a static import would hoist and evaluate
-   * `@nexus/server` before this line ever ran, and `isLocalHostMode()`, while
+   * `@syncode/server` before this line ever ran, and `isLocalHostMode()`, while
    * it happens to be read at request time rather than frozen into a
    * module-scope constant, is exactly the kind of thing a future edit could
    * "simplify" back to a static import without any test here catching it,
@@ -150,7 +150,7 @@ async function startBackend(): Promise<{ origin: string; port: number }> {
    * `DEFAULT_WORKDIR` in create.ts, `DEFAULT_DATA_DIR` in recovery.ts and
    * configStore.ts, `DATA_DIR_ROOT` in index.ts — all of the form
    * `process.env[...] ?? './work'`. A static `import { createServer } from
-   * '@nexus/server'` is hoisted and evaluated before any statement in this
+   * '@syncode/server'` is hoisted and evaluated before any statement in this
    * file runs, so `useWritablePaths()` above would set the variables AFTER
    * those constants had already been frozen to the unwritable defaults, and
    * the fix would silently do nothing.
@@ -161,7 +161,7 @@ async function startBackend(): Promise<{ origin: string; port: number }> {
    * exactly as it was broken before. CLAUDE.md records the same shape for
    * `github.ts`, whose static import in `index.ts` looks removable and is not.
    */
-  const { createServer } = await import('@nexus/server');
+  const { createServer } = await import('@syncode/server');
   // Port 0 hands port selection to the OS. This repo has already hit the
   // consequence of assuming a fixed port is free — CLAUDE.md documents 8080
   // being occupied by an unrelated process on the primary dev machine — and

@@ -12,7 +12,7 @@ import { validateRepoUrl } from '../../src/server/create.js';
 import { recoverRooms, writeRoomMeta } from '../../src/server/recovery.js';
 import { openLog } from '../../src/log/event-log.js';
 import { reconstruct } from '../../src/log/replay.js';
-import type { NexusEvent } from '@nexus/protocol/events';
+import type { NexusEvent } from '@syncode/protocol/events';
 import type { Room } from '../../src/server/rooms.js';
 
 /**

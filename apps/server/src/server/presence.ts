@@ -1,5 +1,5 @@
-import type { NexusEvent } from '@nexus/protocol/events';
-import type { PresenceEntry, ServerFrame } from '@nexus/protocol/wire';
+import type { NexusEvent } from '@syncode/protocol/events';
+import type { PresenceEntry, ServerFrame } from '@syncode/protocol/wire';
 import type { Room } from './rooms.js';
 
 /** Transient snapshot. Never logged, never assigned a seq. */

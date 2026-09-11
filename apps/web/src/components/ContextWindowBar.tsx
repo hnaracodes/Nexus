@@ -1,5 +1,5 @@
 import { Gauge } from 'lucide-react';
-import type { NexusEvent } from '@nexus/protocol/events';
+import type { NexusEvent } from '@syncode/protocol/events';
 
 /** Ratios at and above these thresholds get a warn/danger treatment. */
 const WARN_THRESHOLD = 0.7;

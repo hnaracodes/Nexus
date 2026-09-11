@@ -30,7 +30,7 @@ export interface Batch {
 /**
  * One OTHER agent's identity and coarse status, for the roster preamble a
  * turn's text may carry (phase 17d, `Roster` below). `provider` and `status`
- * are plain strings rather than `@nexus/protocol`'s `AgentProvider`/
+ * are plain strings rather than `@syncode/protocol`'s `AgentProvider`/
  * `AgentStatus` unions — this module's own doc comment above promises "no SDK
  * import, no timers, no I/O", and the caller (`fleet.ts`'s `buildRosterView`)
  * already holds the real union types and narrows them to strings when it

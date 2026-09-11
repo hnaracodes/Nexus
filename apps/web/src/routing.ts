@@ -19,7 +19,7 @@ export type Route =
 
 /**
  * Exported (not just module-private) so a test can assert every path here is
- * also in `@nexus/protocol/pages`'s `PAGE_PATHS` — the allow-list the server
+ * also in `@syncode/protocol/pages`'s `PAGE_PATHS` — the allow-list the server
  * actually serves. `/download` shipped resolving here while missing from
  * that list, which 404'd in production and passed in development because
  * vite's dev server is a catch-all and the deployed server deliberately is

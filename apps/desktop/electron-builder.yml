@@ -1,4 +1,4 @@
-# electron-builder config for @nexus/desktop.
+# electron-builder config for @syncode/desktop.
 #
 # Nothing here downloads or packages anything until `npm run package` (i.e.
 # `electron-builder` itself) is invoked — this file is inert on its own, and
@@ -81,7 +81,7 @@ linux:
   # REQUIRED, and the Linux build cannot complete without it.
   #
   # `executableName` defaults to package.json's `name`, which in this workspace
-  # is the npm scope `@nexus/desktop`. electron-builder strips the slash and
+  # is the npm scope `@syncode/desktop`. electron-builder strips the slash and
   # gets `@nexusdesktop`, which still contains `@`, and refuses:
   #
   #   ⨯ failed to build AppImage  error=executableName contains characters that
@@ -92,7 +92,7 @@ linux:
   # first Linux build ever run is the first time anyone could have seen it.
   #
   # This is the THIRD place the npm scope has leaked into something a user sees:
-  # `app.getName()` put rooms in `~/Library/Application Support/@nexus/desktop`
+  # `app.getName()` put rooms in `~/Library/Application Support/@syncode/desktop`
   # until `app.setName('Nexus')` fixed it (see main.ts), `productName` fixed the
   # bundle name, and this fixes the Linux executable. A scoped package name is
   # an npm implementation detail and every layer that derives an identity from

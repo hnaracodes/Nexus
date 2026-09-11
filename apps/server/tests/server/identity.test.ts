@@ -6,7 +6,7 @@ import { attachApiKey, createRoom, mintRoomId, restoreRoom } from '../../src/ser
 import type { Room } from '../../src/server/rooms.js';
 import { attachRoom, getRuntime } from '../../src/server/ws.js';
 import { projectPresence } from '../../src/server/presence.js';
-import type { ServerFrame } from '@nexus/protocol/wire';
+import type { ServerFrame } from '@syncode/protocol/wire';
 
 const KEY = 'sk-ant-api03-TESTONLY-not-a-real-key';
 

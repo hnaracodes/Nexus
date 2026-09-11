@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { AgentId } from '@nexus/protocol/events';
-import type { FleetEntry } from '@nexus/protocol/wire';
+import type { AgentId } from '@syncode/protocol/events';
+import type { FleetEntry } from '@syncode/protocol/wire';
 import { SideBar } from '../SideBar.js';
 import type { SideBarProps } from '../SideBar.js';
 import type { WorkspaceApi } from '../../workspace/workspaceApi.js';

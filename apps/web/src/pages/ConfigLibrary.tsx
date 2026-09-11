@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { AlertTriangle, Loader2, Pencil, Plus, ShieldAlert, Trash2, X } from 'lucide-react';
-import type { AgentProvider } from '@nexus/protocol/events';
-import { AGENT_PROVIDERS } from '@nexus/protocol/events';
+import type { AgentProvider } from '@syncode/protocol/events';
+import { AGENT_PROVIDERS } from '@syncode/protocol/events';
 import { Button } from '../components/Button.js';
 
 /**
@@ -14,7 +14,7 @@ import { Button } from '../components/Button.js';
  * mirror `configStore.ts` — both server-internal modules `apps/web` has no
  * business importing across the app boundary, so this page keeps its own copy
  * of their WIRE shape, exactly like `CreateRoom.tsx`'s `PickerRepo`. `AgentProvider`
- * itself DOES come from `@nexus/protocol/events` — it is a real protocol type,
+ * itself DOES come from `@syncode/protocol/events` — it is a real protocol type,
  * not a server-internal one, and `FleetPane.tsx` already imports it the same way.
  *
  * D3 says configs and crews are USER ASSETS rather than room history, and this

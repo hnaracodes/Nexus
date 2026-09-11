@@ -17,7 +17,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as Automerge from '@automerge/automerge';
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { UnsequencedEvent } from '@nexus/protocol/events';
+import type { UnsequencedEvent } from '@syncode/protocol/events';
 import { __resetRooms, createRoom } from '../../src/server/rooms.js';
 import { WorkspacePathError } from '../../src/server/workspace.js';
 import {

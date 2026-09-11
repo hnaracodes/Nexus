@@ -4,7 +4,7 @@ import { WebSocket } from 'ws';
 import { createServer } from '../../src/server/index.js';
 import { createRoom } from '../../src/server/rooms.js';
 import { attachRoom, getRuntime } from '../../src/server/ws.js';
-import type { ServerFrame } from '@nexus/protocol/wire';
+import type { ServerFrame } from '@syncode/protocol/wire';
 
 const KEY = 'sk-ant-api03-TESTONLY-not-a-real-key';
 const GH_INSTALL = 'ghs_TESTONLYinstallationtoken0123456789';

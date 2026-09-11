@@ -41,7 +41,7 @@ import type {
   Part,
   ToolListUnion,
 } from '@google/genai';
-import type { NexusEvent, UnsequencedEvent } from '@nexus/protocol/events';
+import type { NexusEvent, UnsequencedEvent } from '@syncode/protocol/events';
 import type { Room } from '../rooms.js';
 import type { PermissionGate, RequestVisibility } from '../permissions.js';
 import { createPermissionGate } from '../permissions.js';

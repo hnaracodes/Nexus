@@ -8,8 +8,8 @@ import { EMPTY_VIEW } from './store.js';
 import type { RoomView } from './store.js';
 import { connect } from './ws.js';
 import type { Connection, Status, WebSocketLike } from './ws.js';
-import type { AgentId, NexusEvent } from '@nexus/protocol/events';
-import { PRIMARY_AGENT_ID, agentIdOf } from '@nexus/protocol/events';
+import type { AgentId, NexusEvent } from '@syncode/protocol/events';
+import { PRIMARY_AGENT_ID, agentIdOf } from '@syncode/protocol/events';
 // phase-5a import anchor
 import { MalformedLink } from './pages/MalformedLink.js';
 // phase-7b import anchor

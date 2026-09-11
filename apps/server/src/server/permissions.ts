@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { UnsequencedEvent } from '@nexus/protocol/events';
+import type { UnsequencedEvent } from '@syncode/protocol/events';
 import type { Room } from './rooms.js';
 import { isAutoApproved } from './runtime/autoApprove.js';
 

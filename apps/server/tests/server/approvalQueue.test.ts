@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AgentId, UnsequencedEvent } from '@nexus/protocol/events';
+import type { AgentId, UnsequencedEvent } from '@syncode/protocol/events';
 import { createApprovalQueue } from '../../src/server/approvalQueue.js';
 import type { ApprovalQueue } from '../../src/server/approvalQueue.js';
 import { createPermissionGate } from '../../src/server/permissions.js';

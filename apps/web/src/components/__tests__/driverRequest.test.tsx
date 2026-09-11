@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { NexusEvent } from '@nexus/protocol/events';
+import type { NexusEvent } from '@syncode/protocol/events';
 import { DriverRequestNotice, derivePendingDriverRequests } from '../DriverRequestNotice.js';
 
 const ROOM = 'room_fixture';

@@ -1,6 +1,6 @@
 import * as Automerge from '@automerge/automerge';
-import { decodeChangeBundle, encodeChangeBundle } from '@nexus/protocol/docsync';
-import type { ClientFrame, DocPresenceEntry, ServerFrame } from '@nexus/protocol/wire';
+import { decodeChangeBundle, encodeChangeBundle } from '@syncode/protocol/docsync';
+import type { ClientFrame, DocPresenceEntry, ServerFrame } from '@syncode/protocol/wire';
 
 /** The one shape every open document holds. Kept minimal on purpose: phase 11
  *  only needs plain-text collaborative editing, and a richer shape (blocks,
@@ -26,7 +26,7 @@ interface PathEntry {
    * sync protocol while the server sent flat change bundles, both were fully
    * tested against themselves, and collaborative editing was broken across the
    * wire with every suite green. The format now lives in
-   * `@nexus/protocol/docsync` so there is only one of it.
+   * `@syncode/protocol/docsync` so there is only one of it.
    */
   lastSentHeads: Automerge.Heads;
   /**

@@ -1,5 +1,5 @@
 {
-  "name": "@nexus/server",
+  "name": "@syncode/server",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -29,7 +29,7 @@
     "@automerge/automerge": "^3.4.1",
     "@google/genai": "^2.21.0",
     "@hono/node-server": "^2.0.12",
-    "@nexus/protocol": "*",
+    "@syncode/protocol": "*",
     "hono": "^4.13.7",
     "openai": "^7.10.0",
     "ws": "^8.18.0",

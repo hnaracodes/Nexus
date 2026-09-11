@@ -1,7 +1,7 @@
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ClientFrame, DocPresenceEntry, ServerFrame } from '@nexus/protocol/wire';
+import type { ClientFrame, DocPresenceEntry, ServerFrame } from '@syncode/protocol/wire';
 import type { DocSession } from '../docSession.js';
 import { createDocSession } from '../docSession.js';
 import { collabExtension, minimalReplace } from '../cmCollab.js';

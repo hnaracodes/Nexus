@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { InterruptNotice } from '../src/components/InterruptNotice.js';
-import type { NexusEvent } from '@nexus/protocol/events';
+import type { NexusEvent } from '@syncode/protocol/events';
 
 function log(...partials: Record<string, unknown>[]): NexusEvent[] {
   return partials.map(

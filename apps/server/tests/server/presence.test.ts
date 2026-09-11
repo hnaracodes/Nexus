@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { presenceFrame, projectPresence } from '../../src/server/presence.js';
 import { __resetRooms, createRoom } from '../../src/server/rooms.js';
-import type { NexusEvent } from '@nexus/protocol/events';
+import type { NexusEvent } from '@syncode/protocol/events';
 
 beforeEach(() => __resetRooms());
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { AssistantMessage } from '@nexus/protocol/events';
-import { PRIMARY_AGENT_ID, agentIdOf } from '@nexus/protocol/events';
-import { parseClientFrame } from '@nexus/protocol/wire';
+import type { AssistantMessage } from '@syncode/protocol/events';
+import { PRIMARY_AGENT_ID, agentIdOf } from '@syncode/protocol/events';
+import { parseClientFrame } from '@syncode/protocol/wire';
 
 /**
  * Phase 8b. The protocol learns to say WHICH agent did a thing, without

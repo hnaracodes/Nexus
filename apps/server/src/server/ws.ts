@@ -1,8 +1,8 @@
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { WebSocket } from 'ws';
-import type { AgentId, AgentProvider, NexusEvent, UnsequencedEvent } from '@nexus/protocol/events';
-import { PRIMARY_AGENT_ID, agentIdOf } from '@nexus/protocol/events';
-import type { DocPresenceEntry, ServerFrame } from '@nexus/protocol/wire';
+import type { AgentId, AgentProvider, NexusEvent, UnsequencedEvent } from '@syncode/protocol/events';
+import { PRIMARY_AGENT_ID, agentIdOf } from '@syncode/protocol/events';
+import type { DocPresenceEntry, ServerFrame } from '@syncode/protocol/wire';
 import { createSink } from '../log/index.js';
 import { projectAgents } from '../log/replay.js';
 import { redactEvent } from '../log/redact.js';

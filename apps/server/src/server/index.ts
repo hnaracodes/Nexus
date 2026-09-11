@@ -8,10 +8,10 @@ import type { Context } from 'hono';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { WebSocketServer } from 'ws';
-import type { GithubRepoRef } from '@nexus/protocol/events';
-import { PRIMARY_AGENT_ID, PROTOCOL_VERSION } from '@nexus/protocol/events';
-import { parseClientFrame } from '@nexus/protocol/wire';
-import { PAGE_PATHS } from '@nexus/protocol/pages';
+import type { GithubRepoRef } from '@syncode/protocol/events';
+import { PRIMARY_AGENT_ID, PROTOCOL_VERSION } from '@syncode/protocol/events';
+import { parseClientFrame } from '@syncode/protocol/wire';
+import { PAGE_PATHS } from '@syncode/protocol/pages';
 // STATIC import, deliberately. Evaluating github.ts is what reads the App
 // secrets and DELETES them from process.env, and that has to happen before any
 // room can attach an agent — startAgent spawns the SDK subprocess with
@@ -783,7 +783,7 @@ export function createServer(
   // A room link is "/?room=…&token=…" (and now also "/room?…"), so "/"
   // serves the shell either way and the client decides which view to mount.
   /**
-   * The page paths, from `@nexus/protocol/pages` rather than written out here.
+   * The page paths, from `@syncode/protocol/pages` rather than written out here.
    *
    * This line used to be its own hand-kept array while the web app's router
    * kept a second one. `/download` was added to the client and to neither of
@@ -800,7 +800,7 @@ export function createServer(
   // Anchored to this module, NOT to process.cwd(). Before the monorepo move
   // the default was the cwd-relative 'apps/web/dist', which worked only because
   // every invocation path happened to run from the repo root. Under workspaces
-  // `npm run dev -w @nexus/server` runs with cwd=apps/server, and that
+  // `npm run dev -w @syncode/server` runs with cwd=apps/server, and that
   // coincidence is gone.
   //
   // `../../../web/dist` resolves identically from source and from build output

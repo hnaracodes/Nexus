@@ -34,8 +34,8 @@ import { createHash } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { relative, sep } from 'node:path';
 import * as Automerge from '@automerge/automerge';
-import type { UnsequencedEvent } from '@nexus/protocol/events';
-import { MAX_SNAPSHOT_BYTES } from '@nexus/protocol/events';
+import type { UnsequencedEvent } from '@syncode/protocol/events';
+import { MAX_SNAPSHOT_BYTES } from '@syncode/protocol/events';
 import type { Room } from './rooms.js';
 import { WorkspacePathError, readWorkspaceFile, resolveWorkspacePath } from './workspace.js';
 
@@ -205,11 +205,11 @@ function headsEqual(a: readonly string[], b: readonly string[]): boolean {
  * merge the same way regardless of the envelope they arrive in.
  */
 // Re-exported, not re-implemented. The definition moved to
-// `@nexus/protocol/docsync` because the browser client had independently
+// `@syncode/protocol/docsync` because the browser client had independently
 // implemented a DIFFERENT format and neither side's tests crossed the
 // boundary to notice. Keeping the names exported here means this module's
 // existing tests and callers are unchanged.
-import { decodeChangeBundle, encodeChangeBundle } from '@nexus/protocol/docsync';
+import { decodeChangeBundle, encodeChangeBundle } from '@syncode/protocol/docsync';
 
 export { decodeChangeBundle, encodeChangeBundle };
 

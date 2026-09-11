@@ -88,7 +88,7 @@ describe('the router actually dispatches each route', () => {
 /**
  * The client half of the seam the server test guards from its side.
  *
- * `PAGE_PATHS` in `@nexus/protocol/pages` is what the server hands back
+ * `PAGE_PATHS` in `@syncode/protocol/pages` is what the server hands back
  * index.html for. If the client cannot resolve one of those paths, the server
  * serves the SPA and the SPA renders the landing page — a 200 showing the wrong
  * thing, which is strictly harder to notice than a 404. If the client resolves
@@ -98,7 +98,7 @@ describe('the router actually dispatches each route', () => {
  */
 describe('every shared page path resolves in the client', () => {
   it('resolves each PAGE_PATHS entry to something other than the landing fallback', async () => {
-    const { PAGE_PATHS } = await import('@nexus/protocol/pages');
+    const { PAGE_PATHS } = await import('@syncode/protocol/pages');
     const { resolveRoute } = await import('../../routing.js');
 
     for (const path of PAGE_PATHS) {
@@ -127,13 +127,13 @@ describe('every shared page path resolves in the client', () => {
  */
 describe('every client-resolvable path is a known page path', () => {
   it('has a PAGE_PATHS entry for every static path in routing.ts', async () => {
-    const { PAGE_PATHS } = await import('@nexus/protocol/pages');
+    const { PAGE_PATHS } = await import('@syncode/protocol/pages');
     const { PATHS } = await import('../../routing.js');
 
     for (const path of Object.keys(PATHS)) {
       expect(
         (PAGE_PATHS as readonly string[]).includes(path),
-        `${path} resolves in the client but is missing from @nexus/protocol/pages PAGE_PATHS — it will 404 in production`,
+        `${path} resolves in the client but is missing from @syncode/protocol/pages PAGE_PATHS — it will 404 in production`,
       ).toBe(true);
     }
   });

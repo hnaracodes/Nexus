@@ -1,4 +1,4 @@
-import type { UnsequencedEvent } from '@nexus/protocol/events';
+import type { UnsequencedEvent } from '@syncode/protocol/events';
 import type { Room } from './rooms.js';
 
 export const GRACE_MS = 30_000;
