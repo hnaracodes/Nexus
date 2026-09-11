@@ -4,11 +4,11 @@
 <style>
   :root { color-scheme: dark; }
   body {
-    margin: 0; height: 100vh; display: grid; place-items: center;
+    margin: 0; min-height: 100vh; display: grid; place-items: center;
     background: #0e0f11; color: #e8e8ea;
     font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
-  main { width: 460px; }
+  main { width: 460px; padding: 24px 0; }
   h1 { font-size: 22px; margin: 0 0 6px; letter-spacing: -0.01em; }
   p.sub { margin: 0 0 26px; color: #9a9aa2; }
   label { display: block; font-weight: 500; margin-bottom: 8px; }
@@ -26,32 +26,63 @@
   button:focus-visible { outline: 2px solid #d98b4a; outline-offset: 2px; }
   .problem { margin-top: 14px; color: #f08a8a; min-height: 20px; }
   .hint { margin-top: 28px; color: #6d6e76; font-size: 12.5px; border-top: 1px solid #1f2126; padding-top: 14px; }
+  .consent {
+    margin: 0 0 20px; padding: 14px 16px; border-radius: 8px; border: 1px solid #3a2a1c;
+    background: #1c1712; color: #e8c9a8; font-size: 13px; white-space: pre-wrap;
+  }
+  [hidden] { display: none !important; }
 </style>
 <main>
-  <h1>Join a room</h1>
-  <p class="sub">Paste the link someone shared with you.</p>
+  <section id="step-choose">
+    <h1>Nexus</h1>
+    <p class="sub">Paste the link someone shared with you, or open a folder on this machine.</p>
 
-  <label for="link">Room link</label>
-  <input id="link" type="text" placeholder="https://nexus-mvp.fly.dev/?room=…&amp;token=…" autofocus />
+    <label for="link">Room link</label>
+    <input id="link" type="text" placeholder="https://nexus-mvp.fly.dev/?room=…&amp;token=…" autofocus />
 
-  <div class="row">
-    <button class="primary" id="join">Join room</button>
-    <button id="local">Work on this machine</button>
-  </div>
+    <div class="row">
+      <button class="primary" id="join">Join room</button>
+      <button id="pick-folder">Open a folder</button>
+    </div>
 
-  <p class="problem" id="problem" role="alert"></p>
+    <p class="problem" id="problem" role="alert"></p>
 
-  <p class="hint">
-    <strong>Join a room</strong> connects to whoever is hosting it — the agent runs there.<br />
-    <strong>Work on this machine</strong> runs everything locally, against your own files. Nobody else can join it.
-  </p>
+    <p class="hint">
+      <strong>Join a room</strong> connects to whoever is hosting it — the agent runs there.<br />
+      <strong>Open a folder</strong> starts a room on this machine, rooted at a real folder you pick —
+      nobody else can join it until you choose <strong>Room &gt; Share on Local Network…</strong>
+      from the app menu.
+    </p>
+  </section>
+
+  <section id="step-consent" hidden>
+    <h1>Before this becomes a room</h1>
+    <p class="consent" id="consent-text"></p>
+
+    <label for="api-key">Anthropic Console API key</label>
+    <input id="api-key" type="password" placeholder="sk-ant-…" autocomplete="off" />
+
+    <div class="row">
+      <button id="back">Back</button>
+      <button class="primary" id="create-room">Open this folder as a room</button>
+    </div>
+
+    <p class="problem" id="problem2" role="alert"></p>
+  </section>
 </main>
 <script>
+  const stepChoose = document.getElementById('step-choose');
+  const stepConsent = document.getElementById('step-consent');
+  const consentText = document.getElementById('consent-text');
+  const apiKeyInput = document.getElementById('api-key');
+
   const link = document.getElementById('link');
   const problem = document.getElementById('problem');
+  const problem2 = document.getElementById('problem2');
   const join = document.getElementById('join');
+  const createRoom = document.getElementById('create-room');
 
-  async function submit() {
+  async function submitLink() {
     problem.textContent = '';
     join.disabled = true;
     const result = await window.nexusJoin.submit(link.value);
@@ -63,7 +94,38 @@
     }
   }
 
-  join.addEventListener('click', submit);
-  link.addEventListener('keydown', (e) => { if (e.key === 'Enter') void submit(); });
-  document.getElementById('local').addEventListener('click', () => void window.nexusJoin.workLocally());
+  async function pickFolder() {
+    problem.textContent = '';
+    const picked = await window.nexusJoin.pickFolder();
+    if (picked === null) return; // user canceled the OS dialog
+    consentText.textContent = picked.consent;
+    problem2.textContent = '';
+    apiKeyInput.value = '';
+    stepChoose.hidden = true;
+    stepConsent.hidden = false;
+    apiKeyInput.focus();
+  }
+
+  async function confirmOpenFolder() {
+    problem2.textContent = '';
+    createRoom.disabled = true;
+    const result = await window.nexusJoin.openFolder(apiKeyInput.value);
+    // A non-null result is a refusal to display; on success this window is
+    // replaced by the room, so there is nothing to re-enable.
+    if (result !== null) {
+      problem2.textContent = result;
+      createRoom.disabled = false;
+    }
+  }
+
+  join.addEventListener('click', submitLink);
+  link.addEventListener('keydown', (e) => { if (e.key === 'Enter') void submitLink(); });
+  document.getElementById('pick-folder').addEventListener('click', () => void pickFolder());
+
+  createRoom.addEventListener('click', confirmOpenFolder);
+  apiKeyInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') void confirmOpenFolder(); });
+  document.getElementById('back').addEventListener('click', () => {
+    stepConsent.hidden = true;
+    stepChoose.hidden = false;
+  });
 </script>

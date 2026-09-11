@@ -64,8 +64,35 @@ against it gets a confusing 404 from someone else's server while ours dies with
 
 ## The desktop app
 
-There is **no installer, no download link, and no `curl | sh`.** Nothing has
-been published anywhere. To get it you build it:
+**It ships now — as of phase 17e, tagging a `v*` release builds it on macOS,
+Windows and Linux and attaches the results to a GitHub Release.** Three ways
+to get it, in the order most people want them:
+
+### 1. Download page
+
+The web app's **`/download`** page detects your OS from the browser and offers
+the matching build, with the other two listed below it. It fetches the
+current release from the GitHub API at load time, so it is never stale — if
+that call fails it falls back to
+[the GitHub releases page](https://github.com/hnaracodes/Nexus/releases/latest)
+directly rather than showing a broken page. (As of this writing the page and
+route exist in `apps/web/src/pages/Download.tsx` and `routing.ts`; whether the
+running app's router already dispatches `/download` to it is a separate,
+smaller integration step — check before linking someone to it.)
+
+### 2. `curl | sh` (macOS / Linux)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/hnaracodes/Nexus/main/scripts/install.sh | sh
+```
+
+Detects your OS and CPU architecture, downloads the matching build from the
+latest release, **verifies its published sha256 checksum, and refuses to
+install anything that doesn't match** — a checksum mismatch is a hard failure,
+not a warning that gets skipped past. On Windows, run the `.exe` from the
+download page instead; there is no Windows path for this script.
+
+### 3. Build it yourself
 
 ```bash
 npm install
@@ -73,13 +100,28 @@ npm run package -w @nexus/desktop
 open apps/desktop/release/mac-arm64/Nexus.app
 ```
 
-That also produces `apps/desktop/release/Nexus-0.0.1-arm64.dmg` (177 MB, arm64).
+That also produces `apps/desktop/release/Nexus-0.0.1-mac-arm64.dmg`.
 
-**It is unsigned.** On another Mac, macOS Gatekeeper will refuse it on first
-launch — the user has to right-click → Open and confirm. That is a deferred
-decision (no Apple Developer certificate yet), not a bug, and it means the
-`.dmg` is **not distributable** in any normal sense today. Do not send it to
-someone at a hackathon and expect it to open.
+### It is unsigned, whichever way you get it
+
+Nobody has bought an Apple Developer certificate or a Windows code-signing
+certificate yet — a deferred decision (see CLAUDE.md §11), not a bug, and
+every one of the three paths above says so before or as it hands you the
+file:
+
+- **macOS** will say *"Apple could not verify that 'Nexus' is free of malware."*
+  Do not click Trash. Right-click (or Control-click) `Nexus.app` → **Open** →
+  confirm in the dialog. Once is enough.
+- **Windows** SmartScreen will say *"Windows protected your PC."* Click
+  **More info**, then **Run anyway**.
+- If macOS still refuses after the right-click, `xattr -d
+  com.apple.quarantine /Applications/Nexus.app` removes the flag Gatekeeper
+  checks — a real fix, but a last resort: it only makes sense once you've
+  already decided you trust where the file came from, and it is not the
+  instruction to lead with.
+
+Do not send the `.dmg`/`.exe` to someone and tell them it "just opens" —
+it doesn't, and the warning above is what they will see instead.
 
 The app picks a random free port, starts the server in-process, and opens a
 window pointed at it. Your rooms and logs live in
@@ -144,7 +186,16 @@ someone else's identity, and asserts the server overrides all of it.
 
 - **The desktop app cannot join a hosted room.** It is its own island. Making
   the desktop client connect to a remote room is real work nobody has done.
-- **The `.dmg` is unsigned**, so it cannot be handed to another person cleanly.
+- **Every build is unsigned.** It can now be *distributed* — a release
+  workflow, a download page and an installer script all exist as of phase
+  17e — but it cannot be *opened* without the person on the other end seeing
+  a Gatekeeper or SmartScreen warning and right-clicking (or clicking
+  through) past it. That is expected, not a rough edge to apologize for; see
+  "The desktop app" above.
+- **The release workflow itself has never been run.** `.github/workflows/release.yml`
+  is unverified until someone actually pushes a `v*` tag — it typechecks as
+  YAML and was reasoned through carefully, but no CI run, no real GitHub
+  Release, and no download of a real published artifact has happened yet.
 - **No live provider run.** OpenAI and Gemini adapters exist, are gated, and are
   tested against injected fakes — but no real OpenAI or Gemini call has ever
   been made from this codebase. Anthropic is the only provider anyone has

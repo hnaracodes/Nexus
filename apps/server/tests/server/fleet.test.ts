@@ -12,7 +12,15 @@ import { PRIMARY_AGENT_ID, agentIdOf } from '@nexus/protocol/events';
 import type { AgentSpawned, NexusEvent } from '@nexus/protocol/events';
 import { createRoom } from '../../src/server/rooms.js';
 import { MemorySink, __resetRuntimes, attachRoom } from '../../src/server/ws.js';
-import { canSpawn, computeResourceCap, fleetSnapshot, spawnAgent, stopAgent } from '../../src/server/fleet.js';
+import {
+  buildRosterView,
+  canSpawn,
+  computeResourceCap,
+  fleetSnapshot,
+  spawnAgent,
+  stopAgent,
+} from '../../src/server/fleet.js';
+import { createTurnGate } from '../../src/server/turnGate.js';
 
 const KEY = 'sk-ant-api03-TESTONLY-not-a-real-key';
 const CWD = '/tmp/nexus-fleet-test-fixture'; // never read: the stub agent below never touches disk
@@ -302,5 +310,62 @@ describe('I1 — an agent already attached is never re-instantiated', () => {
 
     expect(again).toBe(first);
     expect([...runtime.agents.keys()].filter((id) => id === spawned.agentId)).toHaveLength(1);
+  });
+});
+
+/**
+ * Phase 17d — agents know their siblings exist. `buildRosterView` is the
+ * production `Roster` (turnGate.ts) for one agent, built from the SAME
+ * `fleetSnapshot` a human's fleet panel reads — exercised here against the
+ * REAL `attachRoom`, the same way the rest of this file proves `FleetRuntime`
+ * is genuinely satisfied by `RoomRuntime`, not just assumed.
+ */
+describe('buildRosterView', () => {
+  it('returns null for the primary agent alone in a fresh room — no roster, no preamble', () => {
+    const runtime = attach();
+    expect(buildRosterView(runtime, PRIMARY_AGENT_ID)).toBeNull();
+  });
+
+  it('returns null again once a spawned second agent is stopped — back to alone', () => {
+    const runtime = attach();
+    const spawned = spawnAgent({ runtime, displayName: 'Temp', provider: 'anthropic', model: null, by: BY });
+    if (!spawned.ok) throw new Error('setup failed');
+    expect(buildRosterView(runtime, PRIMARY_AGENT_ID)).not.toBeNull();
+
+    stopAgent({ runtime, agentId: spawned.agentId, by: BY });
+    expect(buildRosterView(runtime, PRIMARY_AGENT_ID)).toBeNull();
+  });
+
+  it("names the RECIPIENT correctly — same fleet, opposite self, from each side", () => {
+    const runtime = attach();
+    const alpha = spawnAgent({ runtime, displayName: 'Alpha', provider: 'anthropic', model: null, by: BY });
+    const beta = spawnAgent({ runtime, displayName: 'Beta', provider: 'anthropic', model: null, by: BY });
+    if (!alpha.ok || !beta.ok) throw new Error('setup failed');
+
+    const alphaView = buildRosterView(runtime, alpha.agentId);
+    const betaView = buildRosterView(runtime, beta.agentId);
+
+    expect(alphaView?.selfDisplayName).toBe('Alpha');
+    expect(alphaView?.others.map((o) => o.displayName).sort()).toEqual(['Agent', 'Beta']);
+
+    expect(betaView?.selfDisplayName).toBe('Beta');
+    expect(betaView?.others.map((o) => o.displayName).sort()).toEqual(['Agent', 'Alpha']);
+
+    // And rendered through the SAME turnGate.ts render() a real turn uses:
+    // Alpha's turn must say it is Alpha, Beta's must say it is Beta, from the
+    // one identical fleet.
+    const alphaText = createTurnGate().submit(
+      { seq: 1, displayName: 'Ada', text: 'go', wasDriver: true },
+      alphaView,
+    )?.text;
+    const betaText = createTurnGate().submit(
+      { seq: 1, displayName: 'Ada', text: 'go', wasDriver: true },
+      betaView,
+    )?.text;
+
+    expect(alphaText).toContain(`You are Alpha [${alpha.agentId}].`);
+    expect(alphaText).toContain(`- Beta [${beta.agentId}] (anthropic, idle)`);
+    expect(betaText).toContain(`You are Beta [${beta.agentId}].`);
+    expect(betaText).toContain(`- Alpha [${alpha.agentId}] (anthropic, idle)`);
   });
 });

@@ -20,6 +20,12 @@ appId: com.nexus.desktop
 productName: Nexus
 directories:
   output: release
+# Uniform across all three platforms so the release workflow, the download
+# page (apps/web/src/pages/Download.tsx) and scripts/install.sh can all find
+# an asset by matching on this SHAPE — none of them hardcode a version, since
+# `${version}` is substituted from package.json (or the CI-overridden version
+# for a tagged release) at build time.
+artifactName: '${productName}-${version}-${os}-${arch}.${ext}'
 files:
   - dist/**/*
   - package.json
@@ -32,8 +38,13 @@ files:
 
 mac:
   category: public.app-category.developer-tools
+  # Both architectures, spelled out here rather than left to a CLI flag, so
+  # that "release.yml builds arm64 + x64" is true by reading this file alone.
   target:
-    - dmg
+    - target: dmg
+      arch:
+        - arm64
+        - x64
   # electron-builder reads signing/notarization credentials from the
   # environment, not from this file, so nothing secret is committed here.
   # FILL IN once Apple Developer ID certificates exist, by setting:
@@ -68,3 +79,22 @@ linux:
     - AppImage
   category: Development
   # AppImage has no code-signing step of its own — nothing to fill in here.
+
+# GitHub as the nominal publish target — later, the feed an auto-updater
+# would read for new versions. Phase 17e deliberately does NOT add
+# `electron-updater`: CLAUDE.md §11 is explicit that an auto-updater is
+# remote code execution by design, and it needs signing decided first.
+#
+# release.yml does NOT invoke electron-builder's own publish/upload path
+# (`--publish never` throughout) — its header comment has the evidence, read
+# from the pinned electron-builder version's own source, for why letting
+# electron-builder's GitHub publisher run from three concurrent OS jobs (and,
+# on macOS alone, two archs in one process) is a real race, not a
+# hypothetical one. The actual release is created and every artifact
+# attached exactly once, by a single serialized job, using `gh release`
+# directly. This block stays only as the declared publish target/eventual
+# auto-update feed shape; nothing in this build invocation uploads through it.
+publish:
+  provider: github
+  owner: hnaracodes
+  repo: Nexus

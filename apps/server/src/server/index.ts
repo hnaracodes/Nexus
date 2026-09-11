@@ -33,6 +33,13 @@ import {
 import { presenceFrame } from './presence.js';
 import { recoverRooms, writeRoomMeta } from './recovery.js';
 import { prepareWorkspace, validateApiKeyShape, validateRepoUrl } from './create.js';
+import {
+  claimLocalPath,
+  isLoopbackAddress,
+  isLocalHostMode,
+  localNonLoopbackIPv4Addresses,
+  validateLocalRoomPath,
+} from './localHost.js';
 import { consumeRateLimit } from './rate-limit.js';
 import {
   attachApiKey,
@@ -45,7 +52,7 @@ import {
 } from './rooms.js';
 import type { AgentDeps } from './agent.js';
 import { attachRoom, getRuntime, resolveParticipantId } from './ws.js';
-import { spawnAgent, stopAgent } from './fleet.js';
+import { spawnAgent, stopAgent, fleetSnapshot } from './fleet.js';
 import { securityHeaders } from './hardening.js';
 import { launchCrew } from './crews.js';
 import { hasCycle, startWorkflowRun } from './workflowRunner.js';
@@ -246,11 +253,69 @@ export function createServer(
             connectId?: string;
             owner?: string;
             repo?: string;
+            localPath?: string;
           }
         | null;
 
       const keyCheck = validateApiKeyShape(body?.apiKey);
       if (!keyCheck.ok) return c.json({ error: keyCheck.message }, 400);
+
+      // --- BEGIN phase-17b local-folder room creation ---
+      //
+      // A room can BE an existing directory instead of a fresh clone — the
+      // desktop shell's "open a folder" flow. This is gated on BOTH, checked
+      // independently, per CLAUDE.md §11: honouring `localPath` on a hosted
+      // server would be a remote arbitrary-directory read.
+      //   1. isLocalHostMode() — only the desktop shell's own process sets
+      //      NEXUS_LOCAL_HOST=1; fly.toml never does.
+      //   2. isLoopbackAddress() on the request's OWN socket peer address —
+      //      read via getConnInfo, never from a client-suppliable header.
+      // A `localPath` present under a server NOT in local-host mode is
+      // refused outright, not silently ignored: silently falling back to an
+      // empty fresh room would look like success while handing the caller
+      // something they did not ask for, which is a worse failure mode than a
+      // loud 403.
+      if (typeof body?.localPath === 'string' && body.localPath !== '') {
+        const remoteAddress = getConnInfo(c).remote.address;
+        if (!isLocalHostMode() || !isLoopbackAddress(remoteAddress)) {
+          // One message for both failure causes, deliberately: this route
+          // exists for exactly one caller (the desktop shell talking to its
+          // own in-process server), so there is no legitimate remote caller
+          // this message needs to help debug, and distinguishing the two
+          // causes would only hand a remote attacker a one-bit oracle onto
+          // this server's configuration for free.
+          return c.json({ error: 'Local folder rooms are not available on this server.' }, 403);
+        }
+        if (
+          (typeof body.repoUrl === 'string' && body.repoUrl !== '') ||
+          (typeof body.connectId === 'string' && body.connectId !== '')
+        ) {
+          return c.json({ error: 'A local folder room cannot also name a repository.' }, 400);
+        }
+
+        const validated = validateLocalRoomPath(body.localPath);
+        if (!validated.ok) return c.json({ error: validated.message }, 400);
+
+        const roomId = mintRoomId();
+        const cwd = validated.path;
+        // Claimed BEFORE createRoom, not after: createRoom cannot itself
+        // fail, so there is no ordering where claiming late would matter,
+        // and claiming late here would only be a needless extra place for a
+        // future edit to get the order wrong.
+        claimLocalPath(cwd);
+        const room = createRoom({ id: roomId, apiKey: keyCheck.apiKey, cwd, repoUrl: null, github: null });
+        writeRoomMeta({
+          roomId: room.id,
+          token: room.token,
+          cwd: room.cwd,
+          repoUrl: room.repoUrl,
+          createdAt: room.createdAt,
+          github: room.github,
+        });
+        attachRoom(room, undefined, opts.agentDeps);
+        return c.json({ roomId: room.id, token: room.token });
+      }
+      // --- END phase-17b local-folder room creation ---
 
       // Two mutually exclusive ways to name a repository. The GitHub path wins
       // when present; a caller sending both gets the verified one, never the
@@ -324,6 +389,37 @@ export function createServer(
       return c.json({ error: 'Invalid room token.' }, 401);
     }
     return c.json(room.toJSON());
+  });
+
+  /**
+   * Phase 17b/17c: the machine's own non-loopback IPv4 addresses, so the
+   * desktop shell can show a joinable LAN URL before it actually rebinds the
+   * listener wide. Gated on a room token — CLAUDE.md §11: "the host's LAN
+   * topology is not public" — the SAME guard as GET /api/rooms/:id above,
+   * just keyed by a `?room=` query param rather than a path segment, because
+   * this fact is about the HOST, not about any one room's other state.
+   *
+   * That token guard alone is not enough: this route's whole reason to exist
+   * is telling the DESKTOP SHELL its own machine's LAN addresses, which makes
+   * sense only when this process IS that shell (`isLocalHostMode()`). On an
+   * ordinary hosted deployment, holding a valid token for any one room would
+   * otherwise be enough to enumerate the server's network interfaces — a
+   * fact about the host, not about any room the caller was invited to.
+   * Checked FIRST and unconditionally, before the token, the same way
+   * `/api/github/callback` refuses outright when a feature is not configured
+   * on this server at all: the route does not apply here, so it 404s rather
+   * than merely returning an empty list.
+   */
+  app.get('/api/host/addresses', (c) => {
+    if (!isLocalHostMode()) {
+      return c.json({ error: 'Host addresses are not available on this server.' }, 404);
+    }
+    const roomId = c.req.query('room') ?? '';
+    const token = c.req.header('X-Nexus-Token');
+    if (token === undefined || authorize(roomId, token) === undefined) {
+      return c.json({ error: 'Invalid room token.' }, 401);
+    }
+    return c.json({ addresses: localNonLoopbackIPv4Addresses() });
   });
 
   // --- BEGIN phase-7 workspace routes ---
@@ -684,6 +780,31 @@ export function createServer(
       room.participants.set(participantId, { id: participantId, displayName, connected: true });
       runtime.commit({ type: 'participant_joined', participantId, displayName });
       runtime.broadcast(presenceFrame(room));
+      /**
+       * And the FLEET, to this socket alone.
+       *
+       * `broadcastFleet()` fires when the fleet changes — spawn, stop, model
+       * switch, crew run. A socket that connects after the last of those
+       * receives events, `replay_complete` and `presence`, and then nothing
+       * about the fleet at all, so its fleet view stays empty and its agent
+       * count stays at one until somebody happens to change something.
+       *
+       * The frame cannot be recovered from the replay this socket just got:
+       * it is deliberately transient and unlogged ("liveness, never
+       * membership" — see `broadcastFleet`'s comment in ws.ts), and transient
+       * state has to be handed to a joiner explicitly. Presence, right above,
+       * has always done exactly this; the fleet simply never did.
+       *
+       * Found by opening a room holding eight live agents in a browser and
+       * reading "1 agent" in the status bar. Every suite was green, because
+       * every test that asserts on a fleet frame first does something that
+       * triggers one.
+       *
+       * Sent to THIS socket rather than broadcast: a person joining does not
+       * change anyone else's fleet, and re-broadcasting to the whole room on
+       * every join is noise that grows with the number of people watching.
+       */
+      ws.send(JSON.stringify({ kind: 'fleet', agents: fleetSnapshot(runtime) }));
 
       ws.on('message', (data) => {
         const frame = parseClientFrame(String(data));

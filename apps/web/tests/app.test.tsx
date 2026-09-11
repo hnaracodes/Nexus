@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../src/App.js';
 
@@ -48,6 +48,36 @@ const event = (body: Record<string, unknown>) => {
   seq += 1;
   return { kind: 'event', event: { seq, ts: '2026-07-28T00:00:00.000Z', roomId: 'room_a', ...body } };
 };
+
+/**
+ * A route-aware `fetch` stub for the workspace's REST endpoints, each of
+ * which `workspaceApi.ts` expects in its own named envelope
+ * (`{entries: [...]}`, `{crews: [...]}` — never a bare array). A single
+ * catch-all `() => []` stub satisfies every route SYNTACTICALLY but hands
+ * `FileTree` a `getTree()` result whose `.entries` is `undefined`, which
+ * throws once its lazy-load effect resolves — exactly the historical bug
+ * `workspaceApi.ts`'s own doc comment describes, just reintroduced from the
+ * test side this time. `PaneErrorBoundary` catches it, so a test can still
+ * pass while quietly exercising the crash path instead of the real one.
+ */
+function stubWorkspaceFetch(): void {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/workspace/tree')) {
+        return new Response(JSON.stringify({ entries: [] }), { status: 200 });
+      }
+      if (url.includes('/git/status')) {
+        return new Response(JSON.stringify({ entries: [] }), { status: 200 });
+      }
+      if (url.includes('/configs')) {
+        return new Response(JSON.stringify({ crews: [] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({}), { status: 200 });
+    }),
+  );
+}
 
 beforeEach(() => {
   seq = 0;
@@ -177,21 +207,21 @@ describe('App — the live room view', () => {
  * control in PromptDock out to a real client frame exists nowhere else.
  */
 describe('App — phase 7 workspace and prompt dock', () => {
-  beforeEach(() => {
-    // WorkspacePane fetches the tree on mount. Without this the promise
-    // rejects into an unhandled error and the assertions below get noisy.
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response(JSON.stringify([]), { status: 200 })),
-    );
-  });
+  // The file tree fetches on mount. Without a properly-shaped stub the
+  // promise resolves into a shape `FileTree` cannot iterate — see
+  // `stubWorkspaceFetch`'s own doc comment.
+  beforeEach(stubWorkspaceFetch);
 
-  it('renders the workspace pane beside the transcript', () => {
+  it('renders the workspace shell beside the transcript', () => {
+    // phase-17a: the 44%-column workspace pane's Files/Changes sub-tabs were
+    // replaced by side-bar VIEWS switched from the activity bar — same two
+    // destinations, reached through the new rail instead of an inline tab
+    // strip. See phase-17a-vscode-shell.md.
     render(<App />);
     act(() => FakeSocket.last?.onopen?.());
     identify();
-    expect(screen.getByRole('tab', { name: /files/i })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /changes/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Explorer' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Changes' })).toBeInTheDocument();
   });
 
   it('sends a set_model frame when the model is switched', () => {
@@ -228,6 +258,129 @@ describe('App — phase 7 workspace and prompt dock', () => {
     identify();
     fireEvent.click(screen.getByRole('button', { name: /stop/i }));
     expect(FakeSocket.last?.sent).toContain(JSON.stringify({ kind: 'interrupt' }));
+  });
+});
+
+/**
+ * Phase 17a: the VS Code-shaped shell. `App.tsx` no longer renders a chat
+ * column beside a workspace pane — it renders an activity bar, a side bar
+ * with one view at a time, a tab strip over the editor, a collapsible
+ * bottom panel, and a status bar. These cover the wiring the plan calls out
+ * as minimum coverage: switching side-bar views, the approvals badge,
+ * multi-tab open/close, the `⌘B`/`⌘J` toggles, and the status bar naming
+ * the driver.
+ */
+describe('App — phase 17a VS Code shell', () => {
+  beforeEach(stubWorkspaceFetch);
+
+  it('switches the side bar view from the activity bar', () => {
+    render(<App />);
+    act(() => FakeSocket.last?.onopen?.());
+    identify();
+
+    // Explorer is the default view — its file tree is on screen.
+    expect(screen.getByRole('tree', { name: /workspace files/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Changes' }));
+    expect(screen.queryByRole('tree', { name: /workspace files/i })).not.toBeInTheDocument();
+    // ChangesTab's approval history renders synchronously off the log (no
+    // fetch involved) — asserting on it, rather than the git-status section,
+    // keeps this test independent of how this file's generic fetch stub
+    // shapes a `/git/status` response.
+    expect(screen.getByText(/approval history/i)).toBeInTheDocument();
+  });
+
+  it('shows a badge on the Approvals tab that reflects the pending count, and surfaces it on its own', () => {
+    render(<App />);
+    act(() => FakeSocket.last?.onopen?.());
+    identify();
+
+    // Start on Explorer; a fresh approval must switch the room here WITHOUT
+    // a click — the room's whole premise is that nobody can miss a pending
+    // decision (§1/§11).
+    expect(screen.getByRole('tab', { name: 'Explorer' })).toHaveAttribute('aria-selected', 'true');
+
+    deliver(
+      event({
+        type: 'permission_requested',
+        requestId: 'req_badge',
+        toolName: 'Bash',
+        input: { command: 'ls' },
+        expiresAt: Date.now() + 120_000,
+      }),
+    );
+
+    expect(screen.getByRole('tab', { name: 'Approvals' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByLabelText(/1 pending in approvals/i)).toBeInTheDocument();
+  });
+
+  it('opens two files as two tabs, and closing one keeps the other', () => {
+    render(<App />);
+    act(() => FakeSocket.last?.onopen?.());
+    identify();
+
+    deliver(
+      event({
+        type: 'tool_start',
+        toolUseId: 'tu_1',
+        toolName: 'Read',
+        input: { file_path: 'src/a.ts' },
+      }),
+    );
+    deliver(event({ type: 'tool_result', toolUseId: 'tu_1', toolName: 'Read', isError: false, output: 'ok' }));
+    deliver(
+      event({
+        type: 'tool_start',
+        toolUseId: 'tu_2',
+        toolName: 'Read',
+        input: { file_path: 'src/b.ts' },
+      }),
+    );
+    deliver(event({ type: 'tool_result', toolUseId: 'tu_2', toolName: 'Read', isError: false, output: 'ok' }));
+
+    expect(screen.getByRole('tab', { name: /a\.ts/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /b\.ts/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /close a\.ts/i }));
+
+    expect(screen.queryByRole('tab', { name: /a\.ts/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /b\.ts/ })).toBeInTheDocument();
+  });
+
+  it('toggles the side bar and the panel from the keyboard', () => {
+    render(<App />);
+    act(() => FakeSocket.last?.onopen?.());
+    identify();
+
+    // jsdom's `navigator.platform` never reads as "mac" (`isMac()` returns
+    // false there), so `useHotkeys`'s `mod` checks `ctrlKey` in this
+    // environment — the same convention `useHotkeys.test.tsx` uses.
+    expect(screen.getByRole('tree', { name: /workspace files/i })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'b', ctrlKey: true });
+    expect(screen.queryByRole('tree', { name: /workspace files/i })).not.toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'b', ctrlKey: true });
+    expect(screen.getByRole('tree', { name: /workspace files/i })).toBeInTheDocument();
+
+    expect(screen.getByRole('button', { name: /collapse panel/i })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'j', ctrlKey: true });
+    expect(screen.getByRole('button', { name: /expand panel/i })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'j', ctrlKey: true });
+    expect(screen.getByRole('button', { name: /collapse panel/i })).toBeInTheDocument();
+  });
+
+  it('names the current driver in the status bar', () => {
+    render(<App />);
+    act(() => FakeSocket.last?.onopen?.());
+    identify('p_ada');
+
+    deliver({
+      kind: 'presence',
+      participants: [{ participantId: 'p_ada', displayName: 'Ada', connected: true }],
+      driverId: 'p_ada',
+    });
+
+    const statusBar = screen.getByRole('contentinfo');
+    expect(within(statusBar).getByText('Ada')).toBeInTheDocument();
   });
 });
 

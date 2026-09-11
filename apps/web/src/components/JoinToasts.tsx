@@ -35,9 +35,19 @@ export function deriveJoinsAfter(events: NexusEvent[], afterSeq: number): Welcom
 export function JoinToasts({
   events,
   selfId,
+  replaying,
 }: {
   events: NexusEvent[];
   selfId: string | null;
+  /**
+   * True until `replay_complete` lands. Load-bearing: without it the
+   * high-water mark below is adopted on the first effect pass, when `events`
+   * holds whatever handful of frames happened to arrive before React rendered
+   * — and every remaining replayed join is then greeted as a new arrival.
+   * Opening a room with a long history buried the UI under a column of toasts,
+   * which is the exact thing this component's guard was written to prevent.
+   */
+  replaying: boolean;
 }): JSX.Element | null {
   const [welcomes, setWelcomes] = useState<Welcome[]>([]);
   // -1 until the first render settles; then it is the highest seq we have
@@ -46,6 +56,11 @@ export function JoinToasts({
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
+    // Nothing is "new" until the history has finished arriving. A reconnect
+    // sets this true again, which is harmless: `seenSeq` is already set by
+    // then, and resent events carry seq values at or below it.
+    if (replaying) return;
+
     const highest = events.reduce((max, event) => (event.seq > max ? event.seq : max), 0);
 
     if (seenSeq.current === null) {
@@ -70,7 +85,7 @@ export function JoinToasts({
         }, VISIBLE_MS),
       );
     }
-  }, [events, selfId]);
+  }, [events, selfId, replaying]);
 
   useEffect(
     () => () => {

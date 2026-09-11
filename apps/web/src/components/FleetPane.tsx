@@ -106,8 +106,28 @@ export function FleetPane({ agents, focusedAgentId, onFocus, onSpawn, onStop }: 
     cancelSpawn();
   }
 
+  /**
+   * `w-full min-w-0` on the root is load-bearing, and `border-l` is gone.
+   *
+   * This pane was built as a RIGHT-HAND column with its own left border and
+   * whatever width the room layout gave it. Phase 17a moved it into the 260px
+   * side bar, where it is a flex item — and a flex item defaults to
+   * `min-width: auto`, so it sized itself to its content, overflowed, and was
+   * clipped by the side bar's `overflow-hidden`. The "Add agent" button and
+   * every row's "Stop" button were sliced in half and unreachable: the fleet
+   * was legible but not operable, which for a governance surface is the wrong
+   * half to lose. Found by opening it, not by a test — the rows render
+   * correctly in jsdom, which has no layout.
+   *
+   * The row markup below already handles narrow widths properly (min-w-0 plus
+   * truncate on the label, shrink-0 on the icon and the status). It never got
+   * the chance, because the container never accepted a width.
+   *
+   * The left border went with it: the side bar draws its own `border-r`, and
+   * two borders in a 260px column is one too many.
+   */
   return (
-    <div className="flex h-full min-h-0 flex-col border-l border-border bg-surface">
+    <div className="flex h-full w-full min-w-0 min-h-0 flex-col bg-surface">
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-fg-muted">Fleet</h2>
         {!spawning && (
@@ -184,7 +204,7 @@ export function FleetPane({ agents, focusedAgentId, onFocus, onSpawn, onStop }: 
                 onClick={() => onFocus(agent.agentId)}
                 aria-label={`Focus ${agent.displayName}'s transcript`}
                 aria-current={isFocused ? 'true' : undefined}
-                className={`flex min-h-11 flex-1 items-center gap-2 rounded-md px-2 py-1 text-left ${FOCUS_RING} ${
+                className={`flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1 text-left ${FOCUS_RING} ${
                   isFocused ? 'bg-surface-2' : 'hover:bg-surface-2'
                 }`}
               >
@@ -204,10 +224,17 @@ export function FleetPane({ agents, focusedAgentId, onFocus, onSpawn, onStop }: 
                   )}
                 </span>
               </button>
+              {/* shrink-0: the Stop button is the one thing in this row that
+                  must never be shaved. It is how a person halts an agent, and
+                  a governance control that is present but clipped is worse
+                  than absent — it looks available and is not. The label beside
+                  it truncates instead, which is what `min-w-0` above unlocks. */}
               {!isStopped && (
-                <Button variant="danger" size="sm" aria-label={`Stop ${agent.displayName}`} onClick={() => onStop(agent.agentId)}>
-                  Stop
-                </Button>
+                <span className="shrink-0">
+                  <Button variant="danger" size="sm" aria-label={`Stop ${agent.displayName}`} onClick={() => onStop(agent.agentId)}>
+                    Stop
+                  </Button>
+                </span>
               )}
             </li>
           );

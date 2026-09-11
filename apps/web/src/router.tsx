@@ -6,6 +6,7 @@ import { Privacy } from './pages/Privacy.js';
 import { ConfigLibrary } from './pages/ConfigLibrary.js';
 import { Terms } from './pages/Terms.js';
 import { Security } from './pages/Security.js';
+import { Download } from './pages/Download.js';
 import { resolveRoute } from './routing.js';
 import type { Route } from './routing.js';
 
@@ -45,6 +46,13 @@ export function Router(): JSX.Element {
       return <Terms />;
     case 'security':
       return <Security />;
+    // Phase 17e. `resolveRoute` returned 'download' correctly from the moment
+    // that unit landed, and the page was still unreachable: this switch has a
+    // `default`, so a missing case renders the landing page with a 200 and no
+    // error anywhere. Adding a route is TWO edits in two files, and only the
+    // second one is observable.
+    case 'download':
+      return <Download />;
     default:
       return <Landing />;
   }
