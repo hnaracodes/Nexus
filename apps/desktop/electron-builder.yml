@@ -78,7 +78,34 @@ linux:
   target:
     - AppImage
   category: Development
+  # REQUIRED, and the Linux build cannot complete without it.
+  #
+  # `executableName` defaults to package.json's `name`, which in this workspace
+  # is the npm scope `@nexus/desktop`. electron-builder strips the slash and
+  # gets `@nexusdesktop`, which still contains `@`, and refuses:
+  #
+  #   ⨯ failed to build AppImage  error=executableName contains characters that
+  #     cannot be safely used in file paths: @nexusdesktop
+  #
+  # macOS and Windows never hit this because they name the binary from
+  # `productName` ("Nexus") instead; only Linux uses `executableName`, so the
+  # first Linux build ever run is the first time anyone could have seen it.
+  #
+  # This is the THIRD place the npm scope has leaked into something a user sees:
+  # `app.getName()` put rooms in `~/Library/Application Support/@nexus/desktop`
+  # until `app.setName('Nexus')` fixed it (see main.ts), `productName` fixed the
+  # bundle name, and this fixes the Linux executable. A scoped package name is
+  # an npm implementation detail and every layer that derives an identity from
+  # it has to be told otherwise, individually.
+  #
+  # Lowercase because it is a command people type and a path on disk; the
+  # window and the menu bar still read "Nexus" from `productName`.
+  executableName: nexus
   # AppImage has no code-signing step of its own — nothing to fill in here.
+  #
+  # It DOES ship with the stock Electron icon, because this project has no icon
+  # asset. electron-builder warns and continues. Same on the other platforms;
+  # a real icon is a design task nobody has done, not a packaging bug.
 
 # GitHub as the nominal publish target — later, the feed an auto-updater
 # would read for new versions. Phase 17e deliberately does NOT add
