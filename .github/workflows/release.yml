@@ -65,6 +65,22 @@ on:
   push:
     tags:
       - 'v*'
+  # Re-run a release for a tag that already exists, from the Actions tab,
+  # picking that tag as the ref.
+  #
+  # Without this, the only way to retry a release is to invent a new version
+  # number, so a transient CI failure permanently burns a tag — and a release
+  # workflow's failures are disproportionately transient, because it is the
+  # one workflow that runs on three operating systems and talks to two
+  # external services. v0.2.0 was lost to a real bug and v0.2.1 to a flake
+  # that could not be reproduced locally over eight runs, two of them under
+  # GitHub's own 2-CPU shape; that is two version numbers spent on retries.
+  #
+  # Dispatching against a BRANCH is safe rather than special-cased: the `tag`
+  # job below reads GITHUB_REF_NAME, which is the branch name there, and
+  # refuses it for not being a version. The retry path and the guard are the
+  # same code.
+  workflow_dispatch:
 
 permissions:
   contents: write
