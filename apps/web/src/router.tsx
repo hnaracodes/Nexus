@@ -7,6 +7,7 @@ import { ConfigLibrary } from './pages/ConfigLibrary.js';
 import { Terms } from './pages/Terms.js';
 import { Security } from './pages/Security.js';
 import { Download } from './pages/Download.js';
+import { Usage } from './pages/Usage.js';
 import { resolveRoute } from './routing.js';
 import type { Route } from './routing.js';
 
@@ -53,6 +54,8 @@ export function Router(): JSX.Element {
     // second one is observable.
     case 'download':
       return <Download />;
+    case 'usage':
+      return <Usage />;
     default:
       return <Landing />;
   }

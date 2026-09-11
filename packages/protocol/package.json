@@ -19,6 +19,10 @@
     "./docsync": {
       "types": "./dist/docsync.d.ts",
       "default": "./dist/docsync.js"
+    },
+    "./pages": {
+      "types": "./dist/pages.d.ts",
+      "default": "./dist/pages.js"
     }
   },
   "files": [

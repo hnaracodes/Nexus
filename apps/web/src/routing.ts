@@ -14,7 +14,8 @@ export type Route =
   | 'security'
   | 'room'
   | 'configs'
-  | 'download';
+  | 'download'
+  | 'usage';
 
 const PATHS: Record<string, Route> = {
   '/': 'landing',
@@ -25,6 +26,7 @@ const PATHS: Record<string, Route> = {
   '/configs': 'configs',
   '/room': 'room',
   '/download': 'download',
+  '/usage': 'usage',
 };
 
 /**

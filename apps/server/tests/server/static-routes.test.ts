@@ -1,3 +1,4 @@
+import { PAGE_PATHS } from '@nexus/protocol/pages';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
@@ -39,7 +40,11 @@ function freshApp() {
 describe('static page route allow-list', () => {
   it('serves the SPA shell for every page route', async () => {
     const app = freshApp();
-    for (const path of ['/', '/new', '/privacy', '/terms', '/security', '/room']) {
+    // Driven from the SHARED list, not a copy of it. This assertion used to
+    // enumerate the paths by hand, which is why `/download` could ship
+    // resolving in the client and 404ing in production with the suite green:
+    // the test knew exactly as much as the bug did.
+    for (const path of PAGE_PATHS) {
       const response = await app.fetch(new Request(`http://localhost${path}`));
       expect(response.status, `${path} should serve the client`).toBe(200);
       expect(response.headers.get('content-type')).toContain('text/html');

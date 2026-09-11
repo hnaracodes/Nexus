@@ -4,6 +4,8 @@ import { Menu, X } from 'lucide-react';
 const NAV_LINKS = [
   { href: '#how', label: 'How it works' },
   { href: '#governance', label: 'Governance' },
+  { href: '/usage', label: 'Usage' },
+  { href: '/download', label: 'Download' },
   { href: '/security', label: 'Security' },
   { href: '/privacy', label: 'Privacy' },
 ];

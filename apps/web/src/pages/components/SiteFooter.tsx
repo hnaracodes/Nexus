@@ -11,6 +11,8 @@ const COLUMNS = [
       { label: 'Open a room', href: '/new' },
       { label: 'How it works', href: '/#how' },
       { label: 'Governance', href: '/#governance' },
+      { label: 'Download', href: '/download' },
+      { label: 'Usage', href: '/usage' },
     ],
   },
   {

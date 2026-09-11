@@ -11,6 +11,7 @@ import { WebSocketServer } from 'ws';
 import type { GithubRepoRef } from '@nexus/protocol/events';
 import { PRIMARY_AGENT_ID, PROTOCOL_VERSION } from '@nexus/protocol/events';
 import { parseClientFrame } from '@nexus/protocol/wire';
+import { PAGE_PATHS } from '@nexus/protocol/pages';
 // STATIC import, deliberately. Evaluating github.ts is what reads the App
 // secrets and DELETES them from process.env, and that has to happen before any
 // room can attach an agent — startAgent spawns the SDK subprocess with
@@ -688,7 +689,21 @@ export function createServer(
   // Adding a page means adding its path here; that friction is intentional.
   // A room link is "/?room=…&token=…" (and now also "/room?…"), so "/"
   // serves the shell either way and the client decides which view to mount.
-  const PAGE_ROUTES = ['/', '/new', '/privacy', '/terms', '/security', '/room', '/configs'] as const;
+  /**
+   * The page paths, from `@nexus/protocol/pages` rather than written out here.
+   *
+   * This line used to be its own hand-kept array while the web app's router
+   * kept a second one. `/download` was added to the client and to neither of
+   * the other two places: it resolved, rendered the landing page, and — once
+   * that was fixed — still 404'd on the deployed site while working perfectly
+   * in development, because vite's dev server is a catch-all and this
+   * deliberately is not.
+   *
+   * Still NOT a catch-all: an unmatched `/api/*` must keep 404ing rather than
+   * returning index.html with a 200, which is what sends a client off to parse
+   * `<!doctype html>` as JSON.
+   */
+  const PAGE_ROUTES = PAGE_PATHS;
   // Anchored to this module, NOT to process.cwd(). Before the monorepo move
   // the default was the cwd-relative 'apps/web/dist', which worked only because
   // every invocation path happened to run from the repo root. Under workspaces
