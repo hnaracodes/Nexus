@@ -130,6 +130,63 @@ describe('checkPath', () => {
   });
 });
 
+/**
+ * Phase 17b: `checkPath`/`checkCommand` are already root-agnostic — they take
+ * `roomCwd` as a plain argument and never assume it was minted under
+ * `NEXUS_WORKDIR` by `prepareWorkspace`. This block proves that explicitly,
+ * against a fixture shaped like a REAL, user-picked project directory rather
+ * than a throwaway `<tmp>/room`: nested packages, each with its own secrets,
+ * the way a real monorepo a person would actually "Open a folder" on does.
+ * A throwaway clone never had real credentials sitting in it; a real project
+ * directory does, which is exactly why CLAUDE.md calls this out as mattering
+ * more once a room can BE an existing directory.
+ */
+describe('checkPath and checkCommand under a user-picked project root (phase 17b)', () => {
+  function realProjectFixture() {
+    const root = mkdtempSync(join(tmpdir(), 'nexus-real-project-'));
+    writeFileSync(join(root, 'README.md'), '# a real project someone already had');
+    writeFileSync(join(root, '.env'), 'DATABASE_URL=secret');
+    mkdirSync(join(root, '.git'));
+    writeFileSync(
+      join(root, '.git', 'config'),
+      '[remote "origin"]\n  url = https://ghp_realtoken@github.com/example/repo.git\n',
+    );
+    mkdirSync(join(root, 'packages', 'x'), { recursive: true });
+    writeFileSync(join(root, 'packages', 'x', '.env'), 'STRIPE_KEY=sk_live_real');
+    mkdirSync(join(root, '.ssh'));
+    writeFileSync(join(root, '.ssh', 'id_rsa'), 'not actually a key, but named like one');
+    return root;
+  }
+
+  it('denies the top-level .env in a user-picked root, not just a cloned one', () => {
+    const root = realProjectFixture();
+    expect(checkPath('.env', root).allowed).toBe(false);
+  });
+
+  it('denies a NESTED .env several packages deep', () => {
+    const root = realProjectFixture();
+    expect(checkPath('packages/x/.env', root).allowed).toBe(false);
+    expect(checkCommand('cat packages/x/.env', root).allowed).toBe(false);
+  });
+
+  it('denies .git/config in a user-picked root, which can carry a real embedded token', () => {
+    const root = realProjectFixture();
+    expect(checkPath('.git/config', root).allowed).toBe(false);
+  });
+
+  it('denies .ssh/id_rsa nested in a user-picked root', () => {
+    const root = realProjectFixture();
+    expect(checkPath('.ssh/id_rsa', root).allowed).toBe(false);
+    expect(checkCommand('cat .ssh/id_rsa', root).allowed).toBe(false);
+  });
+
+  it('still allows the ordinary, non-sensitive files in that same real project', () => {
+    const root = realProjectFixture();
+    expect(checkPath('README.md', root)).toEqual({ allowed: true });
+    expect(checkCommand('cat README.md', root)).toEqual({ allowed: true });
+  });
+});
+
 describe('checkCommand', () => {
   it('denies "cat ~/.ssh/id_rsa"', () => {
     const { root } = fixture();

@@ -33,6 +33,13 @@ import {
 import { presenceFrame } from './presence.js';
 import { recoverRooms, writeRoomMeta } from './recovery.js';
 import { prepareWorkspace, validateApiKeyShape, validateRepoUrl } from './create.js';
+import {
+  claimLocalPath,
+  isLoopbackAddress,
+  isLocalHostMode,
+  localNonLoopbackIPv4Addresses,
+  validateLocalRoomPath,
+} from './localHost.js';
 import { consumeRateLimit } from './rate-limit.js';
 import {
   attachApiKey,
@@ -246,11 +253,69 @@ export function createServer(
             connectId?: string;
             owner?: string;
             repo?: string;
+            localPath?: string;
           }
         | null;
 
       const keyCheck = validateApiKeyShape(body?.apiKey);
       if (!keyCheck.ok) return c.json({ error: keyCheck.message }, 400);
+
+      // --- BEGIN phase-17b local-folder room creation ---
+      //
+      // A room can BE an existing directory instead of a fresh clone — the
+      // desktop shell's "open a folder" flow. This is gated on BOTH, checked
+      // independently, per CLAUDE.md §11: honouring `localPath` on a hosted
+      // server would be a remote arbitrary-directory read.
+      //   1. isLocalHostMode() — only the desktop shell's own process sets
+      //      NEXUS_LOCAL_HOST=1; fly.toml never does.
+      //   2. isLoopbackAddress() on the request's OWN socket peer address —
+      //      read via getConnInfo, never from a client-suppliable header.
+      // A `localPath` present under a server NOT in local-host mode is
+      // refused outright, not silently ignored: silently falling back to an
+      // empty fresh room would look like success while handing the caller
+      // something they did not ask for, which is a worse failure mode than a
+      // loud 403.
+      if (typeof body?.localPath === 'string' && body.localPath !== '') {
+        const remoteAddress = getConnInfo(c).remote.address;
+        if (!isLocalHostMode() || !isLoopbackAddress(remoteAddress)) {
+          // One message for both failure causes, deliberately: this route
+          // exists for exactly one caller (the desktop shell talking to its
+          // own in-process server), so there is no legitimate remote caller
+          // this message needs to help debug, and distinguishing the two
+          // causes would only hand a remote attacker a one-bit oracle onto
+          // this server's configuration for free.
+          return c.json({ error: 'Local folder rooms are not available on this server.' }, 403);
+        }
+        if (
+          (typeof body.repoUrl === 'string' && body.repoUrl !== '') ||
+          (typeof body.connectId === 'string' && body.connectId !== '')
+        ) {
+          return c.json({ error: 'A local folder room cannot also name a repository.' }, 400);
+        }
+
+        const validated = validateLocalRoomPath(body.localPath);
+        if (!validated.ok) return c.json({ error: validated.message }, 400);
+
+        const roomId = mintRoomId();
+        const cwd = validated.path;
+        // Claimed BEFORE createRoom, not after: createRoom cannot itself
+        // fail, so there is no ordering where claiming late would matter,
+        // and claiming late here would only be a needless extra place for a
+        // future edit to get the order wrong.
+        claimLocalPath(cwd);
+        const room = createRoom({ id: roomId, apiKey: keyCheck.apiKey, cwd, repoUrl: null, github: null });
+        writeRoomMeta({
+          roomId: room.id,
+          token: room.token,
+          cwd: room.cwd,
+          repoUrl: room.repoUrl,
+          createdAt: room.createdAt,
+          github: room.github,
+        });
+        attachRoom(room, undefined, opts.agentDeps);
+        return c.json({ roomId: room.id, token: room.token });
+      }
+      // --- END phase-17b local-folder room creation ---
 
       // Two mutually exclusive ways to name a repository. The GitHub path wins
       // when present; a caller sending both gets the verified one, never the
@@ -324,6 +389,23 @@ export function createServer(
       return c.json({ error: 'Invalid room token.' }, 401);
     }
     return c.json(room.toJSON());
+  });
+
+  /**
+   * Phase 17b/17c: the machine's own non-loopback IPv4 addresses, so the
+   * desktop shell can show a joinable LAN URL before it actually rebinds the
+   * listener wide. Gated on a room token — CLAUDE.md §11: "the host's LAN
+   * topology is not public" — the SAME guard as GET /api/rooms/:id above,
+   * just keyed by a `?room=` query param rather than a path segment, because
+   * this fact is about the HOST, not about any one room's other state.
+   */
+  app.get('/api/host/addresses', (c) => {
+    const roomId = c.req.query('room') ?? '';
+    const token = c.req.header('X-Nexus-Token');
+    if (token === undefined || authorize(roomId, token) === undefined) {
+      return c.json({ error: 'Invalid room token.' }, 401);
+    }
+    return c.json({ addresses: localNonLoopbackIPv4Addresses() });
   });
 
   // --- BEGIN phase-7 workspace routes ---
