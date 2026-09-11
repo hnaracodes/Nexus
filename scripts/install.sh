@@ -70,9 +70,26 @@ case "$os" in
     ;;
 esac
 
+# `norm_arch` is what we SAY to the user; `arch_pattern` is what we match in a
+# filename, and they are deliberately different.
+#
+# electron-builder spells the architecture differently per target even though
+# one `artifactName` template produces all of them: the dmg and the exe come out
+# `...-mac-x64.dmg` / `...-win-x64.exe`, and the AppImage comes out
+# `...-linux-x86_64.AppImage`, because AppImage's own convention is uname's
+# spelling. Matching a single normalised `x64` therefore finds the mac and
+# Windows builds and silently misses the Linux one — "x86_64" does not contain
+# "x64" — so a real x86_64 Linux user got:
+#
+#   error: No linux/x64 build was found in the latest release.
+#
+# against a release that DID contain their build. Found by running this script
+# against the first real release; no test could have caught it, because every
+# test fixture in install.test.mjs was named by the same assumption the script
+# made.
 case "$arch" in
-  arm64 | aarch64) norm_arch=arm64 ;;
-  x86_64 | amd64) norm_arch=x64 ;;
+  arm64 | aarch64) norm_arch=arm64; arch_pattern='arm64|aarch64' ;;
+  x86_64 | amd64) norm_arch=x64; arch_pattern='x64|x86_64|amd64' ;;
   *)
     die "Unrecognized CPU architecture '$arch'. Download a build manually from $RELEASES_PAGE"
     ;;
@@ -93,9 +110,9 @@ release_json="$(fetch "$API_URL")" ||
 # (e.g. "Nexus-1.2.3-mac-arm64.dmg.sha256") can never be mistaken for the
 # build itself — a naive substring match on ".dmg" would hit both.
 if [ "$platform" = "mac" ]; then
-  asset_line="$(printf '%s\n' "$release_json" | grep -i '"name":' | grep -i '\.dmg"' | grep -i "$norm_arch" | head -n1)"
+  asset_line="$(printf '%s\n' "$release_json" | grep -i '"name":' | grep -i '\.dmg"' | grep -Ei "$arch_pattern" | head -n1)"
 else
-  asset_line="$(printf '%s\n' "$release_json" | grep -i '"name":' | grep -i '\.appimage"' | grep -i "$norm_arch" | head -n1)"
+  asset_line="$(printf '%s\n' "$release_json" | grep -i '"name":' | grep -i '\.appimage"' | grep -Ei "$arch_pattern" | head -n1)"
 fi
 
 if [ -z "$asset_line" ]; then

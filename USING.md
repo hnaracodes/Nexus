@@ -61,44 +61,42 @@ it again after a restart.
 
 ## Getting the desktop app
 
-**Read this section before telling anyone to download it.** The machinery is
-built and works; what is missing is a published build.
+**Read this section before telling anyone to download it.** It is downloadable
+now — and unsigned, which is what they will notice first.
 
 ### The current situation, plainly
 
-| Piece | State |
+**v0.2.3 is published and all four builds are downloadable.** Verified by
+downloading and installing them, not by looking at the releases page:
+
+| Asset | Size |
 |---|---|
-| Release workflow (`.github/workflows/release.yml`) | **written, never run.** Builds macOS/Windows/Linux on a `v*` tag and attaches everything to one Release. |
-| `/download` page | **live in the app.** Detects your OS, offers the matching build. |
-| `curl \| sh` installer (`scripts/install.sh`) | **works.** Verified by running it. |
-| A published release with actual files in it | **does not exist yet.** |
+| `Nexus-0.2.3-mac-arm64.dmg` | 177 MB |
+| `Nexus-0.2.3-mac-x64.dmg` | 181 MB |
+| `Nexus-0.2.3-win-x64.exe` | 146 MB |
+| `Nexus-0.2.3-linux-x86_64.AppImage` | 183 MB |
 
-The last row is the whole problem. The repo's only release is `v.1.0.0` from
-August, and it has **zero assets**. So today:
+Each ships a `.sha256` sidecar, and the installer refuses anything that does not
+match it.
 
-```console
-$ curl -fsSL https://raw.githubusercontent.com/hnaracodes/Nexus/main/scripts/install.sh | sh
-Detected: mac (arm64)
-Checking the latest Nexus release...
-error: No mac/arm64 build was found in the latest release.
-       See https://github.com/hnaracodes/Nexus/releases/latest
-```
+It took three tags to get here, which is worth knowing before you cut the next
+one. `v0.2.0` died on a twelve-day-old CI break (the desktop typecheck needed a
+server build that only existed on machines that had already built once).
+`v0.2.1` died on a flaky test that has never reproduced locally. `v0.2.2` died
+on the first Linux package ever attempted — `executableName` defaulted to the
+npm scope `@nexus/desktop`, which electron-builder refuses. All three are fixed;
+the flake is not understood and may recur, so **a failed release can be re-run
+from the Actions tab** (`workflow_dispatch`) without spending a version number.
 
-That is the installer working correctly — it found the release, found no build
-for this machine, and refused rather than guessing. The `/download` page does
-the same thing: it says *"No matching build found in the latest release yet"*
-and links the releases page.
-
-**To make downloads real, someone has to push a version tag:**
+To cut the next one:
 
 ```bash
-git tag v0.1.0        # NOT v.1.0.0 — the dot after v breaks the build
-git push origin v0.1.0
+git tag v0.2.4        # NOT v.1.0.0 — the dot after the v is refused by the tag guard
+git push origin v0.2.4
 ```
 
-The workflow then runs `npm run verify`, builds all three platforms, generates
-a `.sha256` beside each artifact, and creates the release. A guard job rejects
-a malformed tag in about five seconds rather than failing three jobs deep.
+The workflow runs `npm run verify`, builds all three platforms, writes a
+`.sha256` beside each artifact, and creates the release.
 
 ### 1. Download page
 
@@ -280,16 +278,16 @@ desktop / 5 install**.
 
 ## What is not built, stated plainly
 
-- **No release has ever been published.** The workflow, the download page and
-  the installer all exist and all behave correctly; there is simply nothing to
-  download until someone pushes a version tag. See "The current situation"
-  above.
 - **Every build is unsigned.** It can be distributed; it cannot be opened
   without the person on the other end clicking past a Gatekeeper or SmartScreen
   warning.
-- **The release workflow has never run.** `actionlint` passes and the
-  concurrency design is grounded in reading the pinned electron-builder's
-  source — but no CI run, no real Release, no download of a real artifact.
+- **A flaky test can fail a release at random.** `v0.2.1`'s `verify` failed at
+  the same commit that had passed minutes earlier, and has not reproduced in 28
+  local Linux runs, 20 of them under GitHub's 2-CPU shape. Unresolved. If a
+  release goes red for no visible reason, re-run it from the Actions tab before
+  assuming a real break.
+- **No icon.** Every build ships the stock Electron icon; electron-builder warns
+  and continues. A design task, not a packaging bug.
 - **A desktop-hosted room is LAN-only.** There is no tunnel or relay, so someone
   on another network cannot join a room your app is hosting. Use the web
   deployment for that.

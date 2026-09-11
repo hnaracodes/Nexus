@@ -42,7 +42,7 @@ function sha256Hex(buffer) {
  * overrides so install.sh writes its "installed" artifact into a scratch dir
  * instead of a real system location.
  */
-function makeSandbox({ platformOs, platformArch, assetBytes, checksumLine }) {
+function makeSandbox({ platformOs, platformArch, assetBytes, checksumLine, assetArchTag }) {
   const root = mkdtempSync(join(tmpdir(), 'nexus-install-test-'));
   const bin = join(root, 'bin');
   const fixtures = join(root, 'fixtures');
@@ -52,7 +52,14 @@ function makeSandbox({ platformOs, platformArch, assetBytes, checksumLine }) {
   mkdirSync(scratch, { recursive: true });
 
   const ext = platformOs === 'Darwin' ? 'dmg' : 'AppImage';
-  const archTag = platformArch === 'arm64' || platformArch === 'aarch64' ? 'arm64' : 'x64';
+  // `assetArchTag` overrides how the arch is spelled IN THE FILENAME, which is
+  // not always how `uname -m` spells it. electron-builder emits
+  // `...-mac-x64.dmg` but `...-linux-x86_64.AppImage` from the one
+  // `artifactName` template, and this fixture used to hardcode `x64` for both —
+  // the same assumption install.sh made, which is precisely why every test
+  // passed while a real x86_64 Linux user was told no build existed.
+  const archTag =
+    assetArchTag ?? (platformArch === 'arm64' || platformArch === 'aarch64' ? 'arm64' : 'x64');
   const assetName = `Nexus-9.9.9-${platformOs === 'Darwin' ? 'mac' : 'linux'}-${archTag}.${ext}`;
   const checksumName = `${assetName}.sha256`;
 
@@ -294,9 +301,62 @@ test('prints the unsigned-build warning even when everything succeeds', () => {
   }
 });
 
+// --- the arch is not spelled the same way twice ------------------------------
+// electron-builder produces `Nexus-0.2.3-mac-x64.dmg` and
+// `Nexus-0.2.3-linux-x86_64.AppImage` from ONE `artifactName` template, because
+// AppImage uses uname's spelling. install.sh normalised `uname -m` to `x64` and
+// grepped for that, so on real x86_64 Linux it reported
+//
+//   error: No linux/x64 build was found in the latest release.
+//
+// against a release that contained exactly that build. Every test passed
+// because this file's fixture spelled the filename `x64` too — the test and
+// the code shared one wrong belief, which is the only kind of bug a test suite
+// cannot see. Caught by running the installer against the first real release.
+test('finds a linux build whose filename spells the arch x86_64, not x64', () => {
+  const assetBytes = Buffer.from('an AppImage named the way electron-builder really names them');
+  const sandbox = makeSandbox({
+    platformOs: 'Linux',
+    platformArch: 'x86_64',
+    assetArchTag: 'x86_64',
+    assetBytes,
+  });
+  try {
+    const result = runInstallSh(sandbox);
+    assert.equal(result.status, 0, `expected success, got:\n${result.stdout}\n${result.stderr}`);
+    assert.ok(
+      existsSync(join(sandbox.scratch, 'Nexus.AppImage')),
+      'expected the x86_64-named AppImage to be found and installed',
+    );
+  } finally {
+    cleanup(sandbox);
+  }
+});
+
+// The mirror of the above: an arm64 machine must NOT match an x86_64 asset just
+// because the pattern got looser. Widening a matcher is how you turn "found
+// nothing" into "found the wrong thing", which is worse.
+test('does not hand an arm64 machine an x86_64 build', () => {
+  const assetBytes = Buffer.from('x86_64 bytes that must not reach an arm64 machine');
+  const sandbox = makeSandbox({
+    platformOs: 'Linux',
+    platformArch: 'aarch64',
+    assetArchTag: 'x86_64',
+    assetBytes,
+  });
+  try {
+    const result = runInstallSh(sandbox);
+    assert.notEqual(result.status, 0, 'expected a refusal, not an install');
+    assert.match(`${result.stdout}\n${result.stderr}`, /No linux\/arm64 build was found/i);
+  } finally {
+    cleanup(sandbox);
+  }
+});
+
 if (failures > 0) {
   console.error(`\n${failures} test(s) failed`);
   process.exit(1);
 } else {
   console.log('\nall install.sh tests passed');
 }
+
