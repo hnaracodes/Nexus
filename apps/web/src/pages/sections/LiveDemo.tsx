@@ -87,9 +87,7 @@ export function LiveDemo(): JSX.Element {
   return (
     <section id="demo" className="border-t border-border px-6 py-20 sm:py-28">
       <div className="mx-auto max-w-6xl">
-        <p className="mb-2 font-mono text-xs uppercase tracking-[0.18em] text-accent">
-          Watch it happen
-        </p>
+        <p className="mb-2 font-mono text-xs text-accent">Watch it happen</p>
         <h2 className="mb-3 text-3xl font-semibold tracking-tight text-fg sm:text-4xl">
           One room, one agent, two people deciding together.
         </h2>
@@ -116,7 +114,7 @@ export function LiveDemo(): JSX.Element {
                     type="button"
                     onClick={() => setStep(index)}
                     aria-current={active ? 'step' : undefined}
-                    className={`w-full rounded-xl border p-4 text-left transition-colors duration-200 ${
+                    className={`w-full rounded-lg border p-4 text-left transition-colors duration-200 ${
                       active
                         ? 'border-accent/50 bg-accent/10'
                         : 'border-border bg-surface hover:border-border-strong'
@@ -151,10 +149,15 @@ export function LiveDemo(): JSX.Element {
           <figure className="m-0">
             <div
               aria-hidden="true"
-              className="overflow-hidden rounded-xl border border-border bg-surface shadow-[0_24px_60px_-30px_rgba(0,0,0,0.9)]"
+              className="overflow-hidden rounded-lg border border-border bg-surface"
             >
               <div className="flex items-center justify-between border-b border-border bg-surface-2/50 px-3 py-2">
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="flex gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-danger/70" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-warn/70" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-success/70" />
+                  </span>
                   <Avatar initial="P" hue={52} />
                   <Avatar initial="M" hue={190} />
                   <span className="ml-1 font-mono text-[11px] text-fg-muted">payments-api</span>
@@ -237,7 +240,7 @@ export function LiveDemo(): JSX.Element {
             <figcaption className="mt-3 text-center text-xs text-fg-muted">
               {/* Deliberately not the word "mockup": the hero's RoomMock owns
                   that label and a landing test asserts there is exactly one. */}
-              An illustration of a Nexus room — not live data.
+              An illustration of a SynCode room — not live data.
             </figcaption>
           </figure>
         </div>

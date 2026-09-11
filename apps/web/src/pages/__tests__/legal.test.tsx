@@ -8,7 +8,7 @@ const ANTHROPIC_POLICY =
   'Anthropic does not permit third-party developers to offer Claude.ai login or to route requests through Free, Pro, or Max plan credentials on behalf of their users.';
 
 const SECURITY_BOUNDARY = 'A shared room is a shared security boundary.';
-const NO_ISOLATION = 'Nexus has no isolation between rooms.';
+const NO_ISOLATION = 'SynCode has no isolation between rooms.';
 
 /** Heading levels must descend without skipping (h1 -> h2 -> h3, never h1 -> h3). */
 function assertNoHeadingSkips(container: HTMLElement): void {

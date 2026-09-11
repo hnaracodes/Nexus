@@ -19,7 +19,7 @@ export function Terms(): JSX.Element {
           No warranty
         </h2>
         <p className="mt-3">
-          Nexus is provided as-is, with no warranty of any kind, express or implied — including
+          SynCode is provided as-is, with no warranty of any kind, express or implied — including
           no warranty of merchantability, fitness for a particular purpose, or that it will run
           without interruption or defect. You use it at your own risk.
         </p>
@@ -46,7 +46,7 @@ export function Terms(): JSX.Element {
           A room runs against the Anthropic Console API key its creator supplied. All usage
           costs the room incurs — from every participant&rsquo;s prompts and every agent
           response — are billed to that key and are the creator&rsquo;s responsibility, not
-          Nexus&rsquo;s or any other participant&rsquo;s.
+          SynCode&rsquo;s or any other participant&rsquo;s.
         </p>
       </section>
 
@@ -57,7 +57,7 @@ export function Terms(): JSX.Element {
         <p className="mt-3">
           Only Anthropic Console API keys are accepted, never a Claude.ai (Free, Pro or Max)
           login, per Anthropic&rsquo;s own developer policy — see <a href="/privacy" className="text-info underline underline-offset-2">Privacy</a> for the verbatim
-          wording. Do not attempt to route a subscription login through Nexus; the software
+          wording. Do not attempt to route a subscription login through SynCode; the software
           rejects it, and doing so anyway would violate Anthropic&rsquo;s terms as well as
           these.
         </p>
@@ -68,7 +68,7 @@ export function Terms(): JSX.Element {
           Not multi-tenant
         </h2>
         <p className="mt-3">
-          Nexus is not multi-tenant software and must not be represented as such. One host
+          SynCode is not multi-tenant software and must not be represented as such. One host
           process serves every room on a given deployment, sharing one filesystem; there is no
           sandbox or isolation boundary between rooms. See{' '}
           <a href="/security" className="text-info underline underline-offset-2">
@@ -83,7 +83,7 @@ export function Terms(): JSX.Element {
           Acceptable use
         </h2>
         <p className="mt-3">
-          Do not use Nexus, or the agent it runs, to attack, scan, or gain unauthorized access
+          Do not use SynCode, or the agent it runs, to attack, scan, or gain unauthorized access
           to any system you do not own or have explicit permission to test. Do not use it to
           violate Anthropic&rsquo;s usage policies for the underlying model. Do not use it to
           process content you do not have the right to process.
@@ -95,7 +95,7 @@ export function Terms(): JSX.Element {
           License
         </h2>
         <p className="mt-3">
-          As of this writing, the Nexus repository does not include a LICENSE file or a{' '}
+          As of this writing, the SynCode repository does not include a LICENSE file or a{' '}
           <code>license</code> field in its <code>package.json</code>. In the absence of an
           explicit license, default copyright law applies — the source is not granted under
           an open-source license and you should treat it as all-rights-reserved by its
@@ -109,7 +109,7 @@ export function Terms(): JSX.Element {
           The operator&rsquo;s rights
         </h2>
         <p className="mt-3">
-          Whoever operates a given Nexus instance may remove any room, refuse to create new
+          Whoever operates a given SynCode instance may remove any room, refuse to create new
           ones, or shut the instance down entirely, at any time and without notice. Nothing in
           these terms obligates an operator to keep a room, or an instance, running.
         </p>

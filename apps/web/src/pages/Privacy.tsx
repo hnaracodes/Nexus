@@ -2,7 +2,7 @@ import { AlertTriangle, KeyRound, ShieldAlert } from 'lucide-react';
 import { LegalLayout } from './LegalLayout.js';
 
 const SECTIONS = [
-  { id: 'what-nexus-is', heading: 'What Nexus is' },
+  { id: 'what-nexus-is', heading: 'What SynCode is' },
   { id: 'no-accounts', heading: 'No accounts' },
   { id: 'your-api-key', heading: 'Your API key' },
   { id: 'console-keys-only', heading: 'Why Console keys only' },
@@ -28,12 +28,12 @@ export function Privacy(): JSX.Element {
     <LegalLayout title="Privacy" lastUpdated="2026-07-30" sections={SECTIONS}>
       <section aria-labelledby="what-nexus-is-h" id="what-nexus-is">
         <h2 id="what-nexus-is-h" className="text-2xl font-semibold text-fg">
-          What Nexus is
+          What SynCode is
         </h2>
         <p className="mt-3">
-          Nexus is self-hostable software: source code that anyone can run on their own
+          SynCode is self-hostable software: source code that anyone can run on their own
           machine or server. If you reached this page through a hosted instance someone else
-          is operating, that operator — not the Nexus project — controls the server, the API
+          is operating, that operator — not the SynCode project — controls the server, the API
           key, and the data described below. Ask them who that is if you are not sure. This
           document describes what the software itself does; it cannot describe an operator's
           policies beyond that.
@@ -45,7 +45,7 @@ export function Privacy(): JSX.Element {
           No accounts
         </h2>
         <p className="mt-3">
-          There is no sign-up, no email address, no password, and no user database. Nexus
+          There is no sign-up, no email address, no password, and no user database. SynCode
           sets no cookies and includes no analytics, advertising, or third-party tracking
           script of any kind — there is nothing in this codebase that does. A room&rsquo;s
           link, a high-entropy secret, is the only credential; anyone holding it is a full
@@ -67,7 +67,7 @@ export function Privacy(): JSX.Element {
         </p>
         <p className="mt-3">
           If the server restarts, a room comes back with its full history but{' '}
-          <strong>no key</strong> — Nexus does not persist one, by design. The room refuses
+          <strong>no key</strong> — SynCode does not persist one, by design. The room refuses
           new connections with a distinct close code until its creator re-enters the key.
         </p>
       </section>
@@ -85,7 +85,7 @@ export function Privacy(): JSX.Element {
           Why Console keys only
         </h2>
         <p className="mt-3">
-          Nexus only ever accepts an Anthropic Console API key, never a Claude.ai (Free, Pro
+          SynCode only ever accepts an Anthropic Console API key, never a Claude.ai (Free, Pro
           or Max) login. This follows Anthropic&rsquo;s published developer policy, quoted
           here verbatim:
         </p>
@@ -121,7 +121,7 @@ export function Privacy(): JSX.Element {
           Redaction is narrow — read this before you type a secret
         </h2>
         <p className="mt-3">
-          Before anything is written to the log, Nexus scrubs three specific patterns: an
+          Before anything is written to the log, SynCode scrubs three specific patterns: an
           Anthropic Console key (<code>sk-ant-…</code>), a GitHub access token in any of its
           current prefixes (<code>ghp_</code>, <code>gho_</code>, <code>ghu_</code>,{' '}
           <code>ghs_</code>, <code>ghr_</code>, <code>github_pat_…</code>), and a credential
@@ -131,7 +131,7 @@ export function Privacy(): JSX.Element {
         <p className="mt-3 font-semibold text-fg">
           A password, a different service&rsquo;s access token, a customer&rsquo;s name, or any
           other secret typed into a prompt is written to the log verbatim. Nothing scans for
-          it and nothing removes it. Do not type a secret into a Nexus room unless you would
+          it and nothing removes it. Do not type a secret into a SynCode room unless you would
           be comfortable with it appearing in the room&rsquo;s permanent log.
         </p>
       </section>
@@ -158,12 +158,12 @@ export function Privacy(): JSX.Element {
           Retention: there is currently no deletion mechanism
         </h2>
         <p className="mt-3 font-semibold text-fg">
-          Nexus has no room expiry, no time-to-live, no delete endpoint, and no export
+          SynCode has no room expiry, no time-to-live, no delete endpoint, and no export
           endpoint anywhere in its source code. One of the product&rsquo;s own correctness
           rules forbids changing or removing anything already written to a room&rsquo;s log.
           Logs and any cloned repositories persist on the server&rsquo;s storage until an
           operator deletes them directly. If you want a room&rsquo;s data removed, you must
-          contact whoever operates the server it runs on — Nexus itself has no button for
+          contact whoever operates the server it runs on — SynCode itself has no button for
           it, at any level.
         </p>
       </section>
@@ -173,11 +173,11 @@ export function Privacy(): JSX.Element {
           Stored in your browser
         </h2>
         <p className="mt-3">
-          Nexus keeps a resume token per room and display name in your browser&rsquo;s{' '}
+          SynCode keeps a resume token per room and display name in your browser&rsquo;s{' '}
           <code>localStorage</code>, so a refresh or reconnect can reclaim your identity in a
           room instead of appearing as a new participant. A future room switcher may also keep
           a list of recently visited rooms, including their access tokens, the same way. None
-          of this is transmitted anywhere except back to the Nexus server when you reconnect.
+          of this is transmitted anywhere except back to the SynCode server when you reconnect.
         </p>
         <p className="mt-3 font-semibold text-fg">
           On a shared or public computer, anyone who opens the browser afterwards can use that
@@ -194,7 +194,7 @@ export function Privacy(): JSX.Element {
         <p className="mt-3">
           Anyone who has the room link is a full participant — able to type prompts, run tools
           through the agent, and see everything in the room. It can end up in your browser
-          history, in a screenshot, or in any chat you paste it into. Nexus sends no{' '}
+          history, in a screenshot, or in any chat you paste it into. SynCode sends no{' '}
           <code>Referer</code> header to external sites from any of its pages, so a link click
           does not leak the token to a site you visit from the room. Treat the link exactly
           like a password.
@@ -238,11 +238,11 @@ export function Privacy(): JSX.Element {
           >
             terms
           </a>
-          . This page and the rest of the marketing and legal pages load the Inter typeface
-          from Google Fonts, which means your browser makes a request to Google&rsquo;s font
-          servers when you visit them — a static asset fetch, not analytics or tracking, but
-          a real request to a third party and worth naming plainly. Nexus adds no other
-          third-party processor.
+          . This page and the rest of the marketing and legal pages load the Inter and
+          JetBrains Mono typefaces from Google Fonts, which means your browser makes a request
+          to Google&rsquo;s font servers when you visit them — a static asset fetch, not
+          analytics or tracking, but a real request to a third party and worth naming plainly.
+          SynCode adds no other third-party processor.
         </p>
       </section>
 
@@ -252,7 +252,7 @@ export function Privacy(): JSX.Element {
         </h2>
         <p className="mt-3">
           Questions about this policy, or a request that an operator remove your room&rsquo;s
-          data, should go to whoever operates the Nexus instance you used — see the
+          data, should go to whoever operates the SynCode instance you used — see the
           repository&rsquo;s README for contact details on the project itself. We will update
           this page and change the date above whenever the software&rsquo;s behaviour changes
           in a way that affects it.

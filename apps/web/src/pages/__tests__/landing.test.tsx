@@ -13,7 +13,7 @@ describe('Landing', () => {
   it('renders the verbatim no-isolation sentence', () => {
     render(<Landing />);
     expect(
-      screen.getByText('Nexus has no isolation between rooms.'),
+      screen.getByText('SynCode has no isolation between rooms.'),
     ).toBeInTheDocument();
   });
 

@@ -31,7 +31,7 @@ export function Security(): JSX.Element {
           with shell access to that machine.
         </p>
         <p className="mt-4 text-lg font-semibold text-fg">
-          &ldquo;Nexus has no isolation between rooms.&rdquo;
+          &ldquo;SynCode has no isolation between rooms.&rdquo;
         </p>
         <p className="mt-3">
           One host process serves every room, sharing one filesystem; room A can in principle
@@ -48,7 +48,7 @@ export function Security(): JSX.Element {
           In plain terms: everyone you invite into a room is trusted with everything that room
           can do. Everyone else — anyone who does not have the room link — is not trusted with
           anything. There is no middle tier. The room link, not an account or a role, is the
-          only access-control boundary Nexus has.
+          only access-control boundary SynCode has.
         </p>
       </section>
 
@@ -181,7 +181,7 @@ export function Security(): JSX.Element {
           Reporting a vulnerability
         </h2>
         <p className="mt-3">
-          If you find a security issue in Nexus itself, open an issue in the project&rsquo;s
+          If you find a security issue in SynCode itself, open an issue in the project&rsquo;s
           repository, or contact whoever operates the instance you are using if the issue is
           specific to their deployment rather than the software. Please do not test against a
           room or server you were not given permission to use.

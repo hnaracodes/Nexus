@@ -34,7 +34,7 @@ export function HowItWorks(): JSX.Element {
           {STEPS.map(({ icon: Icon, title, body }, index) => (
             <li
               key={title}
-              className="card-lift rounded-xl border border-border bg-surface p-6 hover:border-accent/40"
+              className="card-lift rounded-lg border border-border bg-surface p-6 hover:border-accent/40"
             >
               <div className="flex items-center gap-2">
                 <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-dim text-sm font-bold text-fg">

@@ -253,7 +253,7 @@ export function Download(): JSX.Element {
                 href={primary.asset?.browser_download_url ?? RELEASES_PAGE}
                 target={primary.asset === undefined ? '_blank' : undefined}
                 rel={primary.asset === undefined ? 'noreferrer noopener' : undefined}
-                className="inline-flex min-h-11 items-center gap-2 rounded-[10px] bg-accent px-4 py-2 text-sm font-medium text-on-accent shadow-[inset_0_1px_0_rgba(255,255,255,0.22)] hover:brightness-110"
+                className="inline-flex min-h-11 items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:brightness-110"
               >
                 {primary.label}
                 {platform === 'mac' && assets.macArm64 !== undefined && ' (Apple Silicon)'}

@@ -18,12 +18,21 @@ export function RoomMock(): JSX.Element {
 
   return (
     <div>
-      <span className="sr-only">Mockup of a Nexus room — not a live view.</span>
+      <span className="sr-only">Mockup of a SynCode room — not a live view.</span>
       <div
         aria-hidden="true"
-        className="w-full max-w-md overflow-hidden rounded-xl border border-border bg-surface shadow-[0_8px_24px_rgb(0_0_0_/_0.4)]"
+        className="w-full max-w-md overflow-hidden rounded-lg border border-border bg-surface"
       >
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <div className="flex items-center gap-2 border-b border-border bg-surface-2/40 px-3 py-2">
+          <span className="flex gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-danger/70" />
+            <span className="h-2.5 w-2.5 rounded-full bg-warn/70" />
+            <span className="h-2.5 w-2.5 rounded-full bg-success/70" />
+          </span>
+          <span className="ml-1 font-mono text-[11px] text-fg-muted">room/payments-api</span>
+        </div>
+
+        <div className="flex items-center justify-between px-4 py-3">
           <div className="flex -space-x-2">
             {participants.map((p) => (
               <span
@@ -35,7 +44,7 @@ export function RoomMock(): JSX.Element {
               </span>
             ))}
           </div>
-          <div className="flex items-center gap-1 rounded-full bg-accent-dim px-2 py-1 text-xs font-medium text-fg">
+          <div className="flex items-center gap-1 rounded-md bg-accent-dim px-2 py-1 text-xs font-medium text-fg">
             <Crown size={14} className="text-accent" />
             Priya is driving
           </div>

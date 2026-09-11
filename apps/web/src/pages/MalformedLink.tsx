@@ -12,7 +12,7 @@ export function MalformedLink(): JSX.Element {
       <AlertOctagon size={20} strokeWidth={2} className="text-danger" aria-hidden="true" />
       <h1 className="text-2xl font-semibold text-fg">This room link is incomplete</h1>
       <p className="text-fg-muted">
-        A Nexus room link needs both a room id and an access token. This one is missing at least
+        A SynCode room link needs both a room id and an access token. This one is missing at least
         one of them, so there is no room to join.
       </p>
       <a

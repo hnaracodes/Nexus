@@ -32,7 +32,7 @@ export function LegalLayout({
         className="inline-flex min-h-[44px] items-center gap-2 rounded text-sm text-fg-muted transition-colors duration-150 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
       >
         <ArrowLeft size={16} aria-hidden="true" />
-        Back to Nexus
+        Back to SynCode
       </a>
 
       <h1 className="mt-6 text-3xl font-semibold text-fg">{title}</h1>

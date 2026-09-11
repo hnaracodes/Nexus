@@ -28,13 +28,9 @@ export function SecurityHonesty(): JSX.Element {
       aria-labelledby="security-honesty-heading"
       className="relative isolate overflow-hidden border-y border-border bg-surface/60 px-4 py-20 sm:px-6 sm:py-28"
     >
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
-        <div className="nexus-blob-b absolute -right-32 top-0 h-[26rem] w-[26rem] rounded-full bg-accent-2 opacity-[0.14] blur-[110px]" />
-      </div>
-
       <div className="mx-auto max-w-6xl">
         <div className="max-w-3xl">
-          <p className="text-sm font-semibold uppercase tracking-wider text-accent">Trust model</p>
+          <p className="text-sm font-semibold text-accent">Trust model</p>
           <h2
             id="security-honesty-heading"
             className="mt-3 text-3xl font-bold tracking-[-0.02em] text-fg sm:text-4xl"
@@ -42,7 +38,7 @@ export function SecurityHonesty(): JSX.Element {
             A shared room is a shared security boundary.
           </h2>
           <p className="mt-5 text-lg leading-relaxed text-fg-muted">
-            Nexus is designed for people who already trust each other with the repository. That
+            SynCode is designed for people who already trust each other with the repository. That
             assumption is deliberate, and stating it plainly is part of the product.
           </p>
         </div>
@@ -51,7 +47,7 @@ export function SecurityHonesty(): JSX.Element {
           {FACTS.map((fact) => (
             <div
               key={fact.title}
-              className="card-lift rounded-xl border border-border bg-bg/60 p-6"
+              className="card-lift rounded-lg border border-border bg-bg/60 p-6"
             >
               <fact.icon size={22} className="text-accent" aria-hidden="true" />
               <h3 className="mt-4 text-lg font-semibold text-fg">{fact.title}</h3>
@@ -60,9 +56,9 @@ export function SecurityHonesty(): JSX.Element {
           ))}
         </div>
 
-        <div className="mt-12 flex flex-col gap-6 rounded-xl border border-warn/40 bg-warn/5 p-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-12 flex flex-col gap-6 rounded-lg border border-warn/40 bg-warn/5 p-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-lg font-semibold text-fg">Nexus has no isolation between rooms.</p>
+            <p className="text-lg font-semibold text-fg">SynCode has no isolation between rooms.</p>
             <p className="mt-2 max-w-2xl text-base leading-relaxed text-fg-muted">
               One host process, one filesystem — room A can in principle reach room B&apos;s working
               directory. Run your own instance for work you would not share.

@@ -41,13 +41,10 @@ export function SiteFooter(): JSX.Element {
           <div className="lg:col-span-2">
             <a
               href="/"
-              className="inline-flex items-center gap-2 text-lg font-semibold text-fg transition-colors duration-150 hover:text-accent"
+              className="inline-flex items-center gap-2 font-mono text-lg font-semibold tracking-tight text-fg transition-colors duration-150 hover:text-accent"
             >
-              <span
-                aria-hidden="true"
-                className="h-2.5 w-2.5 rounded-full bg-gradient-to-br from-accent to-accent-3"
-              />
-              Nexus
+              <span aria-hidden="true" className="h-2 w-2 rounded-full bg-accent" />
+              syncode
             </a>
             <p className="mt-4 max-w-sm text-sm leading-relaxed text-fg-muted">
               One agent, one context window, everyone in the room. Take turns driving, and approve
@@ -66,9 +63,7 @@ export function SiteFooter(): JSX.Element {
 
           {COLUMNS.map((column) => (
             <nav key={column.heading} aria-label={column.heading}>
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-fg">
-                {column.heading}
-              </h2>
+              <h2 className="text-sm font-semibold text-fg">{column.heading}</h2>
               <ul className="mt-4 space-y-3">
                 {column.links.map((link) => (
                   <li key={link.href}>
@@ -86,7 +81,7 @@ export function SiteFooter(): JSX.Element {
         </div>
 
         <div className="mt-14 flex flex-col gap-4 border-t border-border pt-8 text-sm text-fg-muted sm:flex-row sm:items-center sm:justify-between">
-          <p>© {new Date().getFullYear()} Nexus. Bring your own Anthropic Console key.</p>
+          <p>© {new Date().getFullYear()} SynCode. Bring your own Anthropic Console key.</p>
           <p>Built for teams who want a record of who approved what.</p>
         </div>
       </div>

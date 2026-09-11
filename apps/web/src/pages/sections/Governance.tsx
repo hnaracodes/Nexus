@@ -25,29 +25,31 @@ export function Governance(): JSX.Element {
 
         <div
           aria-hidden="true"
-          className="mx-auto w-full max-w-md rounded-xl border-2 border-warn bg-surface p-6"
+          className="mx-auto w-full max-w-md overflow-hidden rounded-lg border border-warn/60 bg-surface"
         >
-          <div className="mb-3 flex items-center justify-between">
-            <span className="flex items-center gap-2 font-semibold text-warn">
-              <ShieldAlert size={20} />
+          <div className="flex items-center justify-between border-b border-warn/30 bg-warn/10 px-4 py-2.5">
+            <span className="flex items-center gap-2 text-sm font-semibold text-warn">
+              <ShieldAlert size={16} />
               Bash
             </span>
-            <span className="text-xs text-fg-muted">47s to decide</span>
+            <span className="font-mono text-xs text-fg-muted">47s to decide</span>
           </div>
-          <pre className="mb-4 overflow-x-auto rounded-lg bg-bg p-3 font-mono text-xs text-fg-muted">
-            rm -rf build/ &amp;&amp; npm run build
-          </pre>
-          <div className="flex flex-wrap gap-3">
-            <span className="flex items-center gap-1 rounded-md bg-accent-dim px-3 py-2 text-sm font-medium text-fg">
-              <CheckCircle2 size={16} className="text-accent" />
-              Approve
-            </span>
-            <span className="flex items-center gap-1 rounded-md bg-surface-2 px-3 py-2 text-sm font-medium text-fg">
-              <XCircle size={16} />
-              Deny
-            </span>
+          <div className="p-4">
+            <pre className="mb-4 overflow-x-auto rounded-md bg-bg p-3 font-mono text-xs text-fg-muted">
+              rm -rf build/ &amp;&amp; npm run build
+            </pre>
+            <div className="flex flex-wrap gap-3">
+              <span className="flex items-center gap-1 rounded-md bg-accent-dim px-3 py-2 text-sm font-medium text-fg">
+                <CheckCircle2 size={16} className="text-accent" />
+                Approve
+              </span>
+              <span className="flex items-center gap-1 rounded-md bg-surface-2 px-3 py-2 text-sm font-medium text-fg">
+                <XCircle size={16} />
+                Deny
+              </span>
+            </div>
+            <p className="mt-3 text-xs text-fg-muted">Anyone in the room can decide this.</p>
           </div>
-          <p className="mt-3 text-xs text-fg-muted">Anyone in the room can decide this.</p>
         </div>
       </div>
     </section>

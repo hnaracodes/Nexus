@@ -29,7 +29,7 @@ export function Problem(): JSX.Element {
           {CARDS.map(({ icon: Icon, title, body }) => (
             <div
               key={title}
-              className="card-lift rounded-xl border border-border bg-surface p-6 hover:border-accent/40"
+              className="card-lift rounded-lg border border-border bg-surface p-6 hover:border-accent/40"
             >
               <Icon size={20} className="text-accent" aria-hidden="true" />
               <h3 className="mt-4 text-lg font-semibold text-fg">{title}</h3>

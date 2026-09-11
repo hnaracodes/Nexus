@@ -62,7 +62,10 @@
        #F0883E is 2.2:1 and unreadable. */
     --on-accent: 20 16 11;  /* #14100B */
     --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-    --font-mono: ui-monospace, 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
+    /* JetBrains Mono replaces the system stack everywhere --font-mono is already
+       used — code, diffs, room ids, terminal chrome — rather than adding mono as
+       a new label treatment. The system stack stays as the fallback chain. */
+    --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
     color-scheme: dark;
   }
 
@@ -138,47 +141,24 @@
     transform: translate3d(0, 0, 0);
   }
 
-  /* Ambient gradient mesh. Two slow-drifting blobs behind the hero. */
-  @keyframes nexus-drift-a {
-    0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
-    50%      { transform: translate3d(6%, -4%, 0) scale(1.12); }
-  }
-  @keyframes nexus-drift-b {
-    0%, 100% { transform: translate3d(0, 0, 0) scale(1.06); }
-    50%      { transform: translate3d(-7%, 5%, 0) scale(1); }
-  }
-  .nexus-blob-a { animation: nexus-drift-a 22s ease-in-out infinite; }
-  .nexus-blob-b { animation: nexus-drift-b 27s ease-in-out infinite; }
-
-  /* Headline gradient. Falls back to --fg where background-clip is unsupported. */
-  .text-gradient {
-    background-image: linear-gradient(110deg, rgb(var(--fg)) 25%, rgb(var(--accent)) 55%, rgb(var(--accent-3)) 85%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    -webkit-text-fill-color: transparent;
-  }
-  @supports not ((background-clip: text) or (-webkit-background-clip: text)) {
-    .text-gradient { color: rgb(var(--fg)); -webkit-text-fill-color: rgb(var(--fg)); }
+  /* Hairline grid behind the hero — reads as an editor's ground, not weather.
+     Static: a dev tool's chrome doesn't drift. */
+  .code-grid {
+    background-image:
+      linear-gradient(rgb(var(--border) / 0.5) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(var(--border) / 0.5) 1px, transparent 1px);
+    background-size: 40px 40px;
+    -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 40%, transparent 100%);
+    mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 40%, transparent 100%);
   }
 
-  /* Accent glow for the primary CTA and live indicators. Tracks --accent
-     rather than a hardcoded rgb() — the old value was green and would have
-     survived the repalette invisibly. */
-  .glow-accent { box-shadow: 0 0 0 0 rgb(var(--accent) / 0.45); transition: box-shadow 250ms ease-out, transform 250ms cubic-bezier(0.16, 1, 0.3, 1); }
-  .glow-accent:hover { box-shadow: 0 8px 32px -6px rgb(var(--accent) / 0.55); transform: translateY(-2px); }
+  /* Primary CTA hover — a flat fill shift and a 1px lift, no soft glow. */
+  .glow-accent { transition: background-color 150ms ease-out, transform 150ms ease-out; }
+  .glow-accent:hover { background-color: rgb(var(--accent-dim)); transform: translateY(-1px); }
 
-  /* Card lift — the DB's Bento hover preset (scale 1.02 + shadow expansion). */
-  .card-lift { transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), border-color 200ms ease-out, box-shadow 200ms ease-out; }
-  .card-lift:hover { transform: translateY(-4px); box-shadow: 0 12px 32px -12px rgb(0 0 0 / 0.6); }
-
-  /* Slow sheen across the section rule under each heading. */
-  @keyframes nexus-sheen { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-  .rule-sheen {
-    background-image: linear-gradient(90deg, rgb(var(--border)) 0%, rgb(var(--accent)) 30%, rgb(var(--accent-3)) 50%, rgb(var(--border)) 80%);
-    background-size: 200% 100%;
-    animation: nexus-sheen 6s linear infinite;
-  }
+  /* Card hover — border intensifies, nothing lifts or casts a shadow. */
+  .card-lift { transition: border-color 150ms ease-out, background-color 150ms ease-out; }
+  .card-lift:hover { background-color: rgb(var(--surface-2) / 0.6); }
 
   /* Hero entrance. One keyframe, staggered by a per-element --d, rather than
      five bespoke animations. Ships with `both` so nothing flashes at full
@@ -188,18 +168,6 @@
     to   { opacity: 1; transform: none; }
   }
   .hero-rise { animation: hero-rise 700ms cubic-bezier(0.16, 1, 0.3, 1) var(--d, 0ms) both; }
-
-  /* The headline gradient drifts. Slow enough (14s) to register as depth
-     rather than as movement — a fast sweep on a headline reads as a banner ad. */
-  @keyframes gradient-drift { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
-  .text-gradient { background-size: 200% auto; animation: gradient-drift 14s linear infinite; }
-
-  /* The room mock breathes so the hero is never fully static. 3px, 7s. */
-  @keyframes mock-float {
-    0%, 100% { transform: translateY(0); }
-    50%      { transform: translateY(-7px); }
-  }
-  .mock-float { animation: mock-float 7s ease-in-out infinite; }
 }
 /* --- END phase-5c marketing motion --- */
 

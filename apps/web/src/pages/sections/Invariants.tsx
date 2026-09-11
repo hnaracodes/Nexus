@@ -36,12 +36,14 @@ export function Invariants(): JSX.Element {
           {INVARIANTS.map((inv) => (
             <div
               key={inv.id}
-              className="card-lift rounded-xl border border-border bg-surface p-6 hover:border-accent/40"
+              className="card-lift rounded-lg border border-border bg-surface p-6 hover:border-accent/40"
             >
-              <h3 className="text-lg font-semibold text-fg">
-                <span className="text-accent">{inv.id}</span> — {inv.plain}
+              <h3 className="flex items-baseline gap-2 text-lg font-semibold text-fg">
+                <span className="font-mono text-sm text-accent">{inv.id}</span>
+                {inv.plain}
               </h3>
-              <p className="mt-3 rounded bg-bg p-3 font-mono text-xs leading-relaxed text-fg-muted">
+              <p className="mt-3 rounded-md bg-bg p-3 font-mono text-xs leading-relaxed text-fg-muted">
+                <span className="text-fg-muted/60">{'// '}</span>
                 {inv.formal}
               </p>
             </div>
