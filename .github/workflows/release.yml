@@ -14,6 +14,51 @@
 # green in THIS run — CLAUDE.md records a `tsc -b` failure shipping behind a
 # green vitest run twice, the second time breaking a deploy. This closes
 # that gap for a tagged release the same way verify.yml closes it for a push.
+#
+# WHY THE MATRIX DOES NOT PUBLISH (read before "simplifying" this back):
+# An earlier version of this workflow had each matrix leg run
+# `electron-builder --publish always`, relying on electron-builder's
+# find-or-create-draft-release behaviour to let three concurrent OS jobs
+# safely accumulate assets on one release. That is unsafe with the
+# electron-builder version this repo pins (26.15.3 — verified by reading the
+# installed package, not from memory):
+#   - app-builder-lib's PublishManager caches one publisher per provider
+#     config in a plain `Map` (`nameToPublisher`), populated with a
+#     check-then-await-then-set that has no lock
+#     (node_modules/app-builder-lib/out/publish/PublishManager.js,
+#     `getOrCreatePublisher`).
+#   - Each built artifact's `artifactCreated` event is handled as a
+#     fire-and-forget task (`this.taskManager.addTask(...)`, not awaited by
+#     the emitter — see `PublishManager`'s constructor and
+#     `asyncEventEmitter.js`'s `emit`), so two artifacts finishing close
+#     together run their publish-scheduling concurrently even though the
+#     packager itself builds archs one at a time by default
+#     (`packager.js` `doBuild`, `poolCount` defaults to 1).
+#   - The macOS leg alone builds TWO targets in one `--publish always`
+#     invocation (arm64 and x64 dmg — see electron-builder.yml's `mac.target`),
+#     which is enough on its own to hit the race: both artifacts can see the
+#     publisher cache miss before either finishes constructing a
+#     `GitHubPublisher`, so two independent instances are created, each with
+#     its own lazily-resolved release lookup
+#     (node_modules/electron-publish/out/gitHubPublisher.js,
+#     `getOrCreateRelease` / the `_release` Lazy). On a fresh tag — the only
+#     time this workflow ever runs — neither publisher sees an existing
+#     release, so both call `createRelease()` independently.
+#   - Three separate OS jobs each running their own Node process compounds
+#     this further: there is nothing here to make one job's release lookup
+#     wait for another's.
+# The reliable shape, used below instead: every matrix leg builds and
+# uploads its artifacts as a plain CI artifact with `--publish never` (so
+# electron-builder never talks to the GitHub Releases API at all), and a
+# single `release` job — which `needs: build`, and therefore waits for every
+# matrix leg to finish — creates the release and attaches everything exactly
+# once. Nothing here can race because nothing runs concurrently against the
+# GitHub Releases API.
+#
+# This workflow has not been run — it is unverified until a real `v*` tag
+# is pushed and this pipeline executes for real. `actionlint` passes on it,
+# and the race analysis above is grounded in reading the pinned package's
+# own source, not in having exercised the pipeline.
 name: release
 
 on:
@@ -61,9 +106,8 @@ jobs:
       - run: npm ci
 
       # electron-builder substitutes `${version}` (electron-builder.yml's
-      # artifactName) from apps/desktop/package.json, and by default looks
-      # for a GitHub release tagged `v${version}` to publish to. Both need to
-      # be the tag that triggered this run, not whatever is committed.
+      # artifactName) from apps/desktop/package.json, so this needs to be the
+      # tag that triggered this run, not whatever is committed.
       - name: Set the desktop package version from the pushed tag
         shell: bash
         run: |
@@ -76,30 +120,24 @@ jobs:
         shell: bash
         run: npm run build -w @nexus/desktop
 
-      # `--publish always` reads electron-builder.yml's `publish:` block.
-      # electron-builder's GitHub provider defaults to a DRAFT release, which
-      # is deliberate here: three OS jobs publish to the same tag
-      # concurrently, and a shared draft is what lets electron-builder
-      # find-or-create the one release and append this job's assets to it
-      # without a race. The `finalize` job below flips it to a real,
-      # non-draft release only after all three have succeeded.
-      - name: Package and publish to the (draft) GitHub release
+      # `--publish never`: this job only produces the dmg/exe/AppImage on
+      # disk. It never talks to the GitHub Releases API, so it needs no
+      # token and cannot race against the other two OS jobs or (on macOS)
+      # against its own second architecture — see the header comment for why
+      # that race is real with the pinned electron-builder version.
+      - name: Package (no publish)
         shell: bash
         working-directory: apps/desktop
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder ${{ matrix.flag }} --publish always
+        run: npx electron-builder ${{ matrix.flag }} --publish never
 
-      # electron-builder's own publish also uploads its update-metadata
+      # electron-builder's own publish path also generates update-metadata
       # (*.yml/*.blockmap) — sha512, meant for a future electron-updater feed
       # this app does not have. scripts/install.sh and the download page
       # verify a plain "<hash>  <filename>" sha256 sidecar instead, so it is
-      # generated and uploaded here, once per artifact this job produced.
-      - name: Publish a sha256 checksum for each artifact
+      # generated here, once per artifact this job produced.
+      - name: Checksum each artifact
         shell: bash
         working-directory: apps/desktop/release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           shopt -s nullglob
           for f in *.dmg *.exe *.AppImage; do
@@ -108,19 +146,51 @@ jobs:
             else
               shasum -a 256 "$f" > "$f.sha256"
             fi
-            gh release upload "$GITHUB_REF_NAME" "$f.sha256" --clobber
           done
 
-  # Runs once, after every platform has uploaded its build, and turns the
-  # shared draft into the real release. Kept as a separate last step instead
-  # of having any one matrix job finalize it, so finalization cannot race
-  # against a still-uploading sibling.
-  finalize:
+      # Hand the built files to the `release` job as a plain CI artifact.
+      # Matrix legs never share a name (matrix.os differs), so this never
+      # collides with actions/upload-artifact@v4's per-name overwrite rule.
+      - name: Upload build output
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.os }}
+          path: |
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.dmg.sha256
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.exe.sha256
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.AppImage.sha256
+          if-no-files-found: error
+
+  # Runs once, after every matrix leg has uploaded its build (`needs: build`
+  # on a matrixed job waits for the whole matrix), and is the ONLY step in
+  # this workflow that ever talks to the GitHub Releases API. One process,
+  # one release lookup, no concurrent sibling to race against.
+  release:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Publish the release
+      - name: Download every platform's build output
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          pattern: desktop-*
+          merge-multiple: true
+
+      - name: Create the release (if it doesn't already exist) and attach everything
+        working-directory: release-assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release edit "$GITHUB_REF_NAME" --draft=false
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" \
+              --title "$GITHUB_REF_NAME" \
+              --notes "Unsigned, un-notarized build (CLAUDE.md §11 — signing is deferred, not skipped). See USING.md for the Gatekeeper/SmartScreen steps to run it."
+          fi
+          # --clobber makes this idempotent: re-running the workflow for a
+          # tag whose release already exists (e.g. retrying after a partial
+          # failure) re-uploads rather than erroring on an existing asset.
+          gh release upload "$GITHUB_REF_NAME" ./* --clobber
