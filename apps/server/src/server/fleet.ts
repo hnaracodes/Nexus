@@ -20,6 +20,7 @@ import { agentIdOf } from '@nexus/protocol/events';
 import type { AgentStatus, FleetEntry } from '@nexus/protocol/wire';
 import { projectAgents } from '../log/replay.js';
 import type { AgentDeps, AgentHandle, Interrupter } from './agent.js';
+import type { Roster } from './turnGate.js';
 
 /**
  * The subset of `RoomRuntime` (`ws.ts`) this module actually calls, declared
@@ -361,4 +362,44 @@ export function fleetSnapshot(runtime: FleetRuntime): FleetEntry[] {
     });
   }
   return entries;
+}
+
+/* -------------------------------------------------------------------------
+ * Phase 17d — agents know their siblings exist.
+ *
+ * `buildRosterView` is the production `Roster` (turnGate.ts) for ONE agent:
+ * every OTHER live agent in the room, plus that agent's own display name.
+ * Deliberately built from `fleetSnapshot` above — the exact same
+ * log-plus-live-gate projection a human's fleet panel reads — rather than a
+ * second, independent read of the log, so an agent's mental model of its
+ * siblings and a person's fleet view can never silently drift apart into two
+ * different pictures of the same room.
+ *
+ * NOT cached anywhere: the intended caller (`AgentDeps.roster`, agent.ts)
+ * calls this fresh at every turn boundary, precisely because a roster is
+ * allowed — expected — to go stale between one turn and the next. Honesty
+ * about that staleness lives in `ROOM_SYSTEM_PROMPT` (agent.ts), not here.
+ * ---------------------------------------------------------------------- */
+
+export function buildRosterView(runtime: FleetRuntime, selfId: AgentId): Roster | null {
+  // Stopped agents are not siblings to warn anyone about — the "one agent
+  // alone" case must look the same whether that solitude is original or the
+  // result of every other agent having been stopped.
+  const live = fleetSnapshot(runtime).filter((entry) => entry.status !== 'stopped');
+  const others = live.filter((entry) => entry.agentId !== selfId);
+  if (others.length === 0) return null;
+
+  const self = live.find((entry) => entry.agentId === selfId);
+  return {
+    // Falls back to the raw id in the one case this should never actually
+    // reach: a caller asking for a roster on behalf of an id `fleetSnapshot`
+    // doesn't know about. Still better than throwing — a wrong-but-legible
+    // name beats crashing a turn over a roster line.
+    selfDisplayName: self?.displayName ?? selfId,
+    others: others.map((entry) => ({
+      displayName: entry.displayName,
+      provider: entry.provider,
+      status: entry.status,
+    })),
+  };
 }

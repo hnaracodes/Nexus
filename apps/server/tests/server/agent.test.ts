@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UnsequencedEvent } from '@nexus/protocol/events';
 import { startAgent, translate } from '../../src/server/agent.js';
+import type { AgentDeps } from '../../src/server/agent.js';
 import { __resetRooms, createRoom } from '../../src/server/rooms.js';
 
 const KEY = 'sk-ant-api03-TESTONLY-not-a-real-key';
@@ -321,5 +322,137 @@ describe('setModel', () => {
     });
     await handle.setModel('claude-opus-4');
     expect(received).toBe('claude-opus-4');
+  });
+});
+
+/**
+ * Phase 17d — agents know their siblings exist. `AgentDeps.roster`, when
+ * supplied, is called fresh at every turn boundary and its result is handed
+ * straight to `turnGate.ts`'s `submit`/`onIdle`, so this suite proves the
+ * WIRING: the text that actually reaches the SDK's prompt queue (what a real
+ * `query()` would read) carries the preamble when a roster is wired, and is
+ * untouched when it is not — the same "no roster, no behaviour change" bar
+ * `turnGate.test.ts` proves for `render` in isolation.
+ */
+describe('sibling roster preamble (phase 17d)', () => {
+  type CapturedMessage = { message: { content: string } };
+
+  /** Captures the exact AsyncIterable handed to `runQuery` as `options.prompt`
+   *  — the same queue a real `query()` reads from — so a test can read back
+   *  precisely what `deliver()` pushed onto it. */
+  function harnessCapturingPrompt(
+    sessionFactory: () => {
+      [Symbol.asyncIterator]: () => AsyncGenerator<unknown>;
+      interrupt: () => Promise<void>;
+    },
+    deps: Partial<AgentDeps> = {},
+  ) {
+    const room = createRoom({ apiKey: KEY, cwd: process.cwd(), repoUrl: null });
+    const events: UnsequencedEvent[] = [];
+    let capturedPrompt: AsyncIterable<CapturedMessage> | undefined;
+    const handle = startAgent(room, (event) => events.push(event), {
+      runQuery: ((opts: { prompt: AsyncIterable<CapturedMessage> }) => {
+        capturedPrompt = opts.prompt;
+        return sessionFactory();
+      }) as never,
+      ...deps,
+    });
+    return {
+      handle,
+      events,
+      nextDelivered: (() => {
+        let iterator: AsyncIterator<CapturedMessage> | undefined;
+        return async (): Promise<string> => {
+          if (iterator === undefined) {
+            if (capturedPrompt === undefined) throw new Error('runQuery was never called');
+            iterator = capturedPrompt[Symbol.asyncIterator]();
+          }
+          const { value } = await iterator.next();
+          return value.message.content;
+        };
+      })(),
+    };
+  }
+
+  function neverEndingSession() {
+    return {
+      [Symbol.asyncIterator]: async function* () {
+        await new Promise<never>(() => {
+          /* session stays open for the room's life (I1) */
+        });
+      },
+      interrupt: async () => undefined,
+    };
+  }
+
+  it('delivers an unchanged prompt when no roster is wired — the existing behaviour', async () => {
+    const h = harnessCapturingPrompt(neverEndingSession);
+    h.handle.submit(prompt('hello'));
+    expect(await h.nextDelivered()).toBe('[Ada]: hello');
+  });
+
+  it('delivers an unchanged prompt when roster() returns null — alone, even though wired', async () => {
+    const h = harnessCapturingPrompt(neverEndingSession, { roster: () => null });
+    h.handle.submit(prompt('hello'));
+    expect(await h.nextDelivered()).toBe('[Ada]: hello');
+  });
+
+  it('prefixes the delivered prompt with whatever roster() returns', async () => {
+    const h = harnessCapturingPrompt(neverEndingSession, {
+      roster: () => ({
+        selfDisplayName: 'Agent',
+        others: [{ displayName: 'Beta', provider: 'anthropic', status: 'idle' }],
+      }),
+    });
+    h.handle.submit(prompt('hello'));
+    const text = await h.nextDelivered();
+    expect(text).toContain('You are Agent.');
+    expect(text).toContain('- Beta (anthropic, idle)');
+    expect(text.endsWith('[Ada]: hello')).toBe(true);
+  });
+
+  it('calls roster() fresh for the SECOND delivery rather than reusing the first answer', async () => {
+    let endTurn: () => void = () => undefined;
+    const turnOver = new Promise<void>((resolve) => {
+      endTurn = resolve;
+    });
+    let calls = 0;
+    const h = harnessCapturingPrompt(
+      () => ({
+        [Symbol.asyncIterator]: async function* () {
+          await turnOver;
+          yield { type: 'result' };
+          await new Promise<never>(() => {
+            /* session stays open (I1) */
+          });
+        },
+        interrupt: async () => undefined,
+      }),
+      {
+        roster: () => {
+          calls += 1;
+          // Alone on the first delivery, joined by Beta by the second — a
+          // spawn that happened mid-turn must show up on the NEXT turn
+          // without restarting anything (I1: one query() for the room's
+          // whole life).
+          return calls === 1
+            ? null
+            : {
+                selfDisplayName: 'Agent',
+                others: [{ displayName: 'Beta', provider: 'anthropic', status: 'working' }],
+              };
+        },
+      },
+    );
+
+    h.handle.submit(prompt('first'));
+    expect(await h.nextDelivered()).toBe('[Ada]: first');
+
+    h.handle.submit(prompt('second', false));
+    endTurn();
+    const second = await h.nextDelivered();
+    expect(second).toContain('You are Agent.');
+    expect(second).toContain('- Beta (anthropic, working)');
+    expect(calls).toBeGreaterThanOrEqual(2);
   });
 });
