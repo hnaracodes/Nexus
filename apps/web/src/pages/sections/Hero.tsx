@@ -70,9 +70,18 @@ export function Hero(): JSX.Element {
               <Download size={18} aria-hidden="true" />
               Download the app
             </a>
+            {/*
+              Demoted from an outlined button to a text link when the download
+              CTA arrived. Three buttons did not fit the hero's column at common
+              laptop widths, so "How it works" wrapped onto a row of its own and
+              read as a stray control. It is also genuinely the least urgent of
+              the three — it scrolls you down a page you are already on — so the
+              hierarchy is now one primary, one secondary, one quiet link
+              instead of three things shouting at the same volume.
+            */}
             <a
               href="#how"
-              className="flex min-h-11 items-center rounded-md border border-border-strong px-6 py-3 text-base font-medium text-fg transition-colors duration-150 hover:border-accent hover:bg-surface"
+              className="flex min-h-11 items-center text-base font-medium text-fg-muted underline decoration-border-strong underline-offset-4 transition-colors duration-150 hover:text-fg hover:decoration-accent"
             >
               How it works
             </a>
