@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import { join as joinPath } from 'node:path';
+import { dirname, join as joinPath } from 'node:path';
 import type { Server } from 'node:http';
 import { BrowserWindow, Menu, app, dialog, ipcMain, shell } from 'electron';
 import type { MenuItem } from 'electron';
@@ -117,18 +117,56 @@ function useWritablePaths(): void {
    * launched — `npm run dev` reads a different package.json context than the
    * packaged bundle does.
    */
-  // Where the old name put things, asked of Electron rather than hardcoded, so
-  // this is right on Windows (%APPDATA%) and Linux (~/.config) too.
-  app.setName('SynCode');
-  const legacyUserData = app.getPath('userData');
-
-  app.setName('SynCode');
+  app.setName(APP_NAME);
   const userData = app.getPath('userData');
-
-  migrateUserData(legacyUserData, userData);
-
   process.env['SYNCODE_DATA_DIR'] ??= joinPath(userData, 'data');
   process.env['SYNCODE_WORKDIR'] ??= joinPath(userData, 'work');
+}
+
+/**
+ * The app's name, and the one it had before the rename.
+ *
+ * LEGACY_APP_NAME is a stored-data key, not a label — it is what Electron
+ * joined into `~/Library/Application Support/<name>` for every install that
+ * exists today, so it must keep saying "Nexus" forever, or at least until
+ * nobody has a pre-rename install left. A repo-wide Nexus->SynCode sweep
+ * rewrote it to 'SynCode' and thereby disabled the migration silently: both
+ * lookups returned the same path, `migrateUserData` saw legacy === next and
+ * returned, and a real install's rooms stayed stranded. Named constants rather
+ * than inline literals so the next sweep has something obvious to not touch.
+ */
+const APP_NAME = 'SynCode';
+const LEGACY_APP_NAME = 'Nexus';
+
+/**
+ * Move a pre-rename install's rooms, ONCE, AT STARTUP.
+ *
+ * At startup specifically, and not inside `useWritablePaths()` where it began:
+ * that function only runs down the "open a folder" branch, so someone who only
+ * ever JOINS rooms would never have migrated at all, and someone who joined for
+ * a week before hosting would have migrated a week late. Data does not belong
+ * behind a feature branch.
+ */
+function migrateLegacyUserData(): void {
+  const userData = app.getPath('userData');
+  // The legacy path is the SIBLING directory, derived from this one — NOT from
+  // `setName(LEGACY_APP_NAME)` + `getPath('userData')`, which is what this did
+  // first and which silently does nothing.
+  //
+  // Electron resolves and creates userData during `whenReady()`, so by the time
+  // any of our code runs, calling `setName` again no longer moves what
+  // `getPath('userData')` returns. Both lookups came back identical,
+  // `migrateUserData` saw legacy === next, returned, and a real install's rooms
+  // stayed stranded — with no error anywhere, because every individual call
+  // succeeded. Found by launching the packaged app against an actual
+  // pre-rename install and watching the data not move; three tests of the
+  // migration itself all passed the whole time, because they are handed two
+  // different paths rather than asking Electron for them.
+  //
+  // `dirname` is the app-data root on all three platforms (Application Support,
+  // %APPDATA%, ~/.config), so the sibling is exactly where the old name lived.
+  const legacy = joinPath(dirname(userData), LEGACY_APP_NAME);
+  migrateUserData(legacy, userData);
 }
 
 
@@ -528,6 +566,9 @@ function buildMenu(): void {
 
 async function main(): Promise<void> {
   await app.whenReady();
+
+  // Before any window, any server and any branch — see migrateLegacyUserData.
+  migrateLegacyUserData();
   buildMenu();
 
   /**

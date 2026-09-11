@@ -76,6 +76,12 @@ downloading and installing them, not by looking at the releases page:
 | `Nexus-0.2.3-win-x64.exe` | 146 MB |
 | `Nexus-0.2.3-linux-x86_64.AppImage` | 183 MB |
 
+Those filenames still say **Nexus** because v0.2.3 was built before the rename
+and a published artifact cannot be renamed after the fact. The next tagged
+release produces `SynCode-…` files. `install.sh` reads the product name out of
+whatever it downloads rather than assuming either, so the same one-liner
+installs both.
+
 Each ships a `.sha256` sidecar, and the installer refuses anything that does not
 match it.
 
@@ -127,7 +133,7 @@ npm run package -w @syncode/desktop
 open apps/desktop/release/mac-arm64/SynCode.app
 ```
 
-Also produces `apps/desktop/release/Nexus-0.0.1-mac-arm64.dmg` and
+Also produces `apps/desktop/release/SynCode-<version>-mac-arm64.dmg` and
 `…-mac-x64.dmg` (~186 MB each).
 
 ### Can it run on anyone's device?

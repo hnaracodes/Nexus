@@ -32,7 +32,7 @@ describe('migrateUserData', () => {
 
     migrateUserData(legacy, next);
 
-    expect(existsSync(legacy)).toBe(false);
+    expect(existsSync(join(legacy, 'data'))).toBe(false);
     expect(readFileSync(join(next, 'data', 'room_abc.jsonl'), 'utf8')).toContain('room_created');
   });
 
@@ -41,7 +41,38 @@ describe('migrateUserData', () => {
 
     migrateUserData(legacy, next);
 
-    expect(existsSync(next)).toBe(false);
+    expect(existsSync(join(next, 'data'))).toBe(false);
+  });
+
+  /**
+   * THE CASE THAT MATTERS, and the one the first version got wrong.
+   *
+   * Electron creates userData for its own caches before any line of this app
+   * runs, so by migration time the NEW directory always exists. A version that
+   * guarded on the directory rather than on the subdirectories refused every
+   * real migration while passing every test — the tests construct both paths
+   * themselves and Electron is not there to get in first.
+   */
+  it('still migrates when Electron has already created the new directory for its caches', () => {
+    const { legacy, next } = sandbox();
+    seedRoom(legacy, '{"type":"room_created","seq":1}\n');
+    mkdirSync(join(next, 'GPUCache'), { recursive: true });
+    mkdirSync(join(next, 'Local Storage'), { recursive: true });
+
+    migrateUserData(legacy, next);
+
+    expect(readFileSync(join(next, 'data', 'room_abc.jsonl'), 'utf8')).toContain('room_created');
+  });
+
+  it('leaves Chromium caches alone — they regenerate and are not the user\'s work', () => {
+    const { legacy, next } = sandbox();
+    mkdirSync(join(legacy, 'GPUCache'), { recursive: true });
+    seedRoom(legacy, 'LOG\n');
+
+    migrateUserData(legacy, next);
+
+    expect(existsSync(join(next, 'GPUCache'))).toBe(false);
+    expect(existsSync(join(legacy, 'GPUCache'))).toBe(true);
   });
 
   it('never overwrites data already under the new name', () => {
@@ -54,7 +85,7 @@ describe('migrateUserData', () => {
     // The second launch, or someone who ran a dev build first. Clobbering here
     // would destroy the rooms they have actually been using.
     expect(readFileSync(join(next, 'data', 'room_abc.jsonl'), 'utf8')).toBe('NEW\n');
-    expect(existsSync(legacy)).toBe(true);
+    expect(existsSync(join(legacy, 'data'))).toBe(true);
   });
 
   it('leaves the old directory intact when the move fails, rather than half-migrating', () => {
@@ -66,13 +97,14 @@ describe('migrateUserData', () => {
       expect(() =>
         migrateUserData(legacy, next, {
           existsSync,
+          mkdirSync,
           renameSync: () => {
             throw new Error('EXDEV: cross-device link not permitted');
           },
         }),
       ).not.toThrow();
       expect(readFileSync(join(legacy, 'data', 'room_abc.jsonl'), 'utf8')).toBe('PRECIOUS\n');
-      expect(existsSync(next)).toBe(false);
+      expect(existsSync(join(next, 'data'))).toBe(false);
     } finally {
       spy.mockRestore();
     }
