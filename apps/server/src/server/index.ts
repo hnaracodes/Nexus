@@ -398,8 +398,22 @@ export function createServer(
    * topology is not public" — the SAME guard as GET /api/rooms/:id above,
    * just keyed by a `?room=` query param rather than a path segment, because
    * this fact is about the HOST, not about any one room's other state.
+   *
+   * That token guard alone is not enough: this route's whole reason to exist
+   * is telling the DESKTOP SHELL its own machine's LAN addresses, which makes
+   * sense only when this process IS that shell (`isLocalHostMode()`). On an
+   * ordinary hosted deployment, holding a valid token for any one room would
+   * otherwise be enough to enumerate the server's network interfaces — a
+   * fact about the host, not about any room the caller was invited to.
+   * Checked FIRST and unconditionally, before the token, the same way
+   * `/api/github/callback` refuses outright when a feature is not configured
+   * on this server at all: the route does not apply here, so it 404s rather
+   * than merely returning an empty list.
    */
   app.get('/api/host/addresses', (c) => {
+    if (!isLocalHostMode()) {
+      return c.json({ error: 'Host addresses are not available on this server.' }, 404);
+    }
     const roomId = c.req.query('room') ?? '';
     const token = c.req.header('X-Nexus-Token');
     if (token === undefined || authorize(roomId, token) === undefined) {

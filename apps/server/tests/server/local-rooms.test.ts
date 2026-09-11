@@ -15,6 +15,7 @@ import type { AgentDeps } from '../../src/server/agent.js';
 import { createServer } from '../../src/server/index.js';
 import { __resetLocalHostState } from '../../src/server/localHost.js';
 import { __resetRateLimits } from '../../src/server/rate-limit.js';
+import { __resetRooms } from '../../src/server/rooms.js';
 
 const KEY = 'sk-ant-api03-TESTONLY-not-a-real-key';
 
@@ -195,6 +196,14 @@ describe('GET /api/host/addresses', () => {
     await new Promise<void>((resolve) => started.server.close(() => resolve()));
   });
 
+  // This route exists solely so the desktop shell can show a joinable LAN
+  // URL — it has no reason to exist, and must not be reachable, on an
+  // ordinary hosted deployment. Mode state is managed explicitly here (not
+  // inherited from whatever the previous describe block left behind) so
+  // these tests are honest about which mode each one needs.
+  beforeEach(() => delete process.env['NEXUS_LOCAL_HOST']);
+  afterEach(() => delete process.env['NEXUS_LOCAL_HOST']);
+
   async function createRoom(): Promise<{ roomId: string; token: string }> {
     const response = await fetch(`http://127.0.0.1:${port}/api/rooms`, {
       method: 'POST',
@@ -204,24 +213,135 @@ describe('GET /api/host/addresses', () => {
     return (await response.json()) as { roomId: string; token: string };
   }
 
-  it('401s with no token and with a wrong token — the host LAN topology is not public', async () => {
-    const { roomId } = await createRoom();
-    const noToken = await fetch(`http://127.0.0.1:${port}/api/host/addresses?room=${roomId}`);
-    expect(noToken.status).toBe(401);
-
-    const wrongToken = await fetch(`http://127.0.0.1:${port}/api/host/addresses?room=${roomId}`, {
-      headers: { 'X-Nexus-Token': 'not-the-real-token' },
-    });
-    expect(wrongToken.status).toBe(401);
-  });
-
-  it('200s with the right room token, and returns an addresses array', async () => {
+  it('404s outright when the server is not in local-host mode, even with a VALID token', async () => {
+    // Created while still off, same as any ordinary hosted room.
     const { roomId, token } = await createRoom();
     const response = await fetch(`http://127.0.0.1:${port}/api/host/addresses?room=${roomId}`, {
       headers: { 'X-Nexus-Token': token },
     });
+    // Not merely an empty list — the route itself must not exist on a
+    // hosted deployment, matching the shape `/api/github/callback` uses for
+    // a feature this server was never configured to serve.
+    expect(response.status).toBe(404);
+    const body = (await response.json()) as { addresses?: string[] };
+    expect(body.addresses).toBeUndefined();
+  });
+
+  it('401s with no token and with a wrong token — the host LAN topology is not public', async () => {
+    const { roomId } = await withLocalHostMode(() => createRoom());
+    const noToken = await withLocalHostMode(() =>
+      fetch(`http://127.0.0.1:${port}/api/host/addresses?room=${roomId}`),
+    );
+    expect(noToken.status).toBe(401);
+
+    const wrongToken = await withLocalHostMode(() =>
+      fetch(`http://127.0.0.1:${port}/api/host/addresses?room=${roomId}`, {
+        headers: { 'X-Nexus-Token': 'not-the-real-token' },
+      }),
+    );
+    expect(wrongToken.status).toBe(401);
+  });
+
+  it('200s with the right room token in local-host mode, and returns an addresses array', async () => {
+    const { roomId, token } = await withLocalHostMode(() => createRoom());
+    const response = await withLocalHostMode(() =>
+      fetch(`http://127.0.0.1:${port}/api/host/addresses?room=${roomId}`, {
+        headers: { 'X-Nexus-Token': token },
+      }),
+    );
     expect(response.status).toBe(200);
     const body = (await response.json()) as { addresses: string[] };
     expect(Array.isArray(body.addresses)).toBe(true);
+  });
+});
+
+/**
+ * `claimedPaths` (localHost.ts) is in-memory only, and recovery.ts exists
+ * precisely because rooms survive a restart — so if the claim set is never
+ * repopulated from what recovery finds on disk, a restarted server silently
+ * stops refusing a second room at a folder a still-live, just-recovered room
+ * already owns. This exercises the ACTUAL restart path — a genuinely new
+ * `createServer()` call, which runs `recoverRooms()` internally exactly as
+ * the real process does at boot — rather than calling any repopulate
+ * function directly.
+ */
+describe('restart repopulates the localPath claim guard', () => {
+  let port = 0;
+  let started: ReturnType<typeof createServer>;
+  let projectDir: string;
+
+  beforeAll(async () => {
+    started = createServer({ agentDeps: stubAgentDeps() });
+    await new Promise<void>((resolve) => {
+      started.server.listen(0, '127.0.0.1', () => {
+        port = (started.server.address() as AddressInfo).port;
+        resolve();
+      });
+    });
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((resolve) => started.server.close(() => resolve()));
+  });
+
+  beforeEach(() => {
+    __resetLocalHostState();
+    __resetRateLimits();
+    projectDir = realpathSync(mkdtempSync(join(tmpdir(), 'nexus-restart-project-')));
+    delete process.env['NEXUS_LOCAL_HOST'];
+  });
+
+  afterEach(() => {
+    __resetLocalHostState();
+    delete process.env['NEXUS_LOCAL_HOST'];
+  });
+
+  it('still refuses a second room at the same localPath after the process "restarts"', async () => {
+    // A room hosted BEFORE the restart.
+    const first = await withLocalHostMode(() =>
+      fetch(`http://127.0.0.1:${port}/api/rooms`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ apiKey: KEY, localPath: projectDir }),
+      }),
+    );
+    expect(first.status).toBe(200);
+
+    // Simulate the process actually dying and a new one starting: everything
+    // in memory is gone — the live room registry AND the claimedPaths guard
+    // — but the meta.json + log sidecars `recoverRooms()` reads from are
+    // untouched on disk, exactly as CLAUDE.md's "rooms survive a restart"
+    // describes. If the fix only repopulated the room registry and not the
+    // claim guard, this is the state that would let a second room silently
+    // slip through.
+    __resetRooms();
+    __resetLocalHostState();
+
+    // A genuinely NEW server, the same way the real process makes one on
+    // boot — its createServer() call runs recoverRooms() internally, which
+    // IS the real restart path, not a repopulate function invoked directly.
+    const restarted = createServer({ agentDeps: stubAgentDeps() });
+    let restartedPort = 0;
+    await new Promise<void>((resolve) => {
+      restarted.server.listen(0, '127.0.0.1', () => {
+        restartedPort = (restarted.server.address() as AddressInfo).port;
+        resolve();
+      });
+    });
+
+    try {
+      const second = await withLocalHostMode(() =>
+        fetch(`http://127.0.0.1:${restartedPort}/api/rooms`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ apiKey: KEY, localPath: projectDir }),
+        }),
+      );
+      expect(second.status).toBe(400);
+      const body = (await second.json()) as { error?: string };
+      expect(body.error).toMatch(/already open/i);
+    } finally {
+      await new Promise<void>((resolve) => restarted.server.close(() => resolve()));
+    }
   });
 });
