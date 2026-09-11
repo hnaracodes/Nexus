@@ -8,10 +8,12 @@ import { isAllowedNavigation } from './navigationGuard.js';
 import { parseRoomLink } from './launcher.js';
 import {
   folderConsentMessage,
+  folderDisplayName,
   lanShareConfirmMessage,
   localNetworkAddresses,
   roomReadyMessage,
 } from './folderRoom.js';
+import { describeHostConflict } from './hostGuard.js';
 
 // One process, one server, one room — this file never calls createServer()
 // more than once. Invariant I1 is about a room owning exactly one live
@@ -27,6 +29,14 @@ import {
 // instance on the SAME port, just on 0.0.0.0 instead of 127.0.0.1. That is
 // still a single server for a single room's whole life; only which
 // interfaces may reach it changes.
+//
+// This comment used to be aspirational rather than enforced: closing a
+// hosted room's window on macOS never quit the process, and the dock icon's
+// `activate` opened a fresh join window whose "Open a folder" button called
+// `startBackend()` again regardless, silently stranding the first server
+// with no window and no way to reach it. `hostedRoom`, `describeHostConflict`
+// (hostGuard.ts) and the `activate` handler below are what actually make
+// this comment true now: see hostedRoom's own doc comment for the mechanism.
 let httpServer: Server | undefined;
 /** The port `httpServer` is listening on, once known. Kept so "Share on
  *  Local Network" can re-listen on the SAME port — changing port on rebind
@@ -43,8 +53,18 @@ let pendingFolderPath: string | undefined;
 /** Set once a local folder room this process is HOSTING has been created.
  *  Absent for a "Join a room" session — there is no server in this process
  *  to share in that case, so the guard below is what keeps "Share on Local
- *  Network" from doing anything when there is nothing local to share. */
-let hostedRoom: { id: string; token: string } | undefined;
+ *  Network" from doing anything when there is nothing local to share.
+ *
+ *  Also the single fact `describeHostConflict` (hostGuard.ts) and the
+ *  `activate` handler below need to close the "second host" hole: as long as
+ *  this is set, `nexus:open-folder` refuses to start a second backend, and a
+ *  dock-icon `activate` with no windows open reopens THIS room rather than
+ *  the join chooser — so there is never a window from which "Open a folder"
+ *  for a different folder can even be reached while one is already hosted.
+ *  `folderName` is display-only (never re-derived into a path); `url` is the
+ *  exact joinable URL `createWindow` was given the first time, so reopening
+ *  it lands the user back on the same room rather than a fresh one. */
+let hostedRoom: { id: string; token: string; folderName: string; url: string } | undefined;
 let sharedOnLan = false;
 let shareMenuItem: MenuItem | undefined;
 /** The most recently opened room window, so the menu's click handler has a
@@ -330,6 +350,20 @@ function registerJoinHandlers(getJoinWindow: () => BrowserWindow | null): void {
    * explicit, separate click").
    */
   ipcMain.handle('nexus:open-folder', async (_event, rawApiKey: unknown): Promise<string | null> => {
+    // Last-line-of-defense, checked BEFORE anything else in this handler:
+    // this process hosts at most one room at a time ("One process, one
+    // server, one room" — this file's own header). The `activate` handler
+    // below is what actually keeps a second folder from being reachable
+    // through the UI once one is already hosted (it reopens THIS room
+    // instead of the join chooser), but that is a UI-level door, not a
+    // security boundary — this check is what actually refuses to call
+    // `startBackend()` a second time no matter how this handler gets
+    // invoked. See hostGuard.ts for the full scenario this closes.
+    const conflict = describeHostConflict(
+      hostedRoom === undefined ? undefined : { folderName: hostedRoom.folderName },
+    );
+    if (conflict.blocked) return conflict.message;
+
     const localPath = pendingFolderPath;
     if (localPath === undefined) {
       return 'Pick a folder first.';
@@ -364,13 +398,17 @@ function registerJoinHandlers(getJoinWindow: () => BrowserWindow | null): void {
       return body?.error ?? 'Could not create a room for that folder.';
     }
 
-    hostedRoom = { id: body.roomId, token: body.token };
-    if (shareMenuItem !== undefined) shareMenuItem.enabled = true;
-
     const joinUrl = new URL(origin);
     joinUrl.searchParams.set('room', body.roomId);
     joinUrl.searchParams.set('token', body.token);
     const url = joinUrl.toString();
+
+    // Recorded with the exact URL and a display name for the folder, not
+    // just the id/token pair — `describeHostConflict` needs the name for its
+    // message, and `activate` needs the URL to reopen this same room rather
+    // than a fresh one (see the field's own doc comment above).
+    hostedRoom = { id: body.roomId, token: body.token, folderName: folderDisplayName(localPath), url };
+    if (shareMenuItem !== undefined) shareMenuItem.enabled = true;
 
     // Shown BEFORE the room window opens — this IS "after the room exists,
     // show the joinable URL" (CLAUDE.md), and it has to be a native dialog
@@ -498,9 +536,24 @@ async function main(): Promise<void> {
 
   app.on('activate', () => {
     // macOS convention: the app stays alive after every window closes, and
-    // clicking the dock icon should bring a window back. With no room chosen
-    // yet, the thing to bring back is the choice.
+    // clicking the dock icon should bring a window back.
     if (BrowserWindow.getAllWindows().length > 0) return;
+
+    // If this process is already HOSTING a room, bring THAT back — never the
+    // join chooser. This is the other half of the "second host" fix
+    // (hostGuard.ts): as long as `hostedRoom` is set, there must be no
+    // window anywhere from which "Open a folder" could be clicked for a
+    // DIFFERENT folder, or the in-handler guard would be the only thing
+    // standing between a user and a second, invisible server. Closing this
+    // room's window and clicking the dock icon is precisely the scenario the
+    // reviewer's finding described, and this is "how to get back to it".
+    if (hostedRoom !== undefined) {
+      createWindow(hostedRoom.url);
+      return;
+    }
+
+    // Otherwise nothing has been chosen yet — the thing to bring back is the
+    // choice.
     joinWindow = createJoinWindow();
     joinWindow.on('closed', () => {
       joinWindow = null;

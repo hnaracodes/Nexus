@@ -1,8 +1,9 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { AgentId, GithubRepoRef, NexusEvent } from '@nexus/protocol/events';
 import { openLog } from '../log/event-log.js';
 import { projectFleet, reconstruct } from '../log/replay.js';
+import { claimLocalPath } from './localHost.js';
 import { restoreRoom } from './rooms.js';
 
 const DEFAULT_DATA_DIR = process.env['NEXUS_DATA_DIR'] ?? './data';
@@ -188,6 +189,29 @@ export function recoverRooms(
         // without asking the human to reconnect GitHub.
         github: meta.github ?? null,
       });
+
+      // `claimedPaths` (localHost.ts) is the in-memory-only guard against
+      // two live rooms sharing one `localPath`, and it starts every process
+      // empty — including THIS one, restarting right now. Without this, a
+      // restart silently drops that guard: the recovered room above is
+      // still live and still owns `meta.cwd`, but nothing on the new
+      // process's claim set says so, so a second `localPath` room at the
+      // exact same folder would be wrongly accepted. Claimed by realpath,
+      // like every other entry in the set (`validateLocalRoomPath` compares
+      // realpaths), and best-effort: a folder deleted since the room was
+      // created has nothing to claim, and that is not this loop's problem to
+      // solve — the room's agent will surface a missing cwd on its own if it
+      // is ever attached again. Applied to every recovered room, not only
+      // ones the desktop shell happens to remember creating via `localPath`
+      // — RoomMeta does not distinguish the two, and claiming an ordinary
+      // cloned room's workdir is harmless: no real project folder a person
+      // picks will ever collide with `NEXUS_WORKDIR/<roomId>`.
+      try {
+        claimLocalPath(realpathSync(meta.cwd));
+      } catch {
+        // cwd no longer exists on disk — nothing to claim.
+      }
+
       recovered.push({
         roomId: meta.roomId,
         lastSeq,
