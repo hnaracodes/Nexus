@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { Landing } from '../Landing.js';
 
@@ -84,5 +84,50 @@ describe('Landing', () => {
     const text = document.body.textContent ?? '';
     expect(text).toMatch(/shared security boundary/);
     expect(text).toMatch(/no isolation between rooms/);
+  });
+
+  /**
+   * The download link the user could not find. It existed only in the header
+   * nav and the footer, which is the same as not existing for anyone who
+   * arrives, reads the hero, and leaves.
+   */
+  it('offers the desktop app from the hero itself, not just the nav', () => {
+    render(<Landing />);
+
+    const hero = screen.getByRole('heading', { level: 1 }).closest('section');
+    expect(hero, 'the h1 should live inside a section').not.toBeNull();
+
+    const downloadLinks = [...(hero as HTMLElement).querySelectorAll('a[href="/download"]')];
+    expect(downloadLinks.length, '/download must be reachable from the hero').toBeGreaterThan(0);
+    expect(downloadLinks.some((a) => /download the app/i.test(a.textContent ?? ''))).toBe(true);
+  });
+
+  /**
+   * Unsigned is the first thing a downloader experiences, so it is said before
+   * the download, not after. A page that omits it produces people who conclude
+   * the file is broken.
+   */
+  it('says the build is unsigned where the download is offered', () => {
+    render(<Landing />);
+
+    expect(screen.getByText(/unsigned build, so your OS will warn on first launch/i)).toBeTruthy();
+  });
+
+  /**
+   * "Open a room" must stay the loudest action: it needs nothing installed and
+   * is the fastest path to understanding the product. A second primary button
+   * beside it would make the page ask twice.
+   */
+  it('keeps Open a room as the single primary call to action', () => {
+    render(<Landing />);
+
+    // Scoped to the hero: "Open a room" also appears in the footer, and the
+    // claim under test is about the hero's visual hierarchy, not the page's
+    // total link count.
+    const hero = screen.getByRole('heading', { level: 1 }).closest('section') as HTMLElement;
+    const primary = within(hero).getByRole('link', { name: /open a room/i });
+    const download = within(hero).getByRole('link', { name: /download the app/i });
+    expect(primary.className).toContain('bg-accent');
+    expect(download.className).not.toContain('bg-accent');
   });
 });
