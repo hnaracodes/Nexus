@@ -11,7 +11,18 @@ import { SiteFooter } from './components/SiteFooter.js';
  * kept in sync by hand if the repo ever moves.
  */
 const REPO = 'hnaracodes/Nexus';
-const RELEASES_API = `https://api.github.com/repos/${REPO}/releases/latest`;
+/**
+ * OUR server, not GitHub's.
+ *
+ * This used to be `https://api.github.com/...` called straight from the page,
+ * and it never once succeeded in production: `connect-src` is `'self'` plus the
+ * room websocket, so the browser refused the request and every visitor saw the
+ * "Couldn't reach GitHub" fallback. Widening the CSP would also have made
+ * /privacy's "SynCode adds no other third-party processor" false, by handing
+ * every visitor's IP to GitHub on page load. The server does the lookup now and
+ * caches it; see `/api/releases/latest` in apps/server/src/server/index.ts.
+ */
+const RELEASES_API = '/api/releases/latest';
 
 /**
  * Deliberately version-less. The whole point of fetching from the API at
@@ -138,7 +149,7 @@ export function Download(): JSX.Element {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(RELEASES_API, { headers: { Accept: 'application/vnd.github+json' } })
+    fetch(RELEASES_API, { headers: { Accept: 'application/json' } })
       .then((response) => {
         if (!response.ok) throw new Error(`GitHub API responded ${response.status}`);
         return response.json() as Promise<LatestRelease>;

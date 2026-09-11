@@ -4,7 +4,8 @@ import { Download } from '../Download.js';
 import { resolveRoute } from '../../routing.js';
 
 /**
- * The page fetches `GET /repos/hnaracodes/Nexus/releases/latest` from the
+ * The page fetches `GET /api/releases/latest` from OUR server (not GitHub — see
+ * Download.tsx's comment on why the direct call could never work) from the
  * GitHub API on mount — never a hardcoded version — and picks a primary
  * download from the returned `assets` array by filename shape. This stub
  * mirrors that shape closely enough to exercise the matching logic without

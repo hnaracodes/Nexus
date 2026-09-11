@@ -128,6 +128,27 @@ function githubCallbackUrl(c: Context): string {
  *  own default so a room's configs land beside its log and its meta sidecar. */
 const DATA_DIR_ROOT = process.env['NEXUS_DATA_DIR'] ?? './data';
 
+/**
+ * One shared release lookup for the whole deployment.
+ *
+ * GitHub's unauthenticated limit is 60 requests an hour PER IP, and with the
+ * server making the call that is 60 for every visitor combined rather than 60
+ * each — the one real cost of proxying instead of fetching from the page. Five
+ * minutes of cache turns a busy hour into twelve requests. A release changes
+ * when someone pushes a tag, so five minutes of staleness is invisible.
+ */
+const RELEASE_URL = 'https://api.github.com/repos/hnaracodes/Nexus/releases/latest';
+const RELEASE_CACHE_MS = 5 * 60 * 1000;
+let releaseCache: { at: number; body: unknown } | null = null;
+
+/** Clears the module-scope release cache between tests, the same way
+ *  `__resetRuntimes` clears ws.ts's room memo. Without it the first test to
+ *  populate the cache silently answers every later one, and an assertion about
+ *  a 502 passes against a 200 it never made. */
+export function __resetReleaseCache(): void {
+  releaseCache = null;
+}
+
 export function createServer(
   opts: { agentDeps?: AgentDeps } = {},
 ): { app: Hono; server: Server } {
@@ -162,6 +183,78 @@ export function createServer(
   // --- BEGIN phase-6 GitHub App connect routes ---
 
   app.get('/api/github/status', (c) => c.json({ enabled: hasGithubAppConfig() }));
+
+  /**
+   * The desktop app's published release, fetched HERE rather than from the
+   * visitor's browser.
+   *
+   * `/download` originally called api.github.com directly from the page. Two
+   * things were wrong with that, and only one of them was visible:
+   *
+   *   - It never ran. `connect-src` is `'self'` plus the room websocket
+   *     (hardening.ts), so the browser refused the request and the page showed
+   *     its "Couldn't reach GitHub" fallback to every visitor. Third CSP
+   *     regression in this project; the first one blanked the whole room.
+   *   - Widening `connect-src` to allow it would have made a published promise
+   *     false. `/privacy` says, in as many words, "SynCode adds no other
+   *     third-party processor" beside its disclosure of Google Fonts. A fetch
+   *     from the page would hand every visitor's IP to GitHub on page load.
+   *     Editing that sentence to match the code is the wrong direction — the
+   *     privacy page is a commitment, not a description.
+   *
+   * So the server makes the call and the browser only ever talks to us. The
+   * CSP is unchanged and the privacy page stays true.
+   *
+   * Deliberately UNAUTHENTICATED: this is public marketing data about a public
+   * release, reachable from a page with no room and no token.
+   *
+   * The response is TRIMMED rather than proxied whole. GitHub's release payload
+   * carries uploader identities, node ids and a dozen URLs this page never
+   * reads, and forwarding an upstream body verbatim is how fields nobody
+   * reviewed end up on someone's screen.
+   */
+  app.get('/api/releases/latest', async (c) => {
+    const cached = releaseCache;
+    if (cached !== null && Date.now() - cached.at < RELEASE_CACHE_MS) {
+      return c.json(cached.body);
+    }
+    try {
+      const upstream = await fetch(RELEASE_URL, {
+        headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'syncode-download-page' },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!upstream.ok) return c.json({ error: 'Could not reach GitHub.' }, 502);
+      const raw = (await upstream.json()) as {
+        tag_name?: unknown;
+        html_url?: unknown;
+        assets?: unknown;
+      };
+      const body = {
+        tag_name: typeof raw.tag_name === 'string' ? raw.tag_name : '',
+        html_url: typeof raw.html_url === 'string' ? raw.html_url : '',
+        assets: (Array.isArray(raw.assets) ? raw.assets : [])
+          .map((asset) => asset as Record<string, unknown>)
+          .filter(
+            (asset) =>
+              typeof asset['name'] === 'string' &&
+              typeof asset['browser_download_url'] === 'string' &&
+              typeof asset['size'] === 'number',
+          )
+          .map((asset) => ({
+            name: asset['name'] as string,
+            browser_download_url: asset['browser_download_url'] as string,
+            size: asset['size'] as number,
+          })),
+      };
+      releaseCache = { at: Date.now(), body };
+      return c.json(body);
+    } catch {
+      // Never echo the upstream error: it can carry a URL with a token in it if
+      // this ever grows an authenticated call, and the page has its own
+      // fallback anyway.
+      return c.json({ error: 'Could not reach GitHub.' }, 502);
+    }
+  });
 
   app.get('/api/github/connect', (c) => {
     if (!hasGithubAppConfig()) {
