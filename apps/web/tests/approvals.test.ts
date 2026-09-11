@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { deriveApprovals, summarizeInput } from '../src/approvals.js';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 
-function log(...partials: Record<string, unknown>[]): NexusEvent[] {
+function log(...partials: Record<string, unknown>[]): SynCodeEvent[] {
   return partials.map(
-    (p, i) => ({ seq: i + 1, ts: '2026-07-28T00:00:00.000Z', roomId: 'room_a', ...p }) as NexusEvent,
+    (p, i) => ({ seq: i + 1, ts: '2026-07-28T00:00:00.000Z', roomId: 'room_a', ...p }) as SynCodeEvent,
   );
 }
 

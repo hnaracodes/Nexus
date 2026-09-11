@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 /**
- * Nexus — the agent, as a character.
+ * SynCode — the agent, as a character.
  *
  * A blue blob with eyes and arms. He is deliberately the only blue thing in a
  * warm ember palette: he is a *character in* the product, not a piece of its
@@ -15,7 +15,7 @@ import { useEffect, useRef, useState } from 'react';
 
 export type Emote = 'idle' | 'wave' | 'dance' | 'hop';
 
-export function NexusBlob({
+export function SynCodeBlob({
   size = 56,
   emote = 'idle',
   waving = false,
@@ -153,7 +153,7 @@ function pickTarget(w: number, h: number, fromX: number): { x: number; y: number
  * the primary CTA is a conversion bug wearing a smile. He does not mount at all
  * under `prefers-reduced-motion`, since movement is the entire point of him.
  */
-export function NexusWanderer(): JSX.Element | null {
+export function SynCodeWanderer(): JSX.Element | null {
   const reduced =
     typeof globalThis.matchMedia === 'function' &&
     globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -254,7 +254,7 @@ export function NexusWanderer(): JSX.Element | null {
       className="pointer-events-none fixed left-0 top-0 z-40"
       style={{ filter: 'drop-shadow(0 10px 20px rgb(90 169 255 / 0.35))', willChange: 'transform' }}
     >
-      <NexusBlob size={54} emote={emote} />
+      <SynCodeBlob size={54} emote={emote} />
     </div>
   );
 }

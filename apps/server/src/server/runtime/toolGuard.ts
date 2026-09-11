@@ -1,7 +1,7 @@
 /**
  * Validates the tool declarations a provider adapter is about to SEND.
  *
- * Nexus's gate can only govern a tool the provider hands back for Nexus to
+ * SynCode's gate can only govern a tool the provider hands back for SynCode to
  * execute. Phase 10's first design assumed that owning the tool loop made a
  * bypass structurally impossible; an adversarial review falsified that against
  * the published SDKs, and both holes turned out to be outbound — properties of
@@ -45,7 +45,7 @@ function describe(index: number, value: unknown): string {
 }
 
 /**
- * The ONLY OpenAI tool type Nexus may declare. A `function` tool is always
+ * The ONLY OpenAI tool type SynCode may declare. A `function` tool is always
  * returned to the caller as a `function_call` for local execution — that
  * round trip is what gives the gate somewhere to stand.
  */
@@ -62,8 +62,8 @@ export function guardOpenAiTools(tools: readonly unknown[]): ToolGuardResult {
     const type = tool['type'];
     if (typeof type !== 'string' || !OPENAI_ALLOWED_TYPES.has(type)) {
       problems.push(
-        `${describe(index, tool)} is not a tool Nexus can govern. Only \`function\` tools are ` +
-          'declared, because they are returned to Nexus for execution and can therefore be ' +
+        `${describe(index, tool)} is not a tool SynCode can govern. Only \`function\` tools are ` +
+          'declared, because they are returned to SynCode for execution and can therefore be ' +
           'held at the room\'s approval gate. Every other type may be executed by the ' +
           'provider itself, where the room cannot see or stop it.',
       );
@@ -98,7 +98,7 @@ export function guardGeminiTools(tools: readonly unknown[]): ToolGuardResult {
       problems.push(
         `The tool at index ${index} carries a callable \`callTool\`, which switches on the ` +
           "Gemini SDK's own automatic function-calling loop. That loop executes tools inside " +
-          'the generateContent call, before Nexus regains control, so the room could neither ' +
+          'the generateContent call, before SynCode regains control, so the room could neither ' +
           'approve nor even observe them. Declare plain `functionDeclarations` instead.',
       );
     }

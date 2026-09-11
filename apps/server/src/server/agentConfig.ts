@@ -5,7 +5,7 @@
  * established in phase 10's spike by reading the SDK's own dispatch code rather
  * than its documentation:
  *
- *   `canUseTool` — Nexus's entire four-eyes gate — is the LAST thing consulted
+ *   `canUseTool` — SynCode's entire four-eyes gate — is the LAST thing consulted
  *   in the permission pipeline, and it is skipped outright when an earlier step
  *   produces an allow. `permissionMode: 'bypassPermissions'`, an `allowedTools`
  *   entry, a settings-file allow rule, and `acceptEdits` (for some tools) each
@@ -29,7 +29,7 @@
  *    `permissionMode` on a nested subagent — so a value arriving as parsed JSON
  *    and asserted `as AgentDefinition` is NOT protected by the type system. The
  *    subagent path is the nastier one: it bypasses the gate without touching
- *    Nexus's top-level options at all.
+ *    SynCode's top-level options at all.
  *
  * Nothing here is a substitute for the server-owned `PreToolUse` hook, which is
  * the only point in the SDK pipeline that `permissionMode` cannot override.
@@ -82,7 +82,7 @@ function unknownFields(input: Record<string, unknown>, allowed: readonly string[
     .filter((key) => !allowed.includes(key))
     .map(
       (key) =>
-        `\`${key}\` is not a field Nexus accepts on an agent configuration. ` +
+        `\`${key}\` is not a field SynCode accepts on an agent configuration. ` +
         'Only the room may set how an agent is permitted to act.',
     );
 }

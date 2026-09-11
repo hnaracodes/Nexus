@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import { deriveAgentStatus } from '../../agentStatus.js';
 
 const ROOM = 'room_fixture';
@@ -9,7 +9,7 @@ function ts(seq: number): string {
   return new Date(2026, 6, 28, 0, 0, seq).toISOString();
 }
 
-function prompt(seq: number): NexusEvent {
+function prompt(seq: number): SynCodeEvent {
   return {
     seq,
     ts: ts(seq),
@@ -21,15 +21,15 @@ function prompt(seq: number): NexusEvent {
   };
 }
 
-function idle(seq: number): NexusEvent {
+function idle(seq: number): SynCodeEvent {
   return { seq, ts: ts(seq), roomId: ROOM, type: 'agent_idle' };
 }
 
-function toolStart(seq: number, toolName: string, toolUseId: string): NexusEvent {
+function toolStart(seq: number, toolName: string, toolUseId: string): SynCodeEvent {
   return { seq, ts: ts(seq), roomId: ROOM, type: 'tool_start', toolUseId, toolName, input: {} };
 }
 
-function toolResult(seq: number, toolUseId: string): NexusEvent {
+function toolResult(seq: number, toolUseId: string): SynCodeEvent {
   return {
     seq,
     ts: ts(seq),
@@ -42,7 +42,7 @@ function toolResult(seq: number, toolUseId: string): NexusEvent {
   };
 }
 
-function permissionRequested(seq: number, requestId: string): NexusEvent {
+function permissionRequested(seq: number, requestId: string): SynCodeEvent {
   return {
     seq,
     ts: ts(seq),
@@ -55,7 +55,7 @@ function permissionRequested(seq: number, requestId: string): NexusEvent {
   };
 }
 
-function permissionDecided(seq: number, requestId: string, decision: 'allow' | 'deny'): NexusEvent {
+function permissionDecided(seq: number, requestId: string, decision: 'allow' | 'deny'): SynCodeEvent {
   return {
     seq,
     ts: ts(seq),

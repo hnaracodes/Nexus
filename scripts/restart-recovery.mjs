@@ -2,7 +2,7 @@
 /**
  * Restart-recovery harness.
  *
- * Kills a running Nexus and asks what survived. Everything this repo claims
+ * Kills a running SynCode and asks what survived. Everything this repo claims
  * about I3 — "every view of room state must be reconstructible from the log
  * alone" — is a claim about a process that has died, and no unit test can make
  * that claim, because a unit test never dies.
@@ -107,7 +107,7 @@ console.log(`restart-recovery — port ${PORT}, data dir ${DATA_DIR}\n`);
 /**
  * REFUSE TO RUN ON AN OCCUPIED PORT.
  *
- * Found the hard way on the first run of this harness: a stale Nexus from
+ * Found the hard way on the first run of this harness: a stale SynCode from
  * earlier in the day was still listening on 8099, so the harness's own server
  * died with EADDRINUSE while `/healthz` answered cheerfully from the OTHER
  * process. Every subsequent assertion would have described a server this

@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import { ChangesTab } from '../ChangesTab.js';
 
 const ROOM = 'room_fixture';
@@ -9,7 +9,7 @@ function ts(seq: number): string {
   return new Date(2026, 6, 28, 0, 0, seq).toISOString();
 }
 
-function permissionRequested(seq: number, requestId: string): NexusEvent {
+function permissionRequested(seq: number, requestId: string): SynCodeEvent {
   return {
     seq,
     ts: ts(seq),
@@ -27,7 +27,7 @@ function permissionDecided(
   requestId: string,
   decision: 'allow' | 'deny',
   displayName: string | null,
-): NexusEvent {
+): SynCodeEvent {
   return {
     seq,
     ts: ts(seq),
@@ -45,7 +45,7 @@ function permissionDecided(
 
 describe('ChangesTab', () => {
   it('renders the settled approval history using the same derivation as SideRail', () => {
-    const events: NexusEvent[] = [
+    const events: SynCodeEvent[] = [
       permissionRequested(1, 'r1'),
       permissionDecided(2, 'r1', 'deny', 'Ada'),
     ];

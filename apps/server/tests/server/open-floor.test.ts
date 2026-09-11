@@ -5,7 +5,7 @@ import { createRoom } from '../../src/server/rooms.js';
 import { attachRoom } from '../../src/server/ws.js';
 import type { ServerFrame } from '@syncode/protocol/wire';
 import type {
-  NexusEvent,
+  SynCodeEvent,
   PromptBatchDelivered,
   PromptBatchDiscarded,
 } from '@syncode/protocol/events';
@@ -67,8 +67,8 @@ function stubbedRoom() {
   return { room: created, seen };
 }
 
-const events = (frames: ServerFrame[]): NexusEvent[] =>
-  frames.filter((f) => f.kind === 'event').map((f) => (f as { event: NexusEvent }).event);
+const events = (frames: ServerFrame[]): SynCodeEvent[] =>
+  frames.filter((f) => f.kind === 'event').map((f) => (f as { event: SynCodeEvent }).event);
 
 const batches = (frames: ServerFrame[]): PromptBatchDelivered[] =>
   events(frames).filter((e): e is PromptBatchDelivered => e.type === 'prompt_batch_delivered');

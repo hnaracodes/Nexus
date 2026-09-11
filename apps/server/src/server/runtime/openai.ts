@@ -5,14 +5,14 @@ import type {
   ResponseInputItem,
   ResponseStreamEvent,
 } from 'openai/resources/responses/responses';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import type { Room } from '../rooms.js';
 import { createPermissionGate } from '../permissions.js';
 import type { PermissionGate, RequestVisibility } from '../permissions.js';
 import { createTurnGate } from '../turnGate.js';
 import type { Batch, PendingPrompt } from '../turnGate.js';
-import { buildNexusTools, dispatchToolCall } from './tools.js';
-import type { EmitFn, NexusTool, ToolCallResult } from './tools.js';
+import { buildSynCodeTools, dispatchToolCall } from './tools.js';
+import type { EmitFn, SynCodeTool, ToolCallResult } from './tools.js';
 import { guardOpenAiTools } from './toolGuard.js';
 import type { AgentRuntime, Interrupter, ModelChoice } from './types.js';
 
@@ -25,7 +25,7 @@ export type { EmitFn } from './tools.js';
  * That is a security decision rather than a taste one: the agents SDK's
  * `needsApproval` is per-tool opt-in and defaults to OFF, so a tool added to a
  * room later would execute ungoverned unless somebody remembered to opt it in.
- * Nexus owns the loop instead, which makes the gate unconditional — there is
+ * SynCode owns the loop instead, which makes the gate unconditional — there is
  * exactly one place a tool can be executed from (`dispatchToolCall`), and it
  * awaits the room before it runs anything.
  *
@@ -80,7 +80,7 @@ export interface OpenAiDeps {
   /** Overridable for tests. Same role as `AgentDeps.idleTimeoutMs` in agent.ts. */
   idleTimeoutMs?: number;
   /** Threaded into `ToolContext` exactly as `agent.ts`'s `AgentDeps` does. */
-  readEvents?: () => NexusEvent[];
+  readEvents?: () => SynCodeEvent[];
   /**
    * Overrides the room's permission gate. Test-only seam — production always
    * builds its own via `createPermissionGate`, the same one every provider
@@ -115,7 +115,7 @@ const DEFAULT_IDLE_TIMEOUT_MS = 150_000;
 const DEFAULT_MODEL = 'gpt-5.1';
 
 /**
- * Bounds the function-call round trips inside ONE turn. Nexus drives this loop
+ * Bounds the function-call round trips inside ONE turn. SynCode drives this loop
  * itself, so there is no SDK-side turn limit to lean on: a model that keeps
  * calling tools and never returns a plain answer would otherwise loop forever.
  * Matches `gemini.ts` exactly — a mixed-provider fleet should not have two
@@ -203,14 +203,14 @@ function defaultClient(room: Room): OpenAiClient {
 
 /**
  * `strict: false` on purpose. Strict mode requires every property to be
- * required and `additionalProperties: false` throughout; `NexusTool.inputSchema`
+ * required and `additionalProperties: false` throughout; `SynCodeTool.inputSchema`
  * is ordinary draft-07 JSON Schema with genuinely optional fields (`list_files`
  * takes an optional path). Declaring `strict: true` over a schema that does not
  * satisfy those rules is rejected by the API at request time — which would
  * surface as every tool call failing, rather than as a validation error anyone
  * could read.
  */
-function toFunctionTool(tool: NexusTool): FunctionTool {
+function toFunctionTool(tool: SynCodeTool): FunctionTool {
   return {
     type: 'function',
     name: tool.name,
@@ -251,7 +251,7 @@ function parseArguments(raw: string): { ok: true; input: unknown } | { ok: false
 export function startOpenAiAgent(room: Room, emit: EmitFn, deps: OpenAiDeps = {}): AgentRuntime {
   const client = deps.client ?? defaultClient(room);
   const idleTimeoutMs = deps.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
-  const readEvents = deps.readEvents ?? ((): NexusEvent[] => []);
+  const readEvents = deps.readEvents ?? ((): SynCodeEvent[] => []);
   const gate =
     deps.gate ??
     createPermissionGate(
@@ -259,7 +259,7 @@ export function startOpenAiAgent(room: Room, emit: EmitFn, deps: OpenAiDeps = {}
       emit,
       deps.visibility === undefined ? {} : { visibility: deps.visibility },
     );
-  const nexusTools = buildNexusTools(room);
+  const nexusTools = buildSynCodeTools(room);
   const turns = createTurnGate();
 
   const outboundTools: readonly unknown[] = deps.tools ?? nexusTools.map(toFunctionTool);

@@ -336,3 +336,41 @@ describe('stable participant identity', () => {
     await closeAndSettle(ada);
   });
 });
+
+/**
+ * A tab that was already open when the rename deployed is still running the old
+ * bundle and still sending `X-Nexus-Token`. The room link IS the credential
+ * (CLAUDE.md §11), so rejecting that header would log people out of a session
+ * they cannot re-enter without finding the link again.
+ */
+describe('the room token header survives the SynCode rename', () => {
+  it('accepts the new X-SynCode-Token', async () => {
+    const room = stubbedRoom();
+    const response = await started.app.fetch(
+      new Request(`http://localhost/api/rooms/${room.id}`, {
+        headers: { 'X-SynCode-Token': room.token },
+      }),
+    );
+    expect(response.status).toBe(200);
+  });
+
+  it('still accepts the legacy X-Nexus-Token, so an open tab is not logged out by a deploy', async () => {
+    const room = stubbedRoom();
+    const response = await started.app.fetch(
+      new Request(`http://localhost/api/rooms/${room.id}`, {
+        headers: { 'X-Nexus-Token': room.token },
+      }),
+    );
+    expect(response.status).toBe(200);
+  });
+
+  it('still refuses a wrong token under either name', async () => {
+    const room = stubbedRoom();
+    for (const header of ['X-SynCode-Token', 'X-Nexus-Token']) {
+      const response = await started.app.fetch(
+        new Request(`http://localhost/api/rooms/${room.id}`, { headers: { [header]: 'not-the-token' } }),
+      );
+      expect(response.status, `${header} with a bad value must not authorize`).toBe(401);
+    }
+  });
+});

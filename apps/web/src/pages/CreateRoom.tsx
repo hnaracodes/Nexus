@@ -292,7 +292,7 @@ export function CreateRoom({ onCreated }: { onCreated: (link: string) => void })
         <span className="text-accent">$</span> nexus create-room
         <span className="animate-nexus-caret text-accent"> ▍</span>
       </p>
-      <h1 className="mb-2 text-2xl font-semibold tracking-tight text-fg">Open a Nexus room</h1>
+      <h1 className="mb-2 text-2xl font-semibold tracking-tight text-fg">Open a SynCode room</h1>
       <p className="mb-6 text-fg-muted">
         One agent, one context window, everyone in the room watching the same thing.
       </p>
@@ -306,7 +306,7 @@ export function CreateRoom({ onCreated }: { onCreated: (link: string) => void })
             git credentials, run commands.
           </p>
           <p className="mb-2">
-            Nexus has no isolation between rooms. Only share this link with people you trust.
+            SynCode has no isolation between rooms. Only share this link with people you trust.
           </p>
           <a href="/security" className="font-medium text-info underline underline-offset-2">
             Read the full security model
@@ -451,7 +451,7 @@ export function CreateRoom({ onCreated }: { onCreated: (link: string) => void })
                   )}
                   {connectError === null && !loadingRepos && installations !== null && (
                     <p className="text-sm text-fg-muted">
-                      The Nexus GitHub App is not installed on any repositories yet.
+                      The SynCode GitHub App is not installed on any repositories yet.
                     </p>
                   )}
                   {!loadingRepos && (
@@ -465,7 +465,7 @@ export function CreateRoom({ onCreated }: { onCreated: (link: string) => void })
                     </button>
                   )}
                   <p className="text-xs text-fg-muted">
-                    You choose which repositories the App can reach. Nexus clones with a
+                    You choose which repositories the App can reach. SynCode clones with a
                     short-lived token that never reaches your browser or the event log.
                   </p>
                 </>

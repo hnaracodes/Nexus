@@ -1,11 +1,11 @@
 // tests/log/replay.test.ts
 import { describe, expect, it } from 'vitest';
 import { reconstruct } from '../../src/log/replay.js';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 
-function log(...partials: Record<string, unknown>[]): NexusEvent[] {
+function log(...partials: Record<string, unknown>[]): SynCodeEvent[] {
   return partials.map(
-    (p, i) => ({ seq: i + 1, ts: '2026-07-28T00:00:00.000Z', roomId: 'room_a', ...p }) as NexusEvent,
+    (p, i) => ({ seq: i + 1, ts: '2026-07-28T00:00:00.000Z', roomId: 'room_a', ...p }) as SynCodeEvent,
   );
 }
 
@@ -33,7 +33,7 @@ describe('reconstruct', () => {
   });
 
   it('clears an approval once decided', () => {
-    const decided: NexusEvent[] = [
+    const decided: SynCodeEvent[] = [
       ...full,
       {
         seq: 6,
@@ -47,7 +47,7 @@ describe('reconstruct', () => {
         displayName: 'Ada',
         via: 'first_response',
         reason: null,
-      } as NexusEvent,
+      } as SynCodeEvent,
     ];
     expect(reconstruct(decided)?.pendingApprovalIds).toEqual([]);
   });

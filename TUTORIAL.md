@@ -1,4 +1,4 @@
-# Nexus — a tour of what exists and how it works
+# SynCode — a tour of what exists and how it works
 
 Last updated 2026-09-05, against branch `v2`. This is the "read this first if
 you're new, or if you've been away" document. `CLAUDE.md` is the terse
@@ -7,12 +7,12 @@ orientation for agents; this is the explanatory one for humans.
 **If you only want to know what moved recently, jump to §9 — the progress log.**
 
 > **Naming:** the product will be renamed **SynCode**. Nothing in the code is
-> renamed yet, deliberately — see `CLAUDE.md` §1. `Nexus` below means the same
+> renamed yet, deliberately — see `CLAUDE.md` §1. `SynCode` below means the same
 > thing `SynCode` will mean.
 
 ---
 
-## 1. What Nexus actually is, right now
+## 1. What SynCode actually is, right now
 
 A **room** is a link. Several people open it and share **one** AI coding agent —
 the same context window, the same transcript, live. Nobody screen-shares, nobody
@@ -265,7 +265,7 @@ recently failed in a way that teaches more than it cost.
 
 ### How it works
 
-When the agent wants to use a tool, Nexus intercepts:
+When the agent wants to use a tool, SynCode intercepts:
 
 ```
 agent wants Bash
@@ -312,9 +312,9 @@ holds even under `permissionMode: 'bypassPermissions'`, and hook sources merge
 additively — so nothing a user-supplied agent config can carry will remove it.
 That last property is what makes it a boundary rather than a convention.
 
-### And now Nexus watches itself
+### And now SynCode watches itself
 
-Because the SDK won't tell you, Nexus keeps its own books: every gated tool is
+Because the SDK won't tell you, SynCode keeps its own books: every gated tool is
 recorded by tool-use id, and any tool that produces a *result* without a decision
 behind it raises a loud, logged error. Two ordering details make it usable:
 
@@ -589,8 +589,8 @@ exist:
   weakening the other.
 
 **Phase 10 — three providers, one gate.** OpenAI and Google do not run tools for
-you: they emit a call and wait. So Nexus owns the execution loop, which means
-Nexus owns the gate. `runtime/tools.ts` exposes exactly one way to run a tool,
+you: they emit a call and wait. So SynCode owns the execution loop, which means
+SynCode owns the gate. `runtime/tools.ts` exposes exactly one way to run a tool,
 `dispatchToolCall`, and it awaits the room before it runs anything. Both provider
 adapters are structurally identical twins, so `factory.ts` has three arms of the
 same shape with a `never`-typed default — a fourth provider fails to *compile*
@@ -652,7 +652,7 @@ pass if the editor ignored it.
   the test that kills it asserts on the *error path*, which a hard-coded `ok`
   skips. While it was in, the Gemini tool guard was decorative, and
   `guardGeminiTools` is the only thing standing between the room and a
-  `CallableTool` that makes the SDK run ten tool round trips where Nexus never
+  `CallableTool` that makes the SDK run ten tool round trips where SynCode never
   sees them. Caught by a workflow **retry** that I had been calling redundant
   and was about to kill.
 - `isAutoApproved('mcp__attacker__Read')` returned **true**. One existing test

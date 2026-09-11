@@ -8,7 +8,7 @@ import { EMPTY_VIEW } from './store.js';
 import type { RoomView } from './store.js';
 import { connect } from './ws.js';
 import type { Connection, Status, WebSocketLike } from './ws.js';
-import type { AgentId, NexusEvent } from '@syncode/protocol/events';
+import type { AgentId, SynCodeEvent } from '@syncode/protocol/events';
 import { PRIMARY_AGENT_ID, agentIdOf } from '@syncode/protocol/events';
 // phase-5a import anchor
 import { MalformedLink } from './pages/MalformedLink.js';
@@ -82,8 +82,8 @@ function readParams(): { roomId: string; token: string; displayName: string } {
  * name from `room_created` if one is known, else a short room id. Never the
  * token (I4).
  */
-function deriveRoomLabel(events: NexusEvent[], roomId: string): string {
-  const created = events.find((event): event is Extract<NexusEvent, { type: 'room_created' }> =>
+function deriveRoomLabel(events: SynCodeEvent[], roomId: string): string {
+  const created = events.find((event): event is Extract<SynCodeEvent, { type: 'room_created' }> =>
     event.type === 'room_created',
   );
   if (created !== undefined && created.repoUrl !== null) {
@@ -580,7 +580,7 @@ function RoomShell({
     );
     const nameOf = new Map(view.fleet.map((entry) => [entry.agentId, entry.displayName]));
     return view.events
-      .filter((e): e is Extract<NexusEvent, { type: 'permission_requested' }> =>
+      .filter((e): e is Extract<SynCodeEvent, { type: 'permission_requested' }> =>
         e.type === 'permission_requested' && !settled.has(e.requestId))
       .map((e) => {
         const agentId = agentIdOf(e);
@@ -629,7 +629,7 @@ function RoomShell({
     // here — see ConfigLibrary.tsx for why an unscoped config endpoint was the
     // wrong answer even though a config is not room state.
     void fetch(`/api/rooms/${encodeURIComponent(params.roomId)}/configs`, {
-      headers: { 'X-Nexus-Token': params.token },
+      headers: { 'X-SynCode-Token': params.token },
     })
       .then((r) => (r.ok ? r.json() : { crews: [] }))
       .then((body: { crews?: Array<{ name: string; graph?: Graph }> }) => {
@@ -990,7 +990,7 @@ function RoomShell({
                             {
                               method: 'POST',
                               headers: {
-                                'X-Nexus-Token': params.token,
+                                'X-SynCode-Token': params.token,
                                 'content-type': 'application/json',
                               },
                               body: JSON.stringify({ prompt: promptText.trim() || 'Begin.' }),

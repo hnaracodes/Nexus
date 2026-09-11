@@ -17,7 +17,7 @@
 
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
-import type { NexusEvent, UnsequencedEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent, UnsequencedEvent } from '@syncode/protocol/events';
 import { publishToGithub } from './publish.js';
 import type { Room } from './rooms.js';
 
@@ -29,7 +29,7 @@ export type EmitFn = (event: UnsequencedEvent) => void;
  * restarts must still know what it last pushed, or the next publish would take
  * a moving `main` as its parent and fail as a non-fast-forward.
  */
-export function lastPublishedSha(events: NexusEvent[]): string | null {
+export function lastPublishedSha(events: SynCodeEvent[]): string | null {
   for (let i = events.length - 1; i >= 0; i -= 1) {
     const event = events[i];
     if (event?.type === 'github_published') return event.commitSha;
@@ -44,7 +44,7 @@ export function lastPublishedSha(events: NexusEvent[]): string | null {
 export function createGithubMcpServer(
   room: Room,
   emit: EmitFn,
-  readEvents: () => NexusEvent[],
+  readEvents: () => SynCodeEvent[],
 ): ReturnType<typeof createSdkMcpServer> | null {
   const binding = room.github;
   if (binding === null) return null;

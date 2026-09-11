@@ -9,7 +9,7 @@
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import { PRIMARY_AGENT_ID, agentIdOf } from '@syncode/protocol/events';
-import type { AgentSpawned, NexusEvent } from '@syncode/protocol/events';
+import type { AgentSpawned, SynCodeEvent } from '@syncode/protocol/events';
 import { createRoom } from '../../src/server/rooms.js';
 import { MemorySink, __resetRuntimes, attachRoom } from '../../src/server/ws.js';
 import {
@@ -70,7 +70,7 @@ afterEach(() => {
   __resetRuntimes();
 });
 
-function agentSpawnedEvents(events: NexusEvent[]): AgentSpawned[] {
+function agentSpawnedEvents(events: SynCodeEvent[]): AgentSpawned[] {
   return events.filter((event): event is AgentSpawned => event.type === 'agent_spawned');
 }
 

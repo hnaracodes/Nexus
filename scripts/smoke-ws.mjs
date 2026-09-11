@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Verifies that a deployed Nexus can create a room over HTTPS and that a
+// Verifies that a deployed SynCode can create a room over HTTPS and that a
 // WebSocket upgrade survives the platform proxy. Usage:
 //   node scripts/smoke-ws.mjs https://nexus-mvp.fly.dev
 import { WebSocket } from 'ws';

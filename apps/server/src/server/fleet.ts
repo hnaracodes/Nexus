@@ -15,7 +15,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { totalmem } from 'node:os';
-import type { AgentId, AgentProvider, NexusEvent, UnsequencedEvent } from '@syncode/protocol/events';
+import type { AgentId, AgentProvider, SynCodeEvent, UnsequencedEvent } from '@syncode/protocol/events';
 import { agentIdOf } from '@syncode/protocol/events';
 import type { AgentStatus, FleetEntry } from '@syncode/protocol/wire';
 import { projectAgents } from '../log/replay.js';
@@ -32,8 +32,8 @@ export interface FleetRuntime {
   readonly agents: ReadonlyMap<AgentId, AgentHandle>;
   getAgent(agentId?: AgentId): AgentHandle | undefined;
   attachAgent(agentId: AgentId, deps?: AgentDeps, provider?: AgentProvider): AgentHandle;
-  commitAs(agentId: AgentId, event: UnsequencedEvent): NexusEvent;
-  sink: { read(): NexusEvent[] };
+  commitAs(agentId: AgentId, event: UnsequencedEvent): SynCodeEvent;
+  sink: { read(): SynCodeEvent[] };
   /**
    * The room's shared approval queue, when the runtime has one.
    *
@@ -278,7 +278,7 @@ interface AgentMeta {
  *  doc comment) and is pinned by tests on pre-v3 logs; this is a fleet.ts-local
  *  read of the same log for the richer fields phase 12 needs, not a change to
  *  that function's contract. */
-function projectAgentMeta(events: NexusEvent[]): Map<AgentId, AgentMeta> {
+function projectAgentMeta(events: SynCodeEvent[]): Map<AgentId, AgentMeta> {
   const meta = new Map<AgentId, AgentMeta>();
   for (const event of events) {
     if (event.type === 'agent_spawned') {
@@ -305,7 +305,7 @@ function projectAgentMeta(events: NexusEvent[]): Map<AgentId, AgentMeta> {
  * pending approval is exactly the kind of right-now state the log cannot
  * reconstruct on its own.
  */
-function lifecyclePhase(agentId: AgentId, events: NexusEvent[]): 'idle' | 'working' | 'error' {
+function lifecyclePhase(agentId: AgentId, events: SynCodeEvent[]): 'idle' | 'working' | 'error' {
   let phase: 'idle' | 'working' | 'error' = 'idle';
   for (const event of events) {
     if (agentIdOf(event as { agentId?: AgentId }) !== agentId) continue;

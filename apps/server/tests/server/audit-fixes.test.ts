@@ -12,7 +12,7 @@ import { validateRepoUrl } from '../../src/server/create.js';
 import { recoverRooms, writeRoomMeta } from '../../src/server/recovery.js';
 import { openLog } from '../../src/log/event-log.js';
 import { reconstruct } from '../../src/log/replay.js';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import type { Room } from '../../src/server/rooms.js';
 
 /**
@@ -172,14 +172,14 @@ describe('recovery records that the restart took the driver token', () => {
     );
     const log = openLog(roomId, dir);
     const base = { ts: '2026-07-28T00:00:00.000Z', roomId };
-    log.append({ ...base, seq: 1, type: 'room_created', cwd: '/work', repoUrl: null } as NexusEvent);
+    log.append({ ...base, seq: 1, type: 'room_created', cwd: '/work', repoUrl: null } as SynCodeEvent);
     log.append({
       ...base,
       seq: 2,
       type: 'participant_joined',
       participantId: 'p_ada',
       displayName: 'Ada',
-    } as NexusEvent);
+    } as SynCodeEvent);
     log.append({
       ...base,
       seq: 3,
@@ -187,7 +187,7 @@ describe('recovery records that the restart took the driver token', () => {
       participantId: 'p_ada',
       displayName: 'Ada',
       reason: 'claimed',
-    } as NexusEvent);
+    } as SynCodeEvent);
   }
 
   it('appends an explicit driver_released rather than silently dropping it (I3)', () => {
@@ -236,7 +236,7 @@ describe('recovery records that the restart took the driver token', () => {
       type: 'room_created',
       cwd: '/work',
       repoUrl: null,
-    } as NexusEvent);
+    } as SynCodeEvent);
 
     expect(recoverRooms(dir)[0]?.lastSeq).toBe(1);
     expect(openLog('room_idle', dir).read()).toHaveLength(1);

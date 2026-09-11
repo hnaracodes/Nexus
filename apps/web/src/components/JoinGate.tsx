@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { NexusBlob } from './NexusBlob.js';
+import { SynCodeBlob } from './SynCodeBlob.js';
 import { Button } from './Button.js';
 
 /**
@@ -57,7 +57,7 @@ export function JoinGate({
     <div className="flex min-h-screen items-center justify-center bg-bg px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-5 flex flex-col items-center text-center">
-          <NexusBlob size={72} waving title="Nexus, the agent in this room" />
+          <SynCodeBlob size={72} waving title="SynCode, the agent in this room" />
           <h1 className="mt-3 text-lg font-semibold text-fg">Join {roomLabel}</h1>
           <p className="mt-1 text-sm text-fg-muted">
             Your name goes on every prompt you send and every call you approve.

@@ -1,11 +1,11 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { InterruptNotice } from '../src/components/InterruptNotice.js';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 
-function log(...partials: Record<string, unknown>[]): NexusEvent[] {
+function log(...partials: Record<string, unknown>[]): SynCodeEvent[] {
   return partials.map(
-    (p, i) => ({ seq: i + 1, ts: '2026-07-28T00:00:00.000Z', roomId: 'room_a', ...p }) as NexusEvent,
+    (p, i) => ({ seq: i + 1, ts: '2026-07-28T00:00:00.000Z', roomId: 'room_a', ...p }) as SynCodeEvent,
   );
 }
 

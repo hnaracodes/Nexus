@@ -22,7 +22,7 @@ describe('isAutoApproved', () => {
     }
   });
 
-  it('approves an MCP-prefixed read-only tool from a server Nexus owns', () => {
+  it('approves an MCP-prefixed read-only tool from a server SynCode owns', () => {
     expect(isAutoApproved('mcp__nexus__read_file')).toBe(true);
     // A server name containing its own underscore must not confuse the parse —
     // splitting on the FIRST `__` would misread `nexus_github` as the name.
@@ -85,7 +85,7 @@ describe('the MCP server half is not trustworthy', () => {
    * makes it worth a test: it arms itself later, in a phase whose author will
    * have no reason to look here.
    */
-  it('refuses a read-only NAME supplied by a server Nexus does not own', () => {
+  it('refuses a read-only NAME supplied by a server SynCode does not own', () => {
     expect(isAutoApproved('mcp__attacker__Read')).toBe(false);
     expect(isAutoApproved('mcp__attacker__read_file')).toBe(false);
     expect(isAutoApproved('mcp__evil__x__Grep')).toBe(false);
@@ -97,15 +97,15 @@ describe('the MCP server half is not trustworthy', () => {
     expect(isAutoApproved('rm_rf__Grep')).toBe(false);
   });
 
-  it('still auto-approves the Nexus read-only tools, however spelled', () => {
+  it('still auto-approves the SynCode read-only tools, however spelled', () => {
     expect(isAutoApproved('Read')).toBe(true);
     expect(isAutoApproved('read_file')).toBe(true);
     expect(isAutoApproved('mcp__nexus__read_file')).toBe(true);
   });
 
-  it('still refuses publish, which is Nexus-owned but not read-only', () => {
+  it('still refuses publish, which is SynCode-owned but not read-only', () => {
     // The server allow-list must not become a blanket trust of everything a
-    // Nexus server offers — pushing to someone's repository is precisely what
+    // SynCode server offers — pushing to someone's repository is precisely what
     // four-eyes approval exists for.
     expect(isAutoApproved('mcp__nexus_github__publish_pull_request')).toBe(false);
   });

@@ -2,10 +2,10 @@
 import { describe, expect, it } from 'vitest';
 import fixture from '../src/__fixtures__/events.json';
 import { EMPTY_VIEW, project, reduce } from '../src/store.js';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import type { ServerFrame } from '@syncode/protocol/wire';
 
-const events = fixture as unknown as NexusEvent[];
+const events = fixture as unknown as SynCodeEvent[];
 const frames: ServerFrame[] = events.map((event) => ({ kind: 'event', event }));
 
 describe('reduce', () => {
@@ -58,7 +58,7 @@ describe('reduce', () => {
         type: 'assistant_message',
         messageId: 'msg_9',
         text: 'Hello there',
-      } as NexusEvent,
+      } as SynCodeEvent,
     });
     expect(view.messages).toHaveLength(1);
     expect(view.messages[0]?.text).toBe('Hello there');
@@ -125,7 +125,7 @@ describe('reduce', () => {
   it('retains every raw event in order for log-derived features', () => {
     const view = project(frames);
     expect(view.events.map((e) => e.seq)).toEqual(
-      frames.filter((f) => f.kind === 'event').map((f) => (f as { event: NexusEvent }).event.seq),
+      frames.filter((f) => f.kind === 'event').map((f) => (f as { event: SynCodeEvent }).event.seq),
     );
   });
 

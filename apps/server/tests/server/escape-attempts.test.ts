@@ -37,7 +37,7 @@ import type { UnsequencedEvent } from '@syncode/protocol/events';
 import type { Decision, PermissionGate } from '../../src/server/permissions.js';
 import { __resetRooms, createRoom } from '../../src/server/rooms.js';
 import type { Room } from '../../src/server/rooms.js';
-import { buildNexusTools, dispatchToolCall } from '../../src/server/runtime/tools.js';
+import { buildSynCodeTools, dispatchToolCall } from '../../src/server/runtime/tools.js';
 import type { EmitFn, ToolContext } from '../../src/server/runtime/tools.js';
 
 const KEY = 'sk-ant-api03-TESTONLY-not-a-real-key';
@@ -96,7 +96,7 @@ describe('read_file cannot be used to escape the room', () => {
     const { gate, calls } = recordingGate('allow');
 
     const result = await dispatchToolCall({
-      tools: buildNexusTools(room),
+      tools: buildSynCodeTools(room),
       gate,
       emit,
       call: { toolUseId: 'esc_1', name: 'read_file', input: { path: secretPath } },
@@ -123,7 +123,7 @@ describe('read_file cannot be used to escape the room', () => {
     const { gate, calls } = recordingGate('allow');
 
     const result = await dispatchToolCall({
-      tools: buildNexusTools(room),
+      tools: buildSynCodeTools(room),
       gate,
       emit,
       call: { toolUseId: 'esc_2', name: 'read_file', input: { path: traversal } },
@@ -144,7 +144,7 @@ describe('read_file cannot be used to escape the room', () => {
     const { gate, calls } = recordingGate('allow');
 
     const result = await dispatchToolCall({
-      tools: buildNexusTools(room),
+      tools: buildSynCodeTools(room),
       gate,
       emit,
       call: { toolUseId: 'esc_3', name: 'read_file', input: { path: 'looks-like-a-normal-file.txt' } },
@@ -166,7 +166,7 @@ describe('read_file cannot be used to escape the room', () => {
     const { gate, calls } = recordingGate('allow');
 
     const result = await dispatchToolCall({
-      tools: buildNexusTools(room),
+      tools: buildSynCodeTools(room),
       gate,
       emit,
       call: { toolUseId: 'esc_4', name: 'read_file', input: { path: '.env' } },
@@ -185,7 +185,7 @@ describe('write_file cannot be used to escape the room', () => {
     const { gate, calls } = recordingGate('allow');
 
     const result = await dispatchToolCall({
-      tools: buildNexusTools(room),
+      tools: buildSynCodeTools(room),
       gate,
       emit,
       call: { toolUseId: 'esc_5', name: 'write_file', input: { path: target, content: 'pwned' } },
@@ -205,7 +205,7 @@ describe('write_file cannot be used to escape the room', () => {
     const { gate, calls } = recordingGate('allow');
 
     const result = await dispatchToolCall({
-      tools: buildNexusTools(room),
+      tools: buildSynCodeTools(room),
       gate,
       emit,
       call: {
@@ -229,7 +229,7 @@ describe('run_command cannot be used to reach outside the room, or a sensitive p
     const { gate, calls } = recordingGate('allow');
 
     const result = await dispatchToolCall({
-      tools: buildNexusTools(room),
+      tools: buildSynCodeTools(room),
       gate,
       emit,
       call: { toolUseId: 'esc_7', name: 'run_command', input: { command: `cat ${secretPath}` } },
@@ -251,7 +251,7 @@ describe('run_command cannot be used to reach outside the room, or a sensitive p
     const { gate, calls } = recordingGate('allow');
 
     const result = await dispatchToolCall({
-      tools: buildNexusTools(room),
+      tools: buildSynCodeTools(room),
       gate,
       emit,
       call: { toolUseId: 'esc_8', name: 'run_command', input: { command: 'cat .ssh/id_rsa' } },

@@ -7,7 +7,7 @@
  *
  * Accepting `localPath` therefore requires BOTH, independently:
  *   1. `isLocalHostMode()` — true only when the desktop shell has set
- *      `NEXUS_LOCAL_HOST=1` on this process, which `fly.toml` never sets.
+ *      `SYNCODE_LOCAL_HOST=1` on this process, which `fly.toml` never sets.
  *      Read through this ONE exported predicate everywhere the decision is
  *      made, so there is exactly one place to audit.
  *   2. `isLoopbackAddress()` — the request's own TCP peer address, read from
@@ -24,18 +24,19 @@
 import { realpathSync, statSync } from 'node:fs';
 import { networkInterfaces, homedir } from 'node:os';
 import { isAbsolute, resolve as resolvePath, sep } from 'node:path';
+import { readEnv } from './env.js';
 
-const DEFAULT_DATA_DIR = process.env['NEXUS_DATA_DIR'] ?? './data';
+const DEFAULT_DATA_DIR = readEnv('DATA_DIR') ?? './data';
 
 /**
  * The single audited predicate for "this process is the desktop app's
  * in-process backend, not a hosted deployment". Set by `startBackend()` in
  * `apps/desktop/src/main.ts`, BEFORE it dynamically imports `@syncode/server`
  * (the same ordering constraint `useWritablePaths()` documents there).
- * `fly.toml` never sets this — a hosted Nexus must always read false here.
+ * `fly.toml` never sets this — a hosted SynCode must always read false here.
  */
 export function isLocalHostMode(): boolean {
-  return process.env['NEXUS_LOCAL_HOST'] === '1';
+  return readEnv('LOCAL_HOST') === '1';
 }
 
 /**

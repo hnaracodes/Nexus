@@ -60,7 +60,7 @@ function makeSandbox({ platformOs, platformArch, assetBytes, checksumLine, asset
   // passed while a real x86_64 Linux user was told no build existed.
   const archTag =
     assetArchTag ?? (platformArch === 'arm64' || platformArch === 'aarch64' ? 'arm64' : 'x64');
-  const assetName = `Nexus-9.9.9-${platformOs === 'Darwin' ? 'mac' : 'linux'}-${archTag}.${ext}`;
+  const assetName = `SynCode-9.9.9-${platformOs === 'Darwin' ? 'mac' : 'linux'}-${archTag}.${ext}`;
   const checksumName = `${assetName}.sha256`;
 
   const assetPath = join(fixtures, assetName);
@@ -123,7 +123,7 @@ esac
   // can run all the way through in a test: the real `hdiutil` cannot mount
   // arbitrary bytes as a disk image, so without this the macOS branch always
   // dies at `hdiutil attach` before reaching the code that prints the
-  // unsigned-build warning. `attach` drops a fake Nexus.app into the
+  // unsigned-build warning. `attach` drops a fake SynCode.app into the
   // already-created mountpoint dir instead of actually mounting anything;
   // `detach` is a no-op. Harmless on the Linux tests, which never invoke it.
   const fakeHdiutil = `#!/bin/sh
@@ -148,7 +148,7 @@ case "$cmd" in
       echo "fake hdiutil attach: no -mountpoint given" >&2
       exit 1
     fi
-    mkdir -p "$mountpoint/Nexus.app/Contents/MacOS"
+    mkdir -p "$mountpoint/SynCode.app/Contents/MacOS"
     exit 0
     ;;
   detach)
@@ -197,13 +197,13 @@ function test(name, fn) {
 
 // --- the required test: refuses on checksum mismatch -----------------------
 test('refuses to install when the downloaded file does not match its published checksum', () => {
-  const assetBytes = Buffer.from('this is the real Nexus build, honest');
+  const assetBytes = Buffer.from('this is the real SynCode build, honest');
   const sandbox = makeSandbox({
     platformOs: 'Linux',
     platformArch: 'x86_64',
     assetBytes,
     // Deliberately wrong hash — 64 hex chars that do not match assetBytes.
-    checksumLine: `${'0'.repeat(64)}  Nexus-9.9.9-linux-x64.AppImage\n`,
+    checksumLine: `${'0'.repeat(64)}  SynCode-9.9.9-linux-x64.AppImage\n`,
   });
   try {
     const result = runInstallSh(sandbox);
@@ -264,15 +264,15 @@ test('refuses on an unsupported OS instead of guessing', () => {
 // no OS-specific tooling (unlike the macOS branch's real `hdiutil`), so
 // faking `uname` to say Linux is sufficient without needing a real disk image.
 test('installs to the overridden directory when the checksum matches', () => {
-  const assetBytes = Buffer.from('a verified, correctly-shaped Nexus build');
+  const assetBytes = Buffer.from('a verified, correctly-shaped SynCode build');
   const sandbox = makeSandbox({ platformOs: 'Linux', platformArch: 'x86_64', assetBytes });
   try {
     const result = runInstallSh(sandbox);
     assert.equal(result.status, 0, `expected success, got:\n${result.stdout}\n${result.stderr}`);
     const output = `${result.stdout}\n${result.stderr}`;
     assert.match(output, /checksum verified/i);
-    const installed = join(sandbox.scratch, 'Nexus.AppImage');
-    assert.ok(existsSync(installed), 'expected Nexus.AppImage in the overridden install dir');
+    const installed = join(sandbox.scratch, 'SynCode.AppImage');
+    assert.ok(existsSync(installed), 'expected SynCode.AppImage in the overridden install dir');
   } finally {
     cleanup(sandbox);
   }
@@ -293,9 +293,9 @@ test('prints the unsigned-build warning even when everything succeeds', () => {
     const output = `${result.stdout}\n${result.stderr}`;
     assert.match(output, /checksum verified/i);
     assert.match(output, /this build is unsigned and not notarized/i);
-    assert.match(output, /Apple could not verify that 'Nexus' is free of malware/);
-    const installed = join(sandbox.scratch, 'Nexus.app');
-    assert.ok(existsSync(installed), 'expected Nexus.app in the overridden install dir');
+    assert.match(output, /Apple could not verify that 'SynCode' is free of malware/);
+    const installed = join(sandbox.scratch, 'SynCode.app');
+    assert.ok(existsSync(installed), 'expected SynCode.app in the overridden install dir');
   } finally {
     cleanup(sandbox);
   }
@@ -325,7 +325,7 @@ test('finds a linux build whose filename spells the arch x86_64, not x64', () =>
     const result = runInstallSh(sandbox);
     assert.equal(result.status, 0, `expected success, got:\n${result.stdout}\n${result.stderr}`);
     assert.ok(
-      existsSync(join(sandbox.scratch, 'Nexus.AppImage')),
+      existsSync(join(sandbox.scratch, 'SynCode.AppImage')),
       'expected the x86_64-named AppImage to be found and installed',
     );
   } finally {

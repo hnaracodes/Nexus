@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import { MessageList } from '../MessageList.js';
 
 const ROOM = 'room_fixture';
@@ -9,7 +9,7 @@ function ts(seq: number): string {
   return new Date(2026, 6, 28, 0, 0, seq).toISOString();
 }
 
-function prompt(seq: number, opts: Partial<NexusEvent> = {}): NexusEvent {
+function prompt(seq: number, opts: Partial<SynCodeEvent> = {}): SynCodeEvent {
   return {
     seq,
     ts: ts(seq),
@@ -19,14 +19,14 @@ function prompt(seq: number, opts: Partial<NexusEvent> = {}): NexusEvent {
     displayName: 'Ada',
     text: `message ${seq}`,
     ...opts,
-  } as NexusEvent;
+  } as SynCodeEvent;
 }
 
-function assistant(seq: number, messageId: string, text = `assistant ${seq}`): NexusEvent {
+function assistant(seq: number, messageId: string, text = `assistant ${seq}`): SynCodeEvent {
   return { seq, ts: ts(seq), roomId: ROOM, type: 'assistant_message', messageId, text };
 }
 
-function toolStart(seq: number, toolUseId: string, toolName = 'Bash'): NexusEvent {
+function toolStart(seq: number, toolUseId: string, toolName = 'Bash'): SynCodeEvent {
   return {
     seq,
     ts: ts(seq),
@@ -38,7 +38,7 @@ function toolStart(seq: number, toolUseId: string, toolName = 'Bash'): NexusEven
   };
 }
 
-function toolResult(seq: number, toolUseId: string, isError: boolean, output = 'ok'): NexusEvent {
+function toolResult(seq: number, toolUseId: string, isError: boolean, output = 'ok'): SynCodeEvent {
   return {
     seq,
     ts: ts(seq),

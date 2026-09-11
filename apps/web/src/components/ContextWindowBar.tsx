@@ -1,5 +1,5 @@
 import { Gauge } from 'lucide-react';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 
 /** Ratios at and above these thresholds get a warn/danger treatment. */
 const WARN_THRESHOLD = 0.7;
@@ -22,9 +22,9 @@ function barColor(ratio: number): string {
  * is headroom nobody has actually measured yet), so this renders an explicit
  * "usage unavailable" instead.
  */
-export function ContextWindowBar({ events }: { events: NexusEvent[] }): JSX.Element {
+export function ContextWindowBar({ events }: { events: SynCodeEvent[] }): JSX.Element {
   const usageEvents = events.filter(
-    (event): event is Extract<NexusEvent, { type: 'context_usage' }> => event.type === 'context_usage',
+    (event): event is Extract<SynCodeEvent, { type: 'context_usage' }> => event.type === 'context_usage',
   );
   const latest = usageEvents[usageEvents.length - 1];
 

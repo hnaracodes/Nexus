@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { guardGeminiTools, guardOpenAiTools } from '../../../src/server/runtime/toolGuard.js';
 
 /**
- * The gate can only govern a tool the provider hands BACK to Nexus to execute.
+ * The gate can only govern a tool the provider hands BACK to SynCode to execute.
  *
  * Phase 10's design assumed that owning the tool loop made a bypass structurally
  * impossible. An adversarial review falsified that against the actually-published

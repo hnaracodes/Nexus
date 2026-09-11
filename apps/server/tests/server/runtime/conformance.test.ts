@@ -65,7 +65,7 @@ describe('the Claude implementation conforms to AgentRuntime', () => {
     // not `model` — ModelSelector reads .value, and a `model` field here would
     // have silently produced a dropdown of `undefined` options."
     //
-    // Phase 10's first design proposed `NexusModelInfo { id, displayName }`,
+    // Phase 10's first design proposed `SynCodeModelInfo { id, displayName }`,
     // which would have reproduced that bug across every provider at once. The
     // neutral type is the shape both ends already agree on, not a new one.
     const choice: ModelChoice = { value: 'claude-opus-5' };

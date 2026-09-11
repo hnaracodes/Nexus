@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import { WorkspacePane } from '../WorkspacePane.js';
 import type { WorkspaceApi } from '../../workspace/workspaceApi.js';
 
@@ -10,7 +10,7 @@ function ts(seq: number): string {
   return new Date(2026, 6, 28, 0, 0, seq).toISOString();
 }
 
-function toolStart(seq: number, toolUseId: string, filePath: string): NexusEvent {
+function toolStart(seq: number, toolUseId: string, filePath: string): SynCodeEvent {
   return {
     seq,
     ts: ts(seq),
@@ -22,7 +22,7 @@ function toolStart(seq: number, toolUseId: string, filePath: string): NexusEvent
   };
 }
 
-function toolResult(seq: number, toolUseId: string): NexusEvent {
+function toolResult(seq: number, toolUseId: string): SynCodeEvent {
   return {
     seq,
     ts: ts(seq),
@@ -111,7 +111,7 @@ describe('WorkspacePane', () => {
     await waitFor(() => expect(screen.getByLabelText('Current file')).toHaveTextContent('b.ts'));
   });
 
-  it('never imports store.ts (I3) — accepts plain NexusEvent[], not a RoomView', () => {
+  it('never imports store.ts (I3) — accepts plain SynCodeEvent[], not a RoomView', () => {
     // Type-level guarantee exercised at runtime: passing a bare array works.
     const api = makeApi();
     expect(() => render(<WorkspacePane events={[]} api={api} />)).not.toThrow();

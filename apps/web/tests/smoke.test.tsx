@@ -30,6 +30,6 @@ describe('Router', () => {
   it('mounts room creation at "/new"', () => {
     window.history.pushState({}, '', '/new');
     render(<Router />);
-    expect(screen.getByText(/open a nexus room/i)).toBeInTheDocument();
+    expect(screen.getByText(/open a syncode room/i)).toBeInTheDocument();
   });
 });

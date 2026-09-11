@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import { DriverRequestNotice, derivePendingDriverRequests } from '../DriverRequestNotice.js';
 
 const ROOM = 'room_fixture';
@@ -9,11 +9,11 @@ function ts(seq: number): string {
   return new Date(2026, 6, 28, 0, 0, seq).toISOString();
 }
 
-function requested(seq: number, participantId: string, displayName: string): NexusEvent {
+function requested(seq: number, participantId: string, displayName: string): SynCodeEvent {
   return { seq, ts: ts(seq), roomId: ROOM, type: 'driver_requested', participantId, displayName };
 }
 
-function granted(seq: number, participantId: string, displayName: string): NexusEvent {
+function granted(seq: number, participantId: string, displayName: string): SynCodeEvent {
   return {
     seq,
     ts: ts(seq),
@@ -25,7 +25,7 @@ function granted(seq: number, participantId: string, displayName: string): Nexus
   };
 }
 
-function released(seq: number, participantId: string, displayName: string): NexusEvent {
+function released(seq: number, participantId: string, displayName: string): SynCodeEvent {
   return {
     seq,
     ts: ts(seq),

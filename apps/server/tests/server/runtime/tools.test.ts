@@ -6,7 +6,7 @@ import type { UnsequencedEvent } from '@syncode/protocol/events';
 import type { Decision, PermissionGate } from '../../../src/server/permissions.js';
 import { __resetRooms, createRoom } from '../../../src/server/rooms.js';
 import type { Room } from '../../../src/server/rooms.js';
-import { buildNexusTools, dispatchToolCall } from '../../../src/server/runtime/tools.js';
+import { buildSynCodeTools, dispatchToolCall } from '../../../src/server/runtime/tools.js';
 import type { EmitFn, ToolContext } from '../../../src/server/runtime/tools.js';
 
 /**
@@ -68,7 +68,7 @@ function ctx(): ToolContext {
 describe('dispatchToolCall — the choke point', () => {
   it('a gate that denies write_file leaves the filesystem untouched', async () => {
     const result = await dispatchToolCall({
-      tools: buildNexusTools(room),
+      tools: buildSynCodeTools(room),
       gate: denyGate('absolutely not'),
       emit,
       call: { toolUseId: 'tu_1', name: 'write_file', input: { path: 'new.txt', content: 'hello' } },
@@ -83,7 +83,7 @@ describe('dispatchToolCall — the choke point', () => {
 
   it('a gate that denies run_command never runs it — proved by an observable side effect', async () => {
     const result = await dispatchToolCall({
-      tools: buildNexusTools(room),
+      tools: buildSynCodeTools(room),
       gate: denyGate(),
       emit,
       call: { toolUseId: 'tu_2', name: 'run_command', input: { command: 'touch sentinel.txt' } },
@@ -96,7 +96,7 @@ describe('dispatchToolCall — the choke point', () => {
 
   it('emits tool_start and tool_result, both carrying toolUseId and toolName, on a denial', async () => {
     await dispatchToolCall({
-      tools: buildNexusTools(room),
+      tools: buildSynCodeTools(room),
       gate: denyGate('no'),
       emit,
       call: { toolUseId: 'tu_3', name: 'write_file', input: { path: 'x.txt', content: 'x' } },
@@ -117,7 +117,7 @@ describe('dispatchToolCall — the choke point', () => {
   it('an unknown tool name produces an error RESULT, never a thrown exception', async () => {
     await expect(
       dispatchToolCall({
-        tools: buildNexusTools(room),
+        tools: buildSynCodeTools(room),
         gate: allowGate(),
         emit,
         call: { toolUseId: 'tu_4', name: 'no_such_tool', input: {} },
@@ -138,7 +138,7 @@ describe('dispatchToolCall — the choke point', () => {
     };
 
     await dispatchToolCall({
-      tools: buildNexusTools(room),
+      tools: buildSynCodeTools(room),
       gate: spyGate,
       emit,
       call: { toolUseId: 'tu_5', name: 'no_such_tool', input: {} },
@@ -150,7 +150,7 @@ describe('dispatchToolCall — the choke point', () => {
 
   it('an allowed call executes for real and returns the tool output', async () => {
     const result = await dispatchToolCall({
-      tools: buildNexusTools(room),
+      tools: buildSynCodeTools(room),
       gate: allowGate(),
       emit,
       call: { toolUseId: 'tu_6', name: 'write_file', input: { path: 'ok.txt', content: 'hi there' } },
@@ -164,7 +164,7 @@ describe('dispatchToolCall — the choke point', () => {
   it('a tool that throws becomes an error result, not a thrown exception out of dispatchToolCall', async () => {
     await expect(
       dispatchToolCall({
-        tools: buildNexusTools(room),
+        tools: buildSynCodeTools(room),
         gate: allowGate(),
         emit,
         // edit_file on a file that does not exist throws inside execute().
@@ -179,7 +179,7 @@ describe('read_file', () => {
   it('reads a file inside the workspace', async () => {
     writeFileSync(join(cwd, 'hello.txt'), 'hello world', 'utf8');
     const result = await dispatchToolCall({
-      tools: buildNexusTools(room),
+      tools: buildSynCodeTools(room),
       gate: allowGate(),
       emit,
       call: { toolUseId: 'tu_r1', name: 'read_file', input: { path: 'hello.txt' } },
@@ -203,7 +203,7 @@ describe('read_file', () => {
     // than on which net caught it, so a future re-ordering of the two does not
     // read as a regression.
     const result = await dispatchToolCall({
-      tools: buildNexusTools(room),
+      tools: buildSynCodeTools(room),
       gate: allowGate(),
       emit,
       call: {
@@ -223,7 +223,7 @@ describe('list_files', () => {
     writeFileSync(join(cwd, 'a.txt'), 'a', 'utf8');
     mkdirSync(join(cwd, 'sub'));
     const result = await dispatchToolCall({
-      tools: buildNexusTools(room),
+      tools: buildSynCodeTools(room),
       gate: allowGate(),
       emit,
       call: { toolUseId: 'tu_l1', name: 'list_files', input: {} },
@@ -241,7 +241,7 @@ describe('search_files', () => {
     writeFileSync(join(cwd, 'src', 'a.ts'), 'export const needle = 1;', 'utf8');
     writeFileSync(join(cwd, 'src', 'b.ts'), 'export const nothing = 2;', 'utf8');
     const result = await dispatchToolCall({
-      tools: buildNexusTools(room),
+      tools: buildSynCodeTools(room),
       gate: allowGate(),
       emit,
       call: { toolUseId: 'tu_s1', name: 'search_files', input: { pattern: 'needle' } },
@@ -257,7 +257,7 @@ describe('edit_file', () => {
   it('replaces the one occurrence of oldText', async () => {
     writeFileSync(join(cwd, 'f.txt'), 'one two three', 'utf8');
     const result = await dispatchToolCall({
-      tools: buildNexusTools(room),
+      tools: buildSynCodeTools(room),
       gate: allowGate(),
       emit,
       call: { toolUseId: 'tu_e1', name: 'edit_file', input: { path: 'f.txt', oldText: 'two', newText: 'TWO' } },
@@ -270,7 +270,7 @@ describe('edit_file', () => {
   it('errors, and writes nothing, when oldText is absent', async () => {
     writeFileSync(join(cwd, 'f.txt'), 'one two three', 'utf8');
     const result = await dispatchToolCall({
-      tools: buildNexusTools(room),
+      tools: buildSynCodeTools(room),
       gate: allowGate(),
       emit,
       call: { toolUseId: 'tu_e2', name: 'edit_file', input: { path: 'f.txt', oldText: 'zzz', newText: 'TWO' } },
@@ -283,7 +283,7 @@ describe('edit_file', () => {
   it('errors, and writes nothing, when oldText is ambiguous', async () => {
     writeFileSync(join(cwd, 'f.txt'), 'two two', 'utf8');
     const result = await dispatchToolCall({
-      tools: buildNexusTools(room),
+      tools: buildSynCodeTools(room),
       gate: allowGate(),
       emit,
       call: { toolUseId: 'tu_e3', name: 'edit_file', input: { path: 'f.txt', oldText: 'two', newText: 'X' } },
@@ -297,7 +297,7 @@ describe('edit_file', () => {
 describe('write_file', () => {
   it('refuses to create a file whose containing directory does not exist', async () => {
     const result = await dispatchToolCall({
-      tools: buildNexusTools(room),
+      tools: buildSynCodeTools(room),
       gate: allowGate(),
       emit,
       call: { toolUseId: 'tu_w1', name: 'write_file', input: { path: 'nosuch/dir/file.txt', content: 'x' } },
@@ -309,7 +309,7 @@ describe('write_file', () => {
 
   it('is refused by the jail for a new file path that escapes the workspace root', async () => {
     const result = await dispatchToolCall({
-      tools: buildNexusTools(room),
+      tools: buildSynCodeTools(room),
       gate: allowGate(),
       emit,
       call: { toolUseId: 'tu_w2', name: 'write_file', input: { path: '../escaped.txt', content: 'x' } },
@@ -323,7 +323,7 @@ describe('write_file', () => {
 describe('run_command', () => {
   it('runs in room.cwd when allowed', async () => {
     const result = await dispatchToolCall({
-      tools: buildNexusTools(room),
+      tools: buildSynCodeTools(room),
       gate: allowGate(),
       emit,
       call: { toolUseId: 'tu_c1', name: 'run_command', input: { command: 'touch made-it.txt' } },
@@ -344,8 +344,8 @@ describe('publish_pull_request', () => {
     });
     const withoutBinding = room;
 
-    expect(buildNexusTools(withBinding).map((t) => t.name)).toContain('publish_pull_request');
-    expect(buildNexusTools(withoutBinding).map((t) => t.name)).not.toContain('publish_pull_request');
+    expect(buildSynCodeTools(withBinding).map((t) => t.name)).toContain('publish_pull_request');
+    expect(buildSynCodeTools(withoutBinding).map((t) => t.name)).not.toContain('publish_pull_request');
   });
 
   it('is never readOnly', () => {
@@ -355,15 +355,15 @@ describe('publish_pull_request', () => {
       repoUrl: null,
       github: { installationId: 1, owner: 'octo', repo: 'cat', defaultBranch: 'main' },
     });
-    const tool = buildNexusTools(withBinding).find((t) => t.name === 'publish_pull_request');
+    const tool = buildSynCodeTools(withBinding).find((t) => t.name === 'publish_pull_request');
     expect(tool?.readOnly).toBe(false);
   });
 });
 
-describe('buildNexusTools', () => {
+describe('buildSynCodeTools', () => {
   it('every tool is declared exactly once, and readOnly matches isAutoApproved', async () => {
     const { isAutoApproved } = await import('../../../src/server/runtime/autoApprove.js');
-    const tools = buildNexusTools(room);
+    const tools = buildSynCodeTools(room);
     const names = tools.map((t) => t.name);
     expect(new Set(names).size).toBe(names.length);
     for (const tool of tools) {

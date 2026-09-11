@@ -16,14 +16,14 @@
  * `agentId` key onto the event at all.
  */
 import { randomUUID } from 'node:crypto';
-import type { AgentId, CrewLaunched, NexusEvent, UnsequencedEvent } from '@syncode/protocol/events';
+import type { AgentId, CrewLaunched, SynCodeEvent, UnsequencedEvent } from '@syncode/protocol/events';
 import type { AgentDeps, Interrupter } from './agent.js';
 import { readConfig, readCrew } from './configStore.js';
 import type { FleetRuntime } from './fleet.js';
 import { spawnAgent, stopAgent } from './fleet.js';
 
 export interface CrewRuntime extends FleetRuntime {
-  commit(event: UnsequencedEvent): NexusEvent;
+  commit(event: UnsequencedEvent): SynCodeEvent;
 }
 
 export interface LaunchCrewArgs {
@@ -93,7 +93,7 @@ export function launchCrew(args: LaunchCrewArgs): LaunchCrewResult {
     return {
       ok: false,
       reason:
-        `Crew "${crew.name}" names a saved configuration Nexus can't find: ${missingConfigs.join(', ')}. ` +
+        `Crew "${crew.name}" names a saved configuration SynCode can't find: ${missingConfigs.join(', ')}. ` +
         'Save it again, or remove that member from the crew.',
     };
   }
@@ -159,7 +159,7 @@ export interface CrewProjection {
  * are deliberately not read here; only `crew_launched` itself, which is the
  * one durable record that a launch happened and what it produced.
  */
-export function projectCrews(events: NexusEvent[]): CrewProjection[] {
+export function projectCrews(events: SynCodeEvent[]): CrewProjection[] {
   const crews: CrewProjection[] = [];
   for (const event of events) {
     if (event.type === 'crew_launched') {

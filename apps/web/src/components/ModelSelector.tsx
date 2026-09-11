@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Cpu } from 'lucide-react';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 
 /** The default-model sentinel used by the `<select>`. `null` is not a valid HTML option value. */
 const DEFAULT_OPTION_VALUE = '__default__';
@@ -45,7 +45,7 @@ export function ModelSelector({
 }: {
   roomId: string;
   token: string;
-  events: NexusEvent[];
+  events: SynCodeEvent[];
   driverId: string | null;
   selfId: string | null;
   onSetModel: (model: string | null) => void;
@@ -57,7 +57,7 @@ export function ModelSelector({
     async function loadModels(): Promise<void> {
       try {
         const response = await fetch(`/api/rooms/${roomId}/models`, {
-          headers: { 'X-Nexus-Token': token },
+          headers: { 'X-SynCode-Token': token },
         });
         if (!response.ok) return;
         const payload = (await response.json().catch(() => null)) as { models?: ModelOption[] } | null;
@@ -79,7 +79,7 @@ export function ModelSelector({
   // event is the truth, and a room with no such event yet is still on the
   // account default — the same state `model: null` represents on the wire.
   const modelChangedEvents = events.filter(
-    (event): event is Extract<NexusEvent, { type: 'model_changed' }> => event.type === 'model_changed',
+    (event): event is Extract<SynCodeEvent, { type: 'model_changed' }> => event.type === 'model_changed',
   );
   const currentModel = modelChangedEvents[modelChangedEvents.length - 1]?.model ?? null;
 

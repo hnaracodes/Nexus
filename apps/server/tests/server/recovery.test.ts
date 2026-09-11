@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { openLog } from '../../src/log/event-log.js';
 import { readRoomMetas, recoverRooms, writeRoomMeta } from '../../src/server/recovery.js';
 import { __resetRooms, authorize, getRoom } from '../../src/server/rooms.js';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 
 const TOKEN = 'a'.repeat(64);
 
@@ -34,7 +34,7 @@ function seed(roomId: string): void {
     type: 'room_created',
     cwd: '/work',
     repoUrl: null,
-  } as NexusEvent);
+  } as SynCodeEvent);
   log.append({
     seq: 2,
     ts: '2026-07-28T00:00:01.000Z',
@@ -42,7 +42,7 @@ function seed(roomId: string): void {
     type: 'participant_joined',
     participantId: 'p_ada',
     displayName: 'Ada',
-  } as NexusEvent);
+  } as SynCodeEvent);
 }
 
 describe('recovery', () => {

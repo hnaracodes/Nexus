@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import { JoinToasts } from '../JoinToasts.js';
 
 /**
@@ -23,14 +23,14 @@ import { JoinToasts } from '../JoinToasts.js';
  */
 
 let seq = 0;
-const joined = (displayName: string): NexusEvent =>
+const joined = (displayName: string): SynCodeEvent =>
   ({
     seq: (seq += 1),
     type: 'participant_joined',
     participantId: `p_${displayName}`,
     displayName,
     ts: 0,
-  }) as unknown as NexusEvent;
+  }) as unknown as SynCodeEvent;
 
 describe('JoinToasts', () => {
   it('greets nobody for a history that arrives in pieces while still replaying', () => {

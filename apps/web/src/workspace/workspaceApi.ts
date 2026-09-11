@@ -17,7 +17,7 @@ export interface WorkspaceApi {
 }
 
 /**
- * The token goes in the `X-Nexus-Token` header, never a query param — 7a
+ * The token goes in the `X-SynCode-Token` header, never a query param — 7a
  * deliberately provides no query-param fallback for these routes (only the
  * WS upgrade needs one, because the browser's `WebSocket` constructor cannot
  * set headers; `fetch` can).
@@ -25,7 +25,7 @@ export interface WorkspaceApi {
 async function request<T>(config: WorkspaceApiConfig, path: string): Promise<T> {
   const fetchImpl = config.fetchImpl ?? globalThis.fetch;
   const response = await fetchImpl(`/api/rooms/${encodeURIComponent(config.roomId)}${path}`, {
-    headers: { 'X-Nexus-Token': config.token },
+    headers: { 'X-SynCode-Token': config.token },
   });
 
   if (!response.ok) {

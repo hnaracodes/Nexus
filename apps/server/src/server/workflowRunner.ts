@@ -42,7 +42,7 @@
  * `startWorkflowRun` still spawns every ready node once, synchronously,
  * before returning — the graph's root set needs no event to become ready.
  */
-import type { AgentId, AgentProvider, NexusEvent, UnsequencedEvent } from '@syncode/protocol/events';
+import type { AgentId, AgentProvider, SynCodeEvent, UnsequencedEvent } from '@syncode/protocol/events';
 import { agentIdOf } from '@syncode/protocol/events';
 import type { Interrupter } from './agent.js';
 import type { FleetRuntime } from './fleet.js';
@@ -89,7 +89,7 @@ export type NodeStatus = 'pending' | 'running' | 'done' | 'errored' | 'skipped';
  * persisted onto the `user_prompt` event itself.
  */
 export interface WorkflowRuntime extends FleetRuntime {
-  commit(event: UnsequencedEvent): NexusEvent;
+  commit(event: UnsequencedEvent): SynCodeEvent;
 }
 
 export interface StartWorkflowRunArgs {
@@ -199,7 +199,7 @@ type AgentOutcome =
  * "last" would read every errored node as merely idle. Scanning for "first"
  * reports the turn the way it actually ended.
  */
-function nodeOutcome(events: NexusEvent[], agentId: AgentId): AgentOutcome {
+function nodeOutcome(events: SynCodeEvent[], agentId: AgentId): AgentOutcome {
   let lastText = '';
   for (const event of events) {
     if (agentIdOf(event as { agentId?: AgentId }) !== agentId) continue;

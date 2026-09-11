@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import { PRIMARY_AGENT_ID } from '@syncode/protocol/events';
 import { deriveAgentTranscripts, deriveFleetRoster, routeDeltas } from '../fleet.js';
 
@@ -9,11 +9,11 @@ function ts(seq: number): string {
   return new Date(2026, 8, 6, 0, 0, seq).toISOString();
 }
 
-function roomCreated(seq: number): NexusEvent {
+function roomCreated(seq: number): SynCodeEvent {
   return { seq, ts: ts(seq), roomId: ROOM, type: 'room_created', cwd: '/tmp/room', repoUrl: null };
 }
 
-function userPrompt(seq: number, text: string): NexusEvent {
+function userPrompt(seq: number, text: string): SynCodeEvent {
   return {
     seq,
     ts: ts(seq),
@@ -25,7 +25,7 @@ function userPrompt(seq: number, text: string): NexusEvent {
   };
 }
 
-function assistantMessage(seq: number, messageId: string, text: string, agentId?: string): NexusEvent {
+function assistantMessage(seq: number, messageId: string, text: string, agentId?: string): SynCodeEvent {
   return {
     seq,
     ts: ts(seq),
@@ -37,7 +37,7 @@ function assistantMessage(seq: number, messageId: string, text: string, agentId?
   };
 }
 
-function toolStart(seq: number, toolUseId: string, toolName: string, agentId?: string): NexusEvent {
+function toolStart(seq: number, toolUseId: string, toolName: string, agentId?: string): SynCodeEvent {
   return {
     seq,
     ts: ts(seq),
@@ -50,7 +50,7 @@ function toolStart(seq: number, toolUseId: string, toolName: string, agentId?: s
   };
 }
 
-function toolResult(seq: number, toolUseId: string, output: string, agentId?: string): NexusEvent {
+function toolResult(seq: number, toolUseId: string, output: string, agentId?: string): SynCodeEvent {
   return {
     seq,
     ts: ts(seq),
@@ -69,7 +69,7 @@ function agentSpawned(
   agentId: string,
   displayName: string,
   provider: 'anthropic' | 'openai' | 'google' = 'anthropic',
-): NexusEvent {
+): SynCodeEvent {
   return {
     seq,
     ts: ts(seq),
@@ -84,7 +84,7 @@ function agentSpawned(
   };
 }
 
-function agentStopped(seq: number, agentId: string, reason = 'stopped'): NexusEvent {
+function agentStopped(seq: number, agentId: string, reason = 'stopped'): SynCodeEvent {
   return {
     seq,
     ts: ts(seq),
@@ -99,7 +99,7 @@ function agentStopped(seq: number, agentId: string, reason = 'stopped'): NexusEv
 
 describe('deriveAgentTranscripts', () => {
   it('maps a pre-v3 stream with no agentId anywhere entirely to the primary agent', () => {
-    const events: NexusEvent[] = [
+    const events: SynCodeEvent[] = [
       roomCreated(1),
       userPrompt(2, 'hello'),
       assistantMessage(3, 'm1', 'hi there'),
@@ -118,7 +118,7 @@ describe('deriveAgentTranscripts', () => {
   });
 
   it('separates two agents interleaved tool calls into two transcripts, each in seq order', () => {
-    const events: NexusEvent[] = [
+    const events: SynCodeEvent[] = [
       roomCreated(1),
       agentSpawned(2, 'a', 'Agent A'),
       agentSpawned(3, 'b', 'Agent B', 'openai'),
@@ -147,7 +147,7 @@ describe('deriveAgentTranscripts', () => {
   });
 
   it('keeps a stopped agent transcript — history does not vanish when an agent leaves', () => {
-    const events: NexusEvent[] = [
+    const events: SynCodeEvent[] = [
       roomCreated(1),
       agentSpawned(2, 'a', 'Agent A'),
       toolStart(3, 'a-t1', 'Bash', 'a'),
@@ -163,7 +163,7 @@ describe('deriveAgentTranscripts', () => {
   });
 
   it('routes a user_prompt to the agent that prompt_batch_delivered says received it', () => {
-    const events: NexusEvent[] = [
+    const events: SynCodeEvent[] = [
       roomCreated(1),
       agentSpawned(2, 'a', 'Agent A'),
       agentSpawned(3, 'b', 'Agent B'),
@@ -188,14 +188,14 @@ describe('deriveAgentTranscripts', () => {
 
 describe('deriveFleetRoster', () => {
   it('returns just the primary agent for a pre-v3 stream with no agentId anywhere', () => {
-    const events: NexusEvent[] = [roomCreated(1), userPrompt(2, 'hi')];
+    const events: SynCodeEvent[] = [roomCreated(1), userPrompt(2, 'hi')];
     const roster = deriveFleetRoster(events);
     expect(roster).toHaveLength(1);
     expect(roster[0]).toMatchObject({ agentId: PRIMARY_AGENT_ID, stopped: false });
   });
 
   it('keeps a stopped agent in the roster, marked stopped', () => {
-    const events: NexusEvent[] = [roomCreated(1), agentSpawned(2, 'a', 'Agent A'), agentStopped(3, 'a', 'completed')];
+    const events: SynCodeEvent[] = [roomCreated(1), agentSpawned(2, 'a', 'Agent A'), agentStopped(3, 'a', 'completed')];
     const roster = deriveFleetRoster(events);
     const a = roster.find((entry) => entry.agentId === 'a');
     expect(a).toMatchObject({ stopped: true, stopReason: 'completed', displayName: 'Agent A' });
@@ -204,7 +204,7 @@ describe('deriveFleetRoster', () => {
 
 describe('routeDeltas', () => {
   it('does not merge deltas from two agents', () => {
-    const events: NexusEvent[] = [
+    const events: SynCodeEvent[] = [
       roomCreated(1),
       agentSpawned(2, 'a', 'Agent A'),
       agentSpawned(3, 'b', 'Agent B'),
@@ -221,7 +221,7 @@ describe('routeDeltas', () => {
   });
 
   it('defaults a delta with no agentId to the primary agent', () => {
-    const events: NexusEvent[] = [roomCreated(1)];
+    const events: SynCodeEvent[] = [roomCreated(1)];
     const pendingDeltas = { m1: { agentId: PRIMARY_AGENT_ID, text: 'hi' } };
 
     const routed = routeDeltas(pendingDeltas, events);
@@ -230,7 +230,7 @@ describe('routeDeltas', () => {
   });
 
   it('seeds an entry for every roster agent even with no pending deltas', () => {
-    const events: NexusEvent[] = [roomCreated(1), agentSpawned(2, 'a', 'Agent A')];
+    const events: SynCodeEvent[] = [roomCreated(1), agentSpawned(2, 'a', 'Agent A')];
     const routed = routeDeltas({}, events);
     expect(routed.get('a')).toEqual({});
     expect(routed.get(PRIMARY_AGENT_ID)).toEqual({});

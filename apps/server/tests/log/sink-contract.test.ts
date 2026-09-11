@@ -4,18 +4,18 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { logPathFor } from '../../src/log/event-log.js';
 import { createSink } from '../../src/log/index.js';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 
 const KEY = 'sk-ant-api03-TESTONLY-not-a-real-key';
 
-function event(seq: number, extra: Record<string, unknown> = {}): NexusEvent {
+function event(seq: number, extra: Record<string, unknown> = {}): SynCodeEvent {
   return {
     seq,
     ts: '2026-07-28T00:00:00.000Z',
     roomId: 'room_a',
     type: 'agent_idle',
     ...extra,
-  } as NexusEvent;
+  } as SynCodeEvent;
 }
 
 describe('EventSink contract', () => {

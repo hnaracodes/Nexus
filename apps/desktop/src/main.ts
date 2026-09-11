@@ -6,6 +6,7 @@ import type { MenuItem } from 'electron';
 import { resolveListenPort, serverOrigin } from './serverHost.js';
 import { isAllowedNavigation } from './navigationGuard.js';
 import { parseRoomLink } from './launcher.js';
+import { migrateUserData } from './userDataMigration.js';
 import {
   folderConsentMessage,
   folderDisplayName,
@@ -94,7 +95,7 @@ let currentRoomWindow: BrowserWindow | undefined;
  * root."
  *
  * `app.getPath('userData')` is Electron's per-user, per-app writable
- * directory (`~/Library/Application Support/Nexus` on macOS), which is also
+ * directory (`~/Library/Application Support/SynCode` on macOS), which is also
  * where a user would expect their rooms to survive an app update.
  *
  * Set only when the environment does not already say otherwise, so `npm run
@@ -116,11 +117,21 @@ function useWritablePaths(): void {
    * launched — `npm run dev` reads a different package.json context than the
    * packaged bundle does.
    */
-  app.setName('Nexus');
+  // Where the old name put things, asked of Electron rather than hardcoded, so
+  // this is right on Windows (%APPDATA%) and Linux (~/.config) too.
+  app.setName('SynCode');
+  const legacyUserData = app.getPath('userData');
+
+  app.setName('SynCode');
   const userData = app.getPath('userData');
-  process.env['NEXUS_DATA_DIR'] ??= joinPath(userData, 'data');
-  process.env['NEXUS_WORKDIR'] ??= joinPath(userData, 'work');
+
+  migrateUserData(legacyUserData, userData);
+
+  process.env['SYNCODE_DATA_DIR'] ??= joinPath(userData, 'data');
+  process.env['SYNCODE_WORKDIR'] ??= joinPath(userData, 'work');
 }
+
+
 
 async function startBackend(): Promise<{ origin: string; port: number }> {
   useWritablePaths();
@@ -141,7 +152,7 @@ async function startBackend(): Promise<{ origin: string; port: number }> {
    * correct order, is what keeps that easy to audit. `fly.toml` never sets
    * this — a hosted deployment always reads `isLocalHostMode() === false`.
    */
-  process.env['NEXUS_LOCAL_HOST'] = '1';
+  process.env['SYNCODE_LOCAL_HOST'] = '1';
 
   /**
    * DYNAMIC import, and this is load-bearing rather than stylistic.
@@ -236,7 +247,7 @@ function createWindow(origin: string, joinedOrigin?: string): void {
    * This window is chrome-less: there is no address bar, so once it has loaded
    * a remote origin the user has no way to see WHERE they are. A pasted link to
    * `https://nexus-mvp.fly.dev.evil.example` is a well-formed room link to a
-   * host we cannot refuse — Nexus is self-hostable, so there is no allow-list
+   * host we cannot refuse — SynCode is self-hostable, so there is no allow-list
    * of legitimate hosts to check against — and a page there could imitate the
    * room UI and ask for an Anthropic API key.
    *
@@ -258,7 +269,7 @@ function createWindow(origin: string, joinedOrigin?: string): void {
         return joinedOrigin;
       }
     })();
-    window.setTitle(`Nexus — connected to ${host}`);
+    window.setTitle(`SynCode — connected to ${host}`);
     window.on('page-title-updated', (event) => {
       event.preventDefault();
     });
@@ -562,7 +573,7 @@ async function main(): Promise<void> {
 }
 
 app.on('window-all-closed', () => {
-  // Standard Electron convention, not a Nexus-specific choice: on macOS
+  // Standard Electron convention, not a SynCode-specific choice: on macOS
   // apps normally stay resident after their last window closes (quit via
   // Cmd+Q or the dock), so quitting here would surprise a mac user for whom
   // the dock icon staying present means "still running". 'before-quit' below
@@ -580,6 +591,6 @@ void main().catch((error: unknown) => {
   // bundled server dist is missing, …) has nowhere else to go — there is no
   // room UI up yet to show an error banner in. Logging plainly and quitting
   // beats a silently blank or hung window.
-  console.error('Nexus desktop failed to start:', error);
+  console.error('SynCode desktop failed to start:', error);
   app.quit();
 });

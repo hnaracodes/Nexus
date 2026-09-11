@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import { PRIMARY_AGENT_ID } from '@syncode/protocol/events';
 import { openLog } from '../../src/log/event-log.js';
 import { projectAgents, projectFleet } from '../../src/log/replay.js';
@@ -23,9 +23,9 @@ const TOKEN = 'a'.repeat(64);
 
 /** Build a minimal event list with seq/ts/roomId auto-filled, matching the
  *  helper already used in replay.test.ts. */
-function log(...partials: Record<string, unknown>[]): NexusEvent[] {
+function log(...partials: Record<string, unknown>[]): SynCodeEvent[] {
   return partials.map(
-    (p, i) => ({ seq: i + 1, ts: '2026-09-06T00:00:00.000Z', roomId: 'room_fleet', ...p }) as NexusEvent,
+    (p, i) => ({ seq: i + 1, ts: '2026-09-06T00:00:00.000Z', roomId: 'room_fleet', ...p }) as SynCodeEvent,
   );
 }
 
@@ -126,7 +126,7 @@ describe('projectFleet', () => {
     const events = readFileSync(FIXTURE, 'utf8')
       .split('\n')
       .filter((line) => line.trim() !== '')
-      .map((line) => JSON.parse(line) as NexusEvent);
+      .map((line) => JSON.parse(line) as SynCodeEvent);
     const fleet = projectFleet(events);
     expect(fleet).toHaveLength(1);
     expect(fleet[0]).toMatchObject({
@@ -171,7 +171,7 @@ describe('projectAgents is unchanged by the fleet projection', () => {
     const events = readFileSync(FIXTURE, 'utf8')
       .split('\n')
       .filter((line) => line.trim() !== '')
-      .map((line) => JSON.parse(line) as NexusEvent);
+      .map((line) => JSON.parse(line) as SynCodeEvent);
     expect(projectAgents(events)).toEqual([PRIMARY_AGENT_ID]);
   });
 });
@@ -183,7 +183,7 @@ describe('recoverRooms rebuilds the fleet from the log alone', () => {
     __resetRooms();
   });
 
-  function seedRoom(roomId: string, events: NexusEvent[]): void {
+  function seedRoom(roomId: string, events: SynCodeEvent[]): void {
     writeRoomMeta(
       { roomId, token: TOKEN, cwd: '/work', repoUrl: null, createdAt: '2026-09-06T00:00:00.000Z' },
       dir,
@@ -217,7 +217,7 @@ describe('recoverRooms rebuilds the fleet from the log alone', () => {
         participantId: 'p_ada',
         stoppedByName: 'Ada',
       },
-    ] as NexusEvent[]);
+    ] as SynCodeEvent[]);
 
     const [recovered] = recoverRooms(dir);
     expect(recovered?.liveAgentIds).toEqual([PRIMARY_AGENT_ID]);
@@ -250,7 +250,7 @@ describe('recoverRooms rebuilds the fleet from the log alone', () => {
         participantId: 'p_ada',
         spawnedByName: 'Ada',
       },
-    ] as NexusEvent[]);
+    ] as SynCodeEvent[]);
 
     const [recovered] = recoverRooms(dir);
     expect(recovered?.liveAgentIds.sort()).toEqual([PRIMARY_AGENT_ID, 'reviewer', 'tester'].sort());
@@ -310,7 +310,7 @@ describe('recoverRooms rebuilds the fleet from the log alone', () => {
             displayName: id,
             participantId: 'p_ada',
             spawnedByName: 'Ada',
-          }) as NexusEvent,
+          }) as SynCodeEvent,
       ),
     ]);
     // room_c has 4 live agents (primary + 3). Cap it at 2.

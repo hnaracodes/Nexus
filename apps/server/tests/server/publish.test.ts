@@ -205,7 +205,7 @@ function publish(
       cwd: CWD,
       roomId: ROOM_ID,
       title: 'Work from the room',
-      body: 'Produced collaboratively in Nexus.',
+      body: 'Produced collaboratively in SynCode.',
       lastPublishedSha,
     },
     { fetch: gh.fetch, git: git.git },

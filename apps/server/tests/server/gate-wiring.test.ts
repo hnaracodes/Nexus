@@ -18,7 +18,7 @@ import { __resetRooms, createRoom } from '../../src/server/rooms.js';
  * called.
  *
  * These tests therefore assert the SHAPE OF THE OPTIONS HANDED TO `query()` —
- * the seam between Nexus and the SDK — rather than the gate's behaviour. They
+ * the seam between SynCode and the SDK — rather than the gate's behaviour. They
  * are deliberately structural, because the failure was structural.
  *
  * What they cannot do is notice the SDK changing which of these it honours.
@@ -68,14 +68,14 @@ describe('the gate is wired into the SDK at both available seams', () => {
   });
 
   it('does not hand the SDK a permissionMode, which would pre-empt the gate', () => {
-    // Setting one here would be Nexus disabling its own gate. 'bypassPermissions'
+    // Setting one here would be SynCode disabling its own gate. 'bypassPermissions'
     // and 'acceptEdits' both short-circuit the pipeline ahead of canUseTool.
     expect(capturedOptions()['permissionMode']).toBeUndefined();
   });
 
   it('does not hand the SDK an allowedTools list, for the same reason', () => {
     // An allowedTools entry is an allow-rule, and allow-rules also short-circuit
-    // ahead of canUseTool. Auto-approval belongs in Nexus's own AUTO_APPROVE set,
+    // ahead of canUseTool. Auto-approval belongs in SynCode's own AUTO_APPROVE set,
     // where it is visible to the room and logged, not in an SDK option that
     // silently skips the gate.
     expect(capturedOptions()['allowedTools']).toBeUndefined();

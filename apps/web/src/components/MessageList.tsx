@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { Crown } from 'lucide-react';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import { ScrollAnchor } from './ScrollAnchor.js';
 import { ToolCallRow } from './ToolCallRow.js';
 import { Markdown } from '../markdown.js';
@@ -49,7 +49,7 @@ export interface SystemRow {
 
 export type TranscriptRow = UserRow | AssistantRow | ToolRow | SystemRow;
 
-function systemText(event: NexusEvent): string | null {
+function systemText(event: SynCodeEvent): string | null {
   switch (event.type) {
     case 'participant_joined':
       return `${event.displayName} joined`;
@@ -106,7 +106,7 @@ interface ToolLocation {
  * shown) also lands at the top level rather than vanishing: dropping it
  * silently would be strictly worse than misplacing it one level up.
  */
-export function deriveTranscript(events: NexusEvent[]): TranscriptRow[] {
+export function deriveTranscript(events: SynCodeEvent[]): TranscriptRow[] {
   const rows: TranscriptRow[] = [];
   const toolLocation = new Map<string, ToolLocation>();
 
@@ -285,7 +285,7 @@ export function MessageList({
   events,
   pendingDeltas,
 }: {
-  events: NexusEvent[];
+  events: SynCodeEvent[];
   pendingDeltas: Record<string, string>;
 }): JSX.Element {
   const rows = deriveTranscript(events);

@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import type { AgentId, GithubRepoRef, NexusEvent } from '@syncode/protocol/events';
+import type { AgentId, GithubRepoRef, SynCodeEvent } from '@syncode/protocol/events';
 import { openLog } from '../log/event-log.js';
 import { projectFleet, reconstruct } from '../log/replay.js';
 import { claimLocalPath } from './localHost.js';
@@ -126,7 +126,7 @@ export function recoverRooms(
           participantId: state.driverId,
           displayName: holder?.displayName ?? state.driverId,
           reason: 'server_restart',
-        } as NexusEvent);
+        } as SynCodeEvent);
       }
 
       // The fleet's counterpart to the driver-token branch above, same shape:
@@ -169,7 +169,7 @@ export function recoverRooms(
           reason: 'capacity_exceeded',
           participantId: null,
           stoppedByName: null,
-        } as NexusEvent);
+        } as SynCodeEvent);
       }
 
       // Put the room back in the live registry under its ORIGINAL id and

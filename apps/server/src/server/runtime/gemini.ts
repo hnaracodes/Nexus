@@ -1,7 +1,7 @@
 /**
  * The Gemini provider adapter (phase 10).
  *
- * Claude's SDK holds a persistent subprocess and runs tools itself; Nexus only
+ * Claude's SDK holds a persistent subprocess and runs tools itself; SynCode only
  * ever sees a hook fire before it does. Gemini has neither: `generateContent`
  * is one stateless HTTP call, so THIS FILE is the session — the `contents`
  * array below is the only place a Gemini room's conversation lives, and it is
@@ -9,8 +9,8 @@
  * one context, one mutator, shared by every viewer — the persistence
  * mechanism differs from Claude's, the invariant does not).
  *
- * Nexus therefore owns the tool-execution loop for this provider, which means
- * Nexus must gate it itself — there is no SDK-side pipeline left to
+ * SynCode therefore owns the tool-execution loop for this provider, which means
+ * SynCode must gate it itself — there is no SDK-side pipeline left to
  * (accidentally or not) enforce approval. `dispatchToolCall` (`./tools.js`) is
  * the one and only path a tool call takes to actually run; every function-call
  * part the model returns goes through it, gated, before its result is fed
@@ -41,15 +41,15 @@ import type {
   Part,
   ToolListUnion,
 } from '@google/genai';
-import type { NexusEvent, UnsequencedEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent, UnsequencedEvent } from '@syncode/protocol/events';
 import type { Room } from '../rooms.js';
 import type { PermissionGate, RequestVisibility } from '../permissions.js';
 import { createPermissionGate } from '../permissions.js';
 import { createTurnGate } from '../turnGate.js';
 import type { Batch, PendingPrompt } from '../turnGate.js';
 import type { AgentRuntime, Interrupter, ModelChoice } from './types.js';
-import type { EmitFn, NexusTool, ToolCallResult } from './tools.js';
-import { buildNexusTools, dispatchToolCall } from './tools.js';
+import type { EmitFn, SynCodeTool, ToolCallResult } from './tools.js';
+import { buildSynCodeTools, dispatchToolCall } from './tools.js';
 import { guardGeminiTools } from './toolGuard.js';
 
 export type { EmitFn } from './tools.js';
@@ -97,7 +97,7 @@ export interface GeminiDeps {
   /** Overridable for tests. Same role as `AgentDeps.idleTimeoutMs` in agent.ts. */
   idleTimeoutMs?: number;
   /** Threaded into `ToolContext` exactly as `agent.ts`'s `AgentDeps` does. */
-  readEvents?: () => NexusEvent[];
+  readEvents?: () => SynCodeEvent[];
   /**
    * Overrides the room's permission gate. Test-only seam — production always
    * builds its own via `createPermissionGate`, the same one every provider
@@ -106,7 +106,7 @@ export interface GeminiDeps {
   gate?: PermissionGate;
   /**
    * Overrides the outbound tool declarations sent on every request. Test-only
-   * seam: production always derives this from `buildNexusTools(room)`.
+   * seam: production always derives this from `buildSynCodeTools(room)`.
    * Typed as `unknown[]`, not `ToolListUnion`, because its entire purpose is
    * to let a test hand this something a `ToolListUnion` could never
    * legitimately contain — a `CallableTool` — and prove `guardGeminiTools`
@@ -139,7 +139,7 @@ const DEFAULT_IDLE_TIMEOUT_MS = 150_000;
  * default" per `AgentRuntime`). Unlike Claude's SDK, which can start a session
  * with no model and let the server choose, every `generateContentStream` call
  * names a concrete model string — there is no "default" to omit. This is
- * Nexus's own default, not Google's.
+ * SynCode's own default, not Google's.
  */
 const DEFAULT_MODEL = 'gemini-2.5-flash';
 
@@ -200,12 +200,12 @@ function defaultClient(room: Room): GeminiClient {
   return { models: new GoogleGenAI({ apiKey: room.getApiKey() }).models };
 }
 
-function toFunctionDeclaration(tool: NexusTool): FunctionDeclaration {
+function toFunctionDeclaration(tool: SynCodeTool): FunctionDeclaration {
   return {
     name: tool.name,
     // `parametersJsonSchema`, not `parameters`: the latter wants the SDK's own
     // `Schema` type (its `Type` enum, not JSON Schema's string literals).
-    // `NexusTool.inputSchema` is already draft-07 JSON Schema — the same
+    // `SynCodeTool.inputSchema` is already draft-07 JSON Schema — the same
     // object every other provider adapter hands its own SDK as-is —
     // and `parametersJsonSchema` is documented to accept exactly that,
     // mutually exclusive with `parameters`. Converting to `Schema` would be
@@ -218,7 +218,7 @@ function toFunctionDeclaration(tool: NexusTool): FunctionDeclaration {
 export function startGeminiAgent(room: Room, emit: EmitFn, deps: GeminiDeps = {}): AgentRuntime {
   const client = deps.client ?? defaultClient(room);
   const idleTimeoutMs = deps.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
-  const readEvents = deps.readEvents ?? ((): NexusEvent[] => []);
+  const readEvents = deps.readEvents ?? ((): SynCodeEvent[] => []);
   const gate =
     deps.gate ??
     createPermissionGate(
@@ -226,7 +226,7 @@ export function startGeminiAgent(room: Room, emit: EmitFn, deps: GeminiDeps = {}
       emit,
       deps.visibility === undefined ? {} : { visibility: deps.visibility },
     );
-  const nexusTools = buildNexusTools(room);
+  const nexusTools = buildSynCodeTools(room);
   const turns = createTurnGate();
 
   const functionDeclarations = nexusTools.map(toFunctionDeclaration);

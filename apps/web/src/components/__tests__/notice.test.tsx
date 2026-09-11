@@ -122,7 +122,7 @@ describe('ReKeyDialog', () => {
     ];
     expect(url).toBe('/api/rooms/room_1/key');
     expect(url).not.toContain('sk-ant-abc');
-    expect((init.headers as Record<string, string>)['X-Nexus-Token']).toBe('tok_secret');
+    expect((init.headers as Record<string, string>)['X-SynCode-Token']).toBe('tok_secret');
     expect(JSON.parse(init.body as string)).toEqual({ apiKey: 'sk-ant-abc' });
   });
 

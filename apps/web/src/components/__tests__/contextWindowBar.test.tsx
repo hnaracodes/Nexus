@@ -1,9 +1,9 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import { ContextWindowBar } from '../ContextWindowBar.js';
 
-function usage(overrides: Partial<Extract<NexusEvent, { type: 'context_usage' }>> = {}): NexusEvent {
+function usage(overrides: Partial<Extract<SynCodeEvent, { type: 'context_usage' }>> = {}): SynCodeEvent {
   return {
     type: 'context_usage',
     seq: 1,
@@ -62,7 +62,7 @@ describe('ContextWindowBar', () => {
   });
 
   it('ignores non-context_usage events entirely', () => {
-    const other: NexusEvent = {
+    const other: SynCodeEvent = {
       type: 'agent_idle',
       seq: 1,
       ts: '2026-01-01T00:00:00.000Z',

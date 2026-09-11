@@ -9,7 +9,7 @@ import {
   restoreRoom,
 } from '../../src/server/rooms.js';
 import { MemorySink, attachRoom } from '../../src/server/ws.js';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 
 const KEY = 'sk-ant-api03-TESTONLY-not-a-real-key';
 
@@ -91,7 +91,7 @@ describe('restoreRoom', () => {
       type: 'room_created',
       cwd: room.cwd,
       repoUrl: null,
-    } as NexusEvent);
+    } as SynCodeEvent);
 
     attachRoom(room, sink, STUB_AGENT);
 

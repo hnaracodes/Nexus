@@ -347,11 +347,11 @@
 /* --- BEGIN nexus character --- */
 @layer utilities {
   /*
-    Nexus himself. He wanders the landing page: drifts to a waypoint, squashes
+    SynCode himself. He wanders the landing page: drifts to a waypoint, squashes
     when he lands, blinks on his own clock. Purely decorative and always
     pointer-events:none — he must never eat a click meant for a real control.
   */
-  /* Locomotion is driven by requestAnimationFrame in NexusWanderer, not by a
+  /* Locomotion is driven by requestAnimationFrame in SynCodeWanderer, not by a
      CSS transition. The rule that used to live here transitioned `transform`
      while the component moved him with `left`/`top` — two different properties,
      so nothing ever eased and he teleported. */

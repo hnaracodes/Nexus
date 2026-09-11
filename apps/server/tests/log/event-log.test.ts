@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { logPathFor, openLog } from '../../src/log/event-log.js';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 
 const KEY = 'sk-ant-api03-TESTONLY-not-a-real-key';
 let dir = '';
@@ -12,14 +12,14 @@ beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'nexus-log-'));
 });
 
-function event(seq: number, overrides: Record<string, unknown> = {}): NexusEvent {
+function event(seq: number, overrides: Record<string, unknown> = {}): SynCodeEvent {
   return {
     seq,
     ts: '2026-07-28T00:00:00.000Z',
     roomId: 'room_a',
     type: 'agent_idle',
     ...overrides,
-  } as NexusEvent;
+  } as SynCodeEvent;
 }
 
 describe('JsonlEventLog', () => {

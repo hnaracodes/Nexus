@@ -16,44 +16,44 @@ describe('workspaceApi', () => {
     fetchImpl = vi.fn<typeof fetch>();
   });
 
-  it('sends the X-Nexus-Token header on getTree', async () => {
+  it('sends the X-SynCode-Token header on getTree', async () => {
     fetchImpl.mockResolvedValue(jsonResponse({ entries: [] }));
     const api = createWorkspaceApi({ roomId: 'r1', token: 'tok', fetchImpl });
     await api.getTree('');
     const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
-    expect((init.headers as Record<string, string>)['X-Nexus-Token']).toBe('tok');
+    expect((init.headers as Record<string, string>)['X-SynCode-Token']).toBe('tok');
   });
 
-  it('sends the X-Nexus-Token header on getFile', async () => {
+  it('sends the X-SynCode-Token header on getFile', async () => {
     fetchImpl.mockResolvedValue(jsonResponse({ kind: 'text', content: 'hi' }));
     const api = createWorkspaceApi({ roomId: 'r1', token: 'tok', fetchImpl });
     await api.getFile('a.ts');
     const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
-    expect((init.headers as Record<string, string>)['X-Nexus-Token']).toBe('tok');
+    expect((init.headers as Record<string, string>)['X-SynCode-Token']).toBe('tok');
   });
 
-  it('sends the X-Nexus-Token header on getGitStatus', async () => {
+  it('sends the X-SynCode-Token header on getGitStatus', async () => {
     fetchImpl.mockResolvedValue(jsonResponse({ entries: [] }));
     const api = createWorkspaceApi({ roomId: 'r1', token: 'tok', fetchImpl });
     await api.getGitStatus();
     const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
-    expect((init.headers as Record<string, string>)['X-Nexus-Token']).toBe('tok');
+    expect((init.headers as Record<string, string>)['X-SynCode-Token']).toBe('tok');
   });
 
-  it('sends the X-Nexus-Token header on getGitDiff', async () => {
+  it('sends the X-SynCode-Token header on getGitDiff', async () => {
     fetchImpl.mockResolvedValue(jsonResponse({ diff: '' }));
     const api = createWorkspaceApi({ roomId: 'r1', token: 'tok', fetchImpl });
     await api.getGitDiff('a.ts');
     const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
-    expect((init.headers as Record<string, string>)['X-Nexus-Token']).toBe('tok');
+    expect((init.headers as Record<string, string>)['X-SynCode-Token']).toBe('tok');
   });
 
-  it('sends the X-Nexus-Token header on getModels', async () => {
+  it('sends the X-SynCode-Token header on getModels', async () => {
     fetchImpl.mockResolvedValue(jsonResponse({ models: [] }));
     const api = createWorkspaceApi({ roomId: 'r1', token: 'tok', fetchImpl });
     await api.getModels();
     const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
-    expect((init.headers as Record<string, string>)['X-Nexus-Token']).toBe('tok');
+    expect((init.headers as Record<string, string>)['X-SynCode-Token']).toBe('tok');
   });
 
   it('never puts the token in the URL', async () => {

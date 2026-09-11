@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import type { NexusEvent } from '@syncode/protocol/events';
-import { NexusBlob } from './NexusBlob.js';
+import type { SynCodeEvent } from '@syncode/protocol/events';
+import { SynCodeBlob } from './SynCodeBlob.js';
 
 /**
- * Nexus waves people in.
+ * SynCode waves people in.
  *
  * The interesting constraint is *which* joins to celebrate. A room's log is
  * replayed in full on every connect, so the naive "render a toast per
@@ -23,10 +23,10 @@ interface Welcome {
 
 const VISIBLE_MS = 4200;
 
-export function deriveJoinsAfter(events: NexusEvent[], afterSeq: number): Welcome[] {
+export function deriveJoinsAfter(events: SynCodeEvent[], afterSeq: number): Welcome[] {
   return events
     .filter(
-      (event): event is Extract<NexusEvent, { type: 'participant_joined' }> =>
+      (event): event is Extract<SynCodeEvent, { type: 'participant_joined' }> =>
         event.type === 'participant_joined' && event.seq > afterSeq,
     )
     .map((event) => ({ id: `${event.seq}`, name: event.displayName }));
@@ -37,7 +37,7 @@ export function JoinToasts({
   selfId,
   replaying,
 }: {
-  events: NexusEvent[];
+  events: SynCodeEvent[];
   selfId: string | null;
   /**
    * True until `replay_complete` lands. Load-bearing: without it the
@@ -108,7 +108,7 @@ export function JoinToasts({
           key={welcome.id}
           className="nexus-welcome flex items-center gap-2.5 rounded-full border border-border bg-surface/95 py-1.5 pl-1.5 pr-4 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.7)] backdrop-blur"
         >
-          <NexusBlob size={34} waving />
+          <SynCodeBlob size={34} waving />
           <span className="text-sm text-fg">
             <span className="font-semibold">{welcome.name}</span> joined the room
           </span>

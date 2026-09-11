@@ -1,4 +1,4 @@
-# Using Nexus
+# Using SynCode
 
 How to actually run this thing, what each way gets you, and what is genuinely
 not finished. Written 2026-09-11, against `main` at `6bf513d` (phase 17).
@@ -7,7 +7,7 @@ not finished. Written 2026-09-11, against `main` at `6bf513d` (phase 17).
 
 ## What it is now
 
-Nexus turns an AI coding session from a *process* into a *room*. Several people
+SynCode turns an AI coding session from a *process* into a *room*. Several people
 open one link, see the same live agent output, take turns driving, and
 collectively approve or block risky tool calls — against one agent process
 holding one context window. The collaboration is the mechanism; **the
@@ -49,7 +49,7 @@ Pick based on what you want:
 
 Every path needs a real key beginning with `sk-ant-`, from
 [console.anthropic.com](https://console.anthropic.com). A Claude Pro or Max
-subscription **will not work** — those are not API credentials, and Nexus
+subscription **will not work** — those are not API credentials, and SynCode
 rejects the key with a message saying so.
 
 The key is held in memory on whichever server runs the room, is used only to
@@ -124,7 +124,7 @@ Set `NEXUS_INSTALL_APPLICATIONS_DIR` to install somewhere other than
 ```bash
 npm install
 npm run package -w @syncode/desktop
-open apps/desktop/release/mac-arm64/Nexus.app
+open apps/desktop/release/mac-arm64/SynCode.app
 ```
 
 Also produces `apps/desktop/release/Nexus-0.0.1-mac-arm64.dmg` and
@@ -137,12 +137,12 @@ build. But every build is **unsigned and un-notarized** — nobody has bought an
 Apple Developer certificate or a Windows code-signing certificate, a deferred
 decision (CLAUDE.md §11), not a bug. So:
 
-- **macOS**: *"Apple could not verify that 'Nexus' is free of malware."* Do not
-  click Trash. Right-click (or Control-click) `Nexus.app` → **Open** → confirm.
+- **macOS**: *"Apple could not verify that 'SynCode' is free of malware."* Do not
+  click Trash. Right-click (or Control-click) `SynCode.app` → **Open** → confirm.
   Once is enough.
 - **Windows**: SmartScreen says *"Windows protected your PC."* → **More info** →
   **Run anyway**.
-- If macOS still refuses, `xattr -d com.apple.quarantine /Applications/Nexus.app`
+- If macOS still refuses, `xattr -d com.apple.quarantine /Applications/SynCode.app`
   clears the flag Gatekeeper checks. A real fix and a last resort — it only
   makes sense once you have already decided you trust where the file came from,
   and it is not the instruction to lead with.
@@ -156,7 +156,7 @@ above is what they will see. All three paths say so before handing over the file
 
 ```bash
 git clone https://github.com/hnaracodes/Nexus.git
-cd Nexus
+cd SynCode
 npm install
 npm run build:client          # bundles apps/web/dist, which the server serves
 PORT=8099 npm run dev
@@ -199,7 +199,7 @@ One process hosts one folder. Trying to open a second is refused with a message
 pointing at the room already running, rather than silently starting a second
 server you cannot see.
 
-Rooms and logs live in `~/Library/Application Support/Nexus/`.
+Rooms and logs live in `~/Library/Application Support/SynCode/`.
 
 ---
 
@@ -318,7 +318,7 @@ desktop / 5 install**.
 | `error: No mac/arm64 build was found in the latest release` | Correct. No release has assets yet — push a `v*` tag, or build from source. |
 | Release workflow fails on `npm pkg set version` | Your tag is not semver. `v1.0.0`, not `v.1.0.0`. The tag guard now catches this in seconds. |
 | `EADDRINUSE` on start | Something else owns the port. Use `PORT=8099`. |
-| "Nexus needs an Anthropic Console API key" | You used a Pro/Max login. It must be a Console key starting `sk-ant-`. |
+| "SynCode needs an Anthropic Console API key" | You used a Pro/Max login. It must be a Console key starting `sk-ant-`. |
 | "This room lost its API key when the server restarted" | Correct behaviour — keys are never persisted. Click **Re-enter API key**. |
 | Blank page | Almost certainly a Content-Security-Policy problem. Open the console; if it mentions WebAssembly, the CSP is missing `'wasm-unsafe-eval'`. This exact bug shipped once. |
 | The `.dmg` will not open on another Mac | It is unsigned. Right-click → Open. |

@@ -1,9 +1,9 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import { RepoBranchBar } from '../RepoBranchBar.js';
 
-const BOUND: NexusEvent = {
+const BOUND: SynCodeEvent = {
   type: 'room_created',
   seq: 1,
   ts: '2026-01-01T00:00:00.000Z',
@@ -18,7 +18,7 @@ const BOUND: NexusEvent = {
   },
 };
 
-const UNBOUND: NexusEvent = {
+const UNBOUND: SynCodeEvent = {
   type: 'room_created',
   seq: 1,
   ts: '2026-01-01T00:00:00.000Z',

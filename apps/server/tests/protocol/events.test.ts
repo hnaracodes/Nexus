@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PROTOCOL_VERSION, isLoggedEvent } from '@syncode/protocol/events';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import { parseClientFrame } from '@syncode/protocol/wire';
 
 describe('protocol', () => {
@@ -13,7 +13,7 @@ describe('protocol', () => {
   });
 
   it('accepts a well-formed envelope as a logged event', () => {
-    const event: NexusEvent = {
+    const event: SynCodeEvent = {
       seq: 1,
       ts: '2026-07-28T00:00:00.000Z',
       roomId: 'room_abc',
@@ -38,7 +38,7 @@ describe('protocol', () => {
 
   // --- phase 7 ---
   // These two cases are a regression test for the two-edit trap itself: a type
-  // added to the NexusEvent union but NOT to the runtime LOGGED_TYPES set is
+  // added to the SynCodeEvent union but NOT to the runtime LOGGED_TYPES set is
   // written to the JSONL happily and then silently dropped on read-back, so the
   // history exists on disk and vanishes on restart (I3). This bit phase 4.
   it('treats model_changed as a logged event', () => {

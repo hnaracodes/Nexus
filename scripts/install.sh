@@ -1,5 +1,5 @@
 #!/bin/sh
-# Nexus desktop installer.
+# SynCode desktop installer.
 #
 #   curl -fsSL https://raw.githubusercontent.com/hnaracodes/Nexus/main/scripts/install.sh | sh
 #
@@ -34,7 +34,7 @@ die() {
 
 # Overridable for tests (see scripts/install.test.mjs), which stub these on
 # PATH rather than touching the real network or filesystem.
-CURL="${NEXUS_INSTALL_CURL:-curl}"
+CURL="${SYNCODE_INSTALL_CURL:-${NEXUS_INSTALL_CURL:-curl}}"
 
 fetch() {
   # $1 = url; prints the response body to stdout.
@@ -96,7 +96,7 @@ case "$arch" in
 esac
 
 log "Detected: $platform ($norm_arch)"
-log "Checking the latest Nexus release..."
+log "Checking the latest SynCode release..."
 release_json="$(fetch "$API_URL")" ||
   die "Could not reach GitHub ($API_URL). Check your connection, or download manually: $RELEASES_PAGE"
 
@@ -107,7 +107,7 @@ release_json="$(fetch "$API_URL")" ||
 # "browser_download_url" lines is reliable and needs no dependency beyond
 # curl itself. Every match is anchored to the end of the filename (right
 # before the closing quote) specifically so a build's OWN checksum sidecar
-# (e.g. "Nexus-1.2.3-mac-arm64.dmg.sha256") can never be mistaken for the
+# (e.g. "SynCode-1.2.3-mac-arm64.dmg.sha256") can never be mistaken for the
 # build itself — a naive substring match on ".dmg" would hit both.
 if [ "$platform" = "mac" ]; then
   asset_line="$(printf '%s\n' "$release_json" | grep -i '"name":' | grep -i '\.dmg"' | grep -Ei "$arch_pattern" | head -n1)"
@@ -179,38 +179,48 @@ if [ "$platform" = "mac" ]; then
 
   if [ -z "$app_path" ]; then
     hdiutil detach "$mount_point" -quiet || true
-    die "Could not find Nexus.app inside the downloaded disk image."
+    die "Could not find an application bundle inside the downloaded disk image."
   fi
 
-  apps_dir="${NEXUS_INSTALL_APPLICATIONS_DIR:-/Applications}"
+  # The bundle is named from `productName`, which the SynCode rename changed.
+  # Deriving the destination from what is actually inside the image — rather
+  # than hardcoding a name — means this script installs both the SynCode-named
+  # builds already published and every SynCode-named build after them, with no
+  # flag day. Exactly the lesson the x64/x86_64 asset bug taught: read what is
+  # there, do not assume what it is called.
+  app_name="$(basename "$app_path")"
+  apps_dir="${SYNCODE_INSTALL_APPLICATIONS_DIR:-${NEXUS_INSTALL_APPLICATIONS_DIR:-/Applications}}"
   mkdir -p "$apps_dir"
-  dest="$apps_dir/Nexus.app"
+  dest="$apps_dir/$app_name"
   rm -rf "$dest"
   cp -R "$app_path" "$dest"
   hdiutil detach "$mount_point" -quiet || true
 
   log ""
-  log "Installed Nexus.app to $dest"
+  log "Installed $app_name to $dest"
   log ""
   log "IMPORTANT: this build is unsigned and not notarized."
   log "The first time you open it, macOS will say:"
-  log "  \"Apple could not verify that 'Nexus' is free of malware.\""
+  log "  \"Apple could not verify that '${app_name%.app}' is free of malware.\""
   log "Do not move it to the Trash. Instead:"
   log "  1. Open Finder and go to Applications."
-  log "  2. Right-click (or Control-click) Nexus.app."
+  log "  2. Right-click (or Control-click) $app_name."
   log "  3. Choose Open, then click Open again in the dialog that appears."
   log "You only need to do this once."
   log ""
   log "Advanced / last resort, only if that still refuses: you can remove the"
   log "quarantine flag Gatekeeper checks for:"
   log "  xattr -d com.apple.quarantine \"$dest\""
-  log "This disables the malware check for Nexus specifically — only do this"
+  log "This disables the malware check for SynCode specifically — only do this"
   log "if you trust where you got the file. It is not the recommended step;"
   log "the right-click instruction above is."
 else
   bin_dir="${NEXUS_INSTALL_BIN_DIR:-$HOME/.local/bin}"
   mkdir -p "$bin_dir"
-  dest="$bin_dir/Nexus.AppImage"
+  # Same derivation as the macOS branch: the product name is whatever prefixes
+  # the published asset, so this follows the rename without being told about it.
+  app_name="${asset_name%%-*}.AppImage"
+  dest="$bin_dir/$app_name"
   cp "$asset_path" "$dest"
   chmod +x "$dest"
 

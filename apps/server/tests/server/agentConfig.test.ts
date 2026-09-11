@@ -5,7 +5,7 @@ import { parseAgentConfig } from '../../src/server/agentConfig.js';
  * The gatekeeper for user-supplied agent configuration.
  *
  * Spike 1 established, by reading the SDK's own dispatch code, that `canUseTool`
- * — Nexus's four-eyes gate — is the LAST thing consulted and is skipped entirely
+ * — SynCode's four-eyes gate — is the LAST thing consulted and is skipped entirely
  * by several fields a config could carry, producing NO observable signal when it
  * happens. It also found that the SDK's runtime validator accepts fields its
  * public TypeScript type does not, so `as AgentDefinition` on parsed JSON is not
@@ -93,7 +93,7 @@ describe('parseAgentConfig — nested agents, the vector the type system hides',
     // Spike 1's most dangerous finding: AgentDefinition's public type has no
     // permissionMode, but the SDK's runtime zod schema accepts one and carries
     // it onto the subagent, whose tool calls then bypass the gate — without
-    // touching Nexus's top-level options at all.
+    // touching SynCode's top-level options at all.
     const result = parseAgentConfig({
       ...VALID,
       agents: { helper: { description: 'h', prompt: 'p', tools: [], permissionMode: 'bypassPermissions' } },

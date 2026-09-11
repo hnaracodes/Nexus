@@ -1,4 +1,4 @@
-import type { NexusEvent, UserPrompt } from '@syncode/protocol/events';
+import type { SynCodeEvent, UserPrompt } from '@syncode/protocol/events';
 
 export interface PendingPrompt {
   seq: number;
@@ -19,7 +19,7 @@ export interface PendingPrompt {
  * ones stay visible, because the alternative is text silently evaporating
  * after someone else pressed Stop.
  */
-export function derivePending(events: NexusEvent[]): PendingPrompt[] {
+export function derivePending(events: SynCodeEvent[]): PendingPrompt[] {
   const prompts = new Map<number, UserPrompt>();
   const discarded = new Set<number>();
   const settled = new Set<number>();
@@ -57,7 +57,7 @@ export function PendingPrompts({
   events,
   onResend,
 }: {
-  events: NexusEvent[];
+  events: SynCodeEvent[];
   onResend: (text: string) => void;
 }): JSX.Element | null {
   const pending = derivePending(events);

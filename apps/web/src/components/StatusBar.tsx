@@ -1,5 +1,5 @@
 import { GitBranch, User, Users } from 'lucide-react';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import type { PresenceEntry } from '@syncode/protocol/wire';
 import type { Status } from '../ws.js';
 import { deriveGithubBinding } from '../githubBinding.js';
@@ -23,7 +23,7 @@ export function StatusBar({
   agentCount,
   status,
 }: {
-  events: NexusEvent[];
+  events: SynCodeEvent[];
   roomId: string;
   participants: PresenceEntry[];
   driverId: string | null;

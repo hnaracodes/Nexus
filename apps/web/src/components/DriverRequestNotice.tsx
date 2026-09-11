@@ -1,5 +1,5 @@
 import { Hand } from 'lucide-react';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import { Avatar } from './Avatar.js';
 
 export interface PendingDriverRequest {
@@ -16,7 +16,7 @@ export interface PendingDriverRequest {
  * favour. Two requests from the same participant collapse to one (the most
  * recent), ordered by seq.
  */
-export function derivePendingDriverRequests(events: NexusEvent[]): PendingDriverRequest[] {
+export function derivePendingDriverRequests(events: SynCodeEvent[]): PendingDriverRequest[] {
   const pending = new Map<string, PendingDriverRequest>();
 
   for (const event of events) {
@@ -51,7 +51,7 @@ export function DriverRequestNotice({
   onDismiss,
   dismissedParticipantIds = new Set(),
 }: {
-  events: NexusEvent[];
+  events: SynCodeEvent[];
   selfId: string | null;
   driverId: string | null;
   onGrant: (participantId: string) => void;

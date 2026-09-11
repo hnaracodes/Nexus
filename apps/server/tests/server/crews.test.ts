@@ -11,7 +11,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { AgentSpawned, CrewLaunched, NexusEvent } from '@syncode/protocol/events';
+import type { AgentSpawned, CrewLaunched, SynCodeEvent } from '@syncode/protocol/events';
 import { agentIdOf } from '@syncode/protocol/events';
 import { createRoom } from '../../src/server/rooms.js';
 import { MemorySink, __resetRuntimes, attachRoom } from '../../src/server/ws.js';
@@ -97,11 +97,11 @@ function saveThreeMemberCrew(crewName = 'trio'): void {
   if (!result.ok) throw new Error(`fixture setup failed: ${result.problems.join(' ')}`);
 }
 
-function crewLaunchedEvents(events: NexusEvent[]): CrewLaunched[] {
+function crewLaunchedEvents(events: SynCodeEvent[]): CrewLaunched[] {
   return events.filter((event): event is CrewLaunched => event.type === 'crew_launched');
 }
 
-function agentSpawnedEvents(events: NexusEvent[]): AgentSpawned[] {
+function agentSpawnedEvents(events: SynCodeEvent[]): AgentSpawned[] {
   return events.filter((event): event is AgentSpawned => event.type === 'agent_spawned');
 }
 
@@ -109,7 +109,7 @@ function agentSpawnedEvents(events: NexusEvent[]): AgentSpawned[] {
  *  (ws.ts) attaches it, and its generic fallback logs one, before any test
  *  here touches a crew. Its `participantId` is always `null` (ws.ts); a real
  *  member spawn always names the human who launched the crew. */
-function memberSpawnedEvents(events: NexusEvent[]): AgentSpawned[] {
+function memberSpawnedEvents(events: SynCodeEvent[]): AgentSpawned[] {
   return agentSpawnedEvents(events).filter((event) => event.participantId !== null);
 }
 
@@ -263,7 +263,7 @@ describe('projectCrews — I3, no second source of truth', () => {
     // bounce (this is exactly what `openLog`/replay.ts hands back on boot).
     // Round-tripping through JSON severs any object-identity shortcut a lazier
     // implementation might lean on.
-    const replayed = JSON.parse(JSON.stringify(runtime.sink.read())) as NexusEvent[];
+    const replayed = JSON.parse(JSON.stringify(runtime.sink.read())) as SynCodeEvent[];
 
     const crews = projectCrews(replayed);
     expect(crews).toHaveLength(1);

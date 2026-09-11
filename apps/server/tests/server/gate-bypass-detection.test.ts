@@ -4,7 +4,7 @@ import { startAgent } from '../../src/server/agent.js';
 import { __resetRooms, createRoom } from '../../src/server/rooms.js';
 
 /**
- * Nexus notices when its own gate is bypassed.
+ * SynCode notices when its own gate is bypassed.
  *
  * The gate was dead in production and nothing said so, because the SDK emits no
  * signal at all when it declines to call a permission check — a bypassed tool
@@ -12,7 +12,7 @@ import { __resetRooms, createRoom } from '../../src/server/rooms.js';
  * guard the options handed to `query()`, but they cannot notice the SDK changing
  * which of those options it HONOURS, and that is exactly what happened.
  *
- * So Nexus builds the signal the SDK will not: a tool that produced a result
+ * So SynCode builds the signal the SDK will not: a tool that produced a result
  * without first passing the gate is a bypass, and it gets said out loud, in the
  * room, in the append-only log.
  *

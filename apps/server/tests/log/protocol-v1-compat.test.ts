@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import { PRIMARY_AGENT_ID, isLoggedEvent, loggedEventTypes } from '@syncode/protocol/events';
 import { projectAgents, reconstruct } from '../../src/log/replay.js';
 
@@ -53,7 +53,7 @@ const FIXTURE = fileURLToPath(new URL('../fixtures/protocol-v1-room.jsonl', impo
  * log never could — keeping them here rather than in the fixture is what lets
  * the "no event carries an agentId" assertion above stay meaningful.
  */
-const V3_ONLY_EVENTS: NexusEvent[] = [
+const V3_ONLY_EVENTS: SynCodeEvent[] = [
   {
     type: 'agent_spawned',
     agentId: 'reviewer',
@@ -108,11 +108,11 @@ const V3_ONLY_EVENTS: NexusEvent[] = [
   },
 ];
 
-function readFixture(): NexusEvent[] {
+function readFixture(): SynCodeEvent[] {
   return readFileSync(FIXTURE, 'utf8')
     .split('\n')
     .filter((line) => line.trim() !== '')
-    .map((line) => JSON.parse(line) as NexusEvent);
+    .map((line) => JSON.parse(line) as SynCodeEvent);
 }
 
 describe('protocol v1 logs on disk', () => {
@@ -204,7 +204,7 @@ describe('the agent roster is derivable from the log alone (I3)', () => {
       { type: 'agent_idle', agentId: 'reviewer', seq: 25, ts: '2026-08-30T21:10:00.000Z', roomId: 'room_802c12cbc2704971' },
       { type: 'agent_idle', agentId: 'reviewer', seq: 26, ts: '2026-08-30T21:10:01.000Z', roomId: 'room_802c12cbc2704971' },
       { type: 'agent_idle', agentId: 'tester', seq: 27, ts: '2026-08-30T21:10:02.000Z', roomId: 'room_802c12cbc2704971' },
-    ] as NexusEvent[];
+    ] as SynCodeEvent[];
 
     expect(projectAgents(events)).toEqual([PRIMARY_AGENT_ID, 'reviewer', 'tester']);
   });

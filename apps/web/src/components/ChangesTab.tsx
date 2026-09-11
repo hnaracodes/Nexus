@@ -1,5 +1,5 @@
 import { CheckCircle2, XCircle } from 'lucide-react';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import { deriveApprovals } from '../approvals.js';
 import type { GitStatusEntry } from '../workspace/types.js';
 
@@ -9,7 +9,7 @@ export type GitStatusState =
   | { status: 'ready'; entries: GitStatusEntry[] };
 
 export interface ChangesTabProps {
-  events: NexusEvent[];
+  events: SynCodeEvent[];
   gitStatus: GitStatusState;
 }
 

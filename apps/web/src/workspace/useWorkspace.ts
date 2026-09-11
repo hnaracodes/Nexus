@@ -23,7 +23,7 @@ export interface UseWorkspaceResult {
  * imports `store.ts`** — it receives `editSeqByPath`, already derived from
  * the log by the caller (`WorkspacePane`, via `deriveLatestEditSeqByPath`),
  * so this hook can mark entries stale without itself knowing what a
- * `NexusEvent` is (I3).
+ * `SynCodeEvent` is (I3).
  *
  * Reconnect reuses this exact staleness path rather than blind-refetching
  * everything: a replay recomputes `editSeqByPath` from the full log, and any

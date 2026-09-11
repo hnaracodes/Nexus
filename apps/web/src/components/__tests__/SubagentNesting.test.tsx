@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import { MessageList } from '../MessageList.js';
 
 /**
@@ -17,7 +17,7 @@ function ts(seq: number): string {
   return new Date(2026, 6, 28, 0, 0, seq).toISOString();
 }
 
-function prompt(seq: number, opts: Partial<NexusEvent> = {}): NexusEvent {
+function prompt(seq: number, opts: Partial<SynCodeEvent> = {}): SynCodeEvent {
   return {
     seq,
     ts: ts(seq),
@@ -27,10 +27,10 @@ function prompt(seq: number, opts: Partial<NexusEvent> = {}): NexusEvent {
     displayName: 'Ada',
     text: `message ${seq}`,
     ...opts,
-  } as NexusEvent;
+  } as SynCodeEvent;
 }
 
-function assistant(seq: number, messageId: string, parentToolUseId?: string | null): NexusEvent {
+function assistant(seq: number, messageId: string, parentToolUseId?: string | null): SynCodeEvent {
   return {
     seq,
     ts: ts(seq),
@@ -39,7 +39,7 @@ function assistant(seq: number, messageId: string, parentToolUseId?: string | nu
     messageId,
     text: `assistant ${seq}`,
     ...(parentToolUseId === undefined ? {} : { parentToolUseId }),
-  } as NexusEvent;
+  } as SynCodeEvent;
 }
 
 function toolStart(
@@ -47,7 +47,7 @@ function toolStart(
   toolUseId: string,
   toolName = 'Bash',
   parentToolUseId?: string | null,
-): NexusEvent {
+): SynCodeEvent {
   return {
     seq,
     ts: ts(seq),
@@ -57,7 +57,7 @@ function toolStart(
     toolName,
     input: { command: 'ls -la' },
     ...(parentToolUseId === undefined ? {} : { parentToolUseId }),
-  } as NexusEvent;
+  } as SynCodeEvent;
 }
 
 function toolResult(
@@ -66,7 +66,7 @@ function toolResult(
   isError: boolean,
   output = 'ok',
   parentToolUseId?: string | null,
-): NexusEvent {
+): SynCodeEvent {
   return {
     seq,
     ts: ts(seq),
@@ -77,7 +77,7 @@ function toolResult(
     isError,
     output,
     ...(parentToolUseId === undefined ? {} : { parentToolUseId }),
-  } as NexusEvent;
+  } as SynCodeEvent;
 }
 
 describe('MessageList — nested subagent activity', () => {

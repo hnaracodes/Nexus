@@ -2,9 +2,9 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { JoinGate, readStoredName, storeName } from '../JoinGate.js';
 import { JoinToasts, deriveJoinsAfter } from '../JoinToasts.js';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 
-const joined = (seq: number, displayName: string): NexusEvent => ({
+const joined = (seq: number, displayName: string): SynCodeEvent => ({
   seq,
   ts: '2026-08-03T00:00:00.000Z',
   roomId: 'room_a',
@@ -63,7 +63,7 @@ describe('deriveJoinsAfter', () => {
   });
 
   it('ignores non-join events', () => {
-    const events: NexusEvent[] = [
+    const events: SynCodeEvent[] = [
       joined(1, 'Ada'),
       { seq: 2, ts: 't', roomId: 'room_a', type: 'agent_idle' },
     ];

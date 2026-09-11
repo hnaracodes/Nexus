@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { GithubRepoRef, NexusEvent } from '@syncode/protocol/events';
+import type { GithubRepoRef, SynCodeEvent } from '@syncode/protocol/events';
 import { deriveGithubBinding } from '../../githubBinding.js';
 
 const ROOM = 'room_fixture';
@@ -15,7 +15,7 @@ const BINDING: GithubRepoRef = {
   defaultBranch: 'main',
 };
 
-function created(seq: number, github?: GithubRepoRef | null): NexusEvent {
+function created(seq: number, github?: GithubRepoRef | null): SynCodeEvent {
   const event = {
     seq,
     ts: ts(seq),

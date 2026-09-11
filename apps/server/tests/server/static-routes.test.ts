@@ -23,7 +23,7 @@ beforeEach(() => {
   const root = mkdtempSync(join(tmpdir(), 'nexus-client-routes-'));
   clientDir = join(root, 'dist');
   mkdirSync(join(clientDir, 'assets'), { recursive: true });
-  writeFileSync(join(clientDir, 'index.html'), '<!doctype html><title>Nexus</title>', 'utf8');
+  writeFileSync(join(clientDir, 'index.html'), '<!doctype html><title>SynCode</title>', 'utf8');
   // serveStatic resolves relative to cwd, so hand it a cwd-relative path.
   process.env['NEXUS_CLIENT_DIR'] = relative(process.cwd(), clientDir).replaceAll('\\', '/');
 });

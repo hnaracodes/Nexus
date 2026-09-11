@@ -1,4 +1,4 @@
-import type { AgentId, AgentProvider, NexusEvent } from '@syncode/protocol/events';
+import type { AgentId, AgentProvider, SynCodeEvent } from '@syncode/protocol/events';
 import { PRIMARY_AGENT_ID, agentIdOf } from '@syncode/protocol/events';
 import type { PresenceEntry } from '@syncode/protocol/wire';
 import { projectPresence } from '../server/presence.js';
@@ -20,9 +20,9 @@ export interface ReconstructedRoom {
  * attached in memory never lost its state, so it replays raw logged events
  * directly rather than re-deriving them.
  */
-export function reconstruct(events: NexusEvent[]): ReconstructedRoom | null {
+export function reconstruct(events: SynCodeEvent[]): ReconstructedRoom | null {
   const created = events.find(
-    (event): event is Extract<NexusEvent, { type: 'room_created' }> => event.type === 'room_created',
+    (event): event is Extract<SynCodeEvent, { type: 'room_created' }> => event.type === 'room_created',
   );
   if (created === undefined) return null;
 
@@ -59,7 +59,7 @@ export function reconstruct(events: NexusEvent[]): ReconstructedRoom | null {
  * the primary agent rather than as a distinct nameless agent — which is what
  * every line on the production volume is.
  */
-export function projectAgents(events: NexusEvent[]): AgentId[] {
+export function projectAgents(events: SynCodeEvent[]): AgentId[] {
   const seen = new Set<AgentId>([PRIMARY_AGENT_ID]);
   for (const event of events) {
     // Only agent-scoped events carry the field; the rest read as primary and
@@ -117,7 +117,7 @@ export interface FleetEntry {
  * needs to tell a stopped agent from a live one instead of blindly re-attaching
  * everything `projectAgents` ever saw an id for.
  */
-export function projectFleet(events: NexusEvent[]): FleetEntry[] {
+export function projectFleet(events: SynCodeEvent[]): FleetEntry[] {
   const byId = new Map<AgentId, FleetEntry>();
   byId.set(PRIMARY_AGENT_ID, {
     agentId: PRIMARY_AGENT_ID,

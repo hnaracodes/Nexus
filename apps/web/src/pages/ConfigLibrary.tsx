@@ -26,7 +26,7 @@ import { Button } from '../components/Button.js';
  * plant one for someone else's room to launch.
  *
  * Until accounts exist, the room token is the only credential this system has,
- * so these calls are room-scoped and carry `X-Nexus-Token`, exactly as
+ * so these calls are room-scoped and carry `X-SynCode-Token`, exactly as
  * `workspaceApi.ts` does. That is a statement about who may write, not about
  * who owns the data. When accounts land (D1/D3: "keyed by account once
  * accounts exist") the scope moves to a session credential; the header does
@@ -58,7 +58,7 @@ function crewsUrl(suffix = ''): string {
 }
 
 function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
-  return { 'X-Nexus-Token': roomParams().token, ...extra };
+  return { 'X-SynCode-Token': roomParams().token, ...extra };
 }
 
 interface SubagentConfig {
@@ -659,7 +659,7 @@ export function ConfigLibrary(): JSX.Element {
               <div role="alert" className="rounded-md border border-danger bg-muted px-3 py-2 text-sm text-fg">
                 <p className="mb-1 flex items-center gap-2 font-semibold">
                   <AlertTriangle size={14} strokeWidth={2} className="text-danger" aria-hidden="true" />
-                  Nexus rejected this configuration:
+                  SynCode rejected this configuration:
                 </p>
                 <ul className="list-disc space-y-1 pl-5">
                   {configProblems.map((problem) => (
@@ -857,7 +857,7 @@ export function ConfigLibrary(): JSX.Element {
               <div role="alert" className="rounded-md border border-danger bg-muted px-3 py-2 text-sm text-fg">
                 <p className="mb-1 flex items-center gap-2 font-semibold">
                   <AlertTriangle size={14} strokeWidth={2} className="text-danger" aria-hidden="true" />
-                  Nexus rejected this crew:
+                  SynCode rejected this crew:
                 </p>
                 <ul className="list-disc space-y-1 pl-5">
                   {crewProblems.map((problem) => (

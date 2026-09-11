@@ -75,6 +75,7 @@ import {
 import type { Room } from './rooms.js';
 import { getGitDiff, getGitStatus } from './gitStatus.js';
 import { WorkspacePathError, listTree, readWorkspaceFile } from './workspace.js';
+import { readEnv } from './env.js';
 
 // {apiKey, repoUrl} never needs more than a few hundred bytes. This is not
 // about legitimate payloads — it stops an anonymous caller from streaming an
@@ -88,13 +89,13 @@ const CREATE_ROOM_MAX_BODY_BYTES = 16 * 1024;
 // must still see the new value, or the "right assertion at the wrong moment"
 // failure mode repeats itself here.
 function createRoomRateLimit(): number {
-  return Number(process.env['NEXUS_ROOM_RATE_LIMIT'] ?? 5);
+  return Number(readEnv('ROOM_RATE_LIMIT') ?? 5);
 }
 function createRoomRateWindowMs(): number {
-  return Number(process.env['NEXUS_ROOM_RATE_WINDOW_MS'] ?? 10 * 60 * 1000);
+  return Number(readEnv('ROOM_RATE_WINDOW_MS') ?? 10 * 60 * 1000);
 }
 function maxRooms(): number {
-  return Number(process.env['NEXUS_MAX_ROOMS'] ?? 200);
+  return Number(readEnv('MAX_ROOMS') ?? 200);
 }
 
 /** Fly sets Fly-Client-IP on proxied requests; X-Forwarded-For is the more
@@ -114,7 +115,7 @@ function clientIp(c: Context): string {
  * rather than relying on a proxied Host header.
  */
 function publicOrigin(c: Context): string {
-  const configured = process.env['NEXUS_PUBLIC_URL'];
+  const configured = readEnv('PUBLIC_URL');
   if (configured !== undefined && configured !== '') return configured.replace(/\/+$/, '');
   const proto = c.req.header('X-Forwarded-Proto') ?? 'http';
   return `${proto}://${c.req.header('Host') ?? 'localhost'}`;
@@ -126,7 +127,7 @@ function githubCallbackUrl(c: Context): string {
 
 /** The data root every room-scoped store hangs off. Mirrors `recovery.ts`'s
  *  own default so a room's configs land beside its log and its meta sidecar. */
-const DATA_DIR_ROOT = process.env['NEXUS_DATA_DIR'] ?? './data';
+const DATA_DIR_ROOT = readEnv('DATA_DIR') ?? './data';
 
 /**
  * One shared release lookup for the whole deployment.
@@ -147,6 +148,23 @@ let releaseCache: { at: number; body: unknown } | null = null;
  *  a 502 passes against a 200 it never made. */
 export function __resetReleaseCache(): void {
   releaseCache = null;
+}
+
+/**
+ * The room token from a request, under either header name.
+ *
+ * The SynCode rename moved this header, and it is a live wire contract rather
+ * than copy: a browser tab that was already open when a deploy lands is still
+ * running the OLD bundle and still sending `X-Nexus-Token`. A server that only
+ * accepted the new name would log every one of those people out mid-session,
+ * and the room link is the credential — they would have to find it again.
+ *
+ * So both are accepted and the new one wins. Dropping `X-Nexus-Token` is safe
+ * only once no deployed bundle still sends it, which means one release after
+ * every client has been served the new one.
+ */
+function roomTokenHeader(c: Context): string | undefined {
+  return c.req.header('X-SynCode-Token') ?? c.req.header('X-Nexus-Token');
 }
 
 export function createServer(
@@ -337,7 +355,7 @@ export function createServer(
         return c.json({ error: 'Too many rooms created from this address. Try again later.' }, 429);
       }
       if (roomCount() >= maxRooms()) {
-        return c.json({ error: 'Nexus is at capacity. Try again later.' }, 503);
+        return c.json({ error: 'SynCode is at capacity. Try again later.' }, 503);
       }
 
       const body = (await c.req.json().catch(() => null)) as
@@ -478,7 +496,7 @@ export function createServer(
   app.get('/api/rooms/:id', (c) => {
     const room = getRoom(c.req.param('id'));
     if (room === undefined) return c.json({ error: 'No such room.' }, 404);
-    const token = c.req.header('X-Nexus-Token');
+    const token = roomTokenHeader(c);
     if (token === undefined || authorize(room.id, token) === undefined) {
       return c.json({ error: 'Invalid room token.' }, 401);
     }
@@ -509,7 +527,7 @@ export function createServer(
       return c.json({ error: 'Host addresses are not available on this server.' }, 404);
     }
     const roomId = c.req.query('room') ?? '';
-    const token = c.req.header('X-Nexus-Token');
+    const token = roomTokenHeader(c);
     if (token === undefined || authorize(roomId, token) === undefined) {
       return c.json({ error: 'Invalid room token.' }, 401);
     }
@@ -521,7 +539,7 @@ export function createServer(
   //   /api/rooms/:id/workspace/tree?path=   /api/rooms/:id/workspace/file?path=
   //   /api/rooms/:id/git/status             /api/rooms/:id/git/diff?path=
   //   /api/rooms/:id/models
-  // Guard each exactly as GET /api/rooms/:id does above — X-Nexus-Token header
+  // Guard each exactly as GET /api/rooms/:id does above — X-SynCode-Token header (or the legacy X-Nexus-Token)
   // plus authorize(). NO query-param token fallback: only the WS upgrade needs
   // one, because the browser's WebSocket constructor cannot set headers.
   // The path is a QUERY PARAM, never a wildcard segment — Hono decodes and
@@ -534,7 +552,7 @@ export function createServer(
   function requireRoom(c: Context): { room: Room } | Response {
     const room = getRoom(c.req.param('id') ?? '');
     if (room === undefined) return c.json({ error: 'No such room.' }, 404);
-    const token = c.req.header('X-Nexus-Token');
+    const token = roomTokenHeader(c);
     if (token === undefined || authorize(room.id, token) === undefined) {
       return c.json({ error: 'Invalid room token.' }, 401);
     }
@@ -753,7 +771,7 @@ export function createServer(
     // their own key, and because attachRoom is idempotent (I1) whoever wins
     // that race owns the room's one live agent permanently — a later re-key
     // by the real creator is accepted and then silently never used.
-    const token = c.req.header('X-Nexus-Token');
+    const token = roomTokenHeader(c);
     if (token === undefined || authorize(room.id, token) === undefined) {
       return c.json({ error: 'Invalid room token.' }, 401);
     }
@@ -808,7 +826,7 @@ export function createServer(
   // apps/server/. serveStatic joins this with path.join and stats the result,
   // so an absolute path is fine — only *relative* ones are cwd-sensitive.
   const clientDir =
-    process.env['NEXUS_CLIENT_DIR'] ?? fileURLToPath(new URL('../../../web/dist', import.meta.url));
+    readEnv('CLIENT_DIR') ?? fileURLToPath(new URL('../../../web/dist', import.meta.url));
   app.use('/assets/*', serveStatic({ root: clientDir }));
   for (const path of PAGE_ROUTES) {
     app.get(path, serveStatic({ path: `${clientDir}/index.html` }));
@@ -816,7 +834,7 @@ export function createServer(
   for (const path of PAGE_ROUTES) {
     app.get(path, (c) =>
       c.text(
-        'Nexus server is running, but no client bundle was found. ' +
+        'SynCode server is running, but no client bundle was found. ' +
           'Run `npm run build:client`, or set NEXUS_CLIENT_DIR.',
         503,
       ),

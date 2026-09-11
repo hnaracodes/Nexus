@@ -1,10 +1,11 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import { isLoggedEvent } from '@syncode/protocol/events';
 import { redactEvent } from './redact.js';
+import { readEnv } from '../server/env.js';
 
-const DEFAULT_DATA_DIR = process.env['NEXUS_DATA_DIR'] ?? './data';
+const DEFAULT_DATA_DIR = readEnv('DATA_DIR') ?? './data';
 const SAFE_ROOM_ID = /^[A-Za-z0-9_-]+$/;
 
 export function logPathFor(roomId: string, dataDir: string = DEFAULT_DATA_DIR): string {
@@ -16,7 +17,7 @@ export function logPathFor(roomId: string, dataDir: string = DEFAULT_DATA_DIR): 
 
 export class JsonlEventLog {
   readonly path: string;
-  #cache: NexusEvent[] | null = null;
+  #cache: SynCodeEvent[] | null = null;
 
   constructor(roomId: string, dataDir: string = DEFAULT_DATA_DIR) {
     this.path = logPathFor(roomId, dataDir);
@@ -24,20 +25,20 @@ export class JsonlEventLog {
   }
 
   /** Append only. There is deliberately no update, delete, or compact (I3). */
-  append(event: NexusEvent): void {
+  append(event: SynCodeEvent): void {
     const redacted = redactEvent(event);
     appendFileSync(this.path, `${JSON.stringify(redacted)}\n`, 'utf8');
     if (this.#cache !== null) this.#cache.push(redacted);
   }
 
-  read(): NexusEvent[] {
+  read(): SynCodeEvent[] {
     if (this.#cache !== null) return this.#cache;
     this.#cache = existsSync(this.path) ? parseLines(readFileSync(this.path, 'utf8')) : [];
     return this.#cache;
   }
 
   /** Events strictly after `seq`. Used for resume-from-sequence-number. */
-  readFrom(seq: number): NexusEvent[] {
+  readFrom(seq: number): SynCodeEvent[] {
     return this.read().filter((event) => event.seq > seq);
   }
 
@@ -47,8 +48,8 @@ export class JsonlEventLog {
 }
 
 /** A crash mid-append leaves a partial trailing line. Discard it, don't throw. */
-function parseLines(raw: string): NexusEvent[] {
-  const events: NexusEvent[] = [];
+function parseLines(raw: string): SynCodeEvent[] {
+  const events: SynCodeEvent[] = [];
   for (const line of raw.split('\n')) {
     if (line.length === 0) continue;
     let parsed: unknown;

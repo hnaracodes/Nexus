@@ -29,7 +29,7 @@ afterAll(async () => {
 });
 
 // attachRoom now also starts a real recursive fs.watch (phase-7a) on the
-// room's cwd. Pointing every stubbed room at process.cwd() — the whole Nexus
+// room's cwd. Pointing every stubbed room at process.cwd() — the whole SynCode
 // repo, node_modules included — would make each test in this file open a
 // heavy recursive watch on a huge tree instead of a small, disposable one.
 const stubCwd = mkdtempSync(join(tmpdir(), 'nexus-ws-test-'));

@@ -1,4 +1,4 @@
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 
 export const PUBLISH_TOOL_SUFFIX = 'publish_pull_request';
 
@@ -27,7 +27,7 @@ export interface PublishedPr {
  * this project has already shipped one bug from matching decisions positionally.
  * Null when the gate resolved without a human (auto-approve or timeout).
  */
-export function deriveLatestPublishedPr(events: NexusEvent[]): PublishedPr | null {
+export function deriveLatestPublishedPr(events: SynCodeEvent[]): PublishedPr | null {
   for (let i = events.length - 1; i >= 0; i -= 1) {
     const event = events[i];
     if (event?.type !== 'github_published') continue;

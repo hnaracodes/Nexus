@@ -1,10 +1,10 @@
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import { JsonlEventLog } from './event-log.js';
 
 /** Structurally identical to the EventSink interface in src/server/ws.ts. */
 export interface EventSink {
-  append(event: NexusEvent): void;
-  read(): NexusEvent[];
+  append(event: SynCodeEvent): void;
+  read(): SynCodeEvent[];
 }
 
 export function createSink(roomId: string, dataDir?: string): JsonlEventLog {

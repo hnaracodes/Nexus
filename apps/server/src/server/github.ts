@@ -1,7 +1,7 @@
 /**
  * GitHub App authentication (plan phase-6).
  *
- * Nexus authenticates to GitHub as an *App*, never as a human holding a pasted
+ * SynCode authenticates to GitHub as an *App*, never as a human holding a pasted
  * token. The human authorizes once; from then on this module mints the
  * short-lived credentials each operation needs, from the App private key. That
  * is what makes the hard requirement achievable — after one authorize click the
@@ -62,7 +62,7 @@ export interface VerifiedInstallation {
  *
  * `startAgent` spawns the SDK subprocess with `env: { ...process.env, ... }`,
  * so every server-wide environment variable is inherited by an agent that
- * participants can ask to run `printenv`. Nexus previously had only *per-room*
+ * participants can ask to run `printenv`. SynCode previously had only *per-room*
  * secrets, which made that harmless. The App private key is the first
  * server-wide one, and it is a master key: it mints installation tokens for
  * EVERY installation, so a participant in any room could reach every user's
@@ -284,7 +284,7 @@ export function buildAuthorizeUrl(opts: {
 /**
  * Exchange the callback code for a user-to-server token. That token is used
  * once, to verify which installations genuinely belong to this human, and is
- * then discarded in the same request — Nexus never stores it.
+ * then discarded in the same request — SynCode never stores it.
  */
 export async function exchangeCodeForUserToken(
   code: string,

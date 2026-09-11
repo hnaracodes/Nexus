@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import { PUBLISH_TOOL_SUFFIX, deriveLatestPublishedPr } from '../../publishedPr.js';
 
 const ROOM = 'room_fixture';
@@ -8,7 +8,7 @@ function ts(seq: number): string {
   return new Date(2026, 6, 28, 0, 0, seq).toISOString();
 }
 
-function published(seq: number, prNumber: number, created = true): NexusEvent {
+function published(seq: number, prNumber: number, created = true): SynCodeEvent {
   return {
     seq,
     ts: ts(seq),
@@ -28,7 +28,7 @@ function decided(
   participantId: string | null,
   decision: 'allow' | 'deny' = 'allow',
   toolName = `mcp__nexus_github__${PUBLISH_TOOL_SUFFIX}`,
-): NexusEvent {
+): SynCodeEvent {
   return {
     seq,
     ts: ts(seq),

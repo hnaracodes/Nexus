@@ -19,7 +19,7 @@ beforeEach(() => {
   const root = mkdtempSync(join(tmpdir(), 'nexus-client-'));
   clientDir = join(root, 'dist');
   mkdirSync(join(clientDir, 'assets'), { recursive: true });
-  writeFileSync(join(clientDir, 'index.html'), '<!doctype html><title>Nexus</title>', 'utf8');
+  writeFileSync(join(clientDir, 'index.html'), '<!doctype html><title>SynCode</title>', 'utf8');
   writeFileSync(join(clientDir, 'assets', 'index-abc123.js'), 'console.log("bundle")', 'utf8');
   // serveStatic resolves relative to cwd, so hand it a cwd-relative path.
   process.env['NEXUS_CLIENT_DIR'] = relative(process.cwd(), clientDir).replaceAll('\\', '/');
@@ -39,7 +39,7 @@ describe('static client serving', () => {
     const app = freshApp();
     const response = await app.fetch(new Request('http://localhost/?room=r&token=t'));
     expect(response.status).toBe(200);
-    expect(await response.text()).toContain('<title>Nexus</title>');
+    expect(await response.text()).toContain('<title>SynCode</title>');
   });
 
   it('serves hashed asset bundles', async () => {

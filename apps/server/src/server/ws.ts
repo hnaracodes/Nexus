@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { WebSocket } from 'ws';
-import type { AgentId, AgentProvider, NexusEvent, UnsequencedEvent } from '@syncode/protocol/events';
+import type { AgentId, AgentProvider, SynCodeEvent, UnsequencedEvent } from '@syncode/protocol/events';
 import { PRIMARY_AGENT_ID, agentIdOf } from '@syncode/protocol/events';
 import type { DocPresenceEntry, ServerFrame } from '@syncode/protocol/wire';
 import { createSink } from '../log/index.js';
@@ -36,8 +36,8 @@ const DOC_SYNC_NO_ORIGIN = 'server';
 
 /** Implemented durably by `src/log/` (plan phase-1a). */
 export interface EventSink {
-  append(event: NexusEvent): void;
-  read(): NexusEvent[];
+  append(event: SynCodeEvent): void;
+  read(): SynCodeEvent[];
 }
 
 /**
@@ -46,11 +46,11 @@ export interface EventSink {
  * forbids.
  */
 export class MemorySink implements EventSink {
-  #events: NexusEvent[] = [];
-  append(event: NexusEvent): void {
+  #events: SynCodeEvent[] = [];
+  append(event: SynCodeEvent): void {
     this.#events.push(event);
   }
-  read(): NexusEvent[] {
+  read(): SynCodeEvent[] {
     return this.#events;
   }
 }
@@ -162,10 +162,10 @@ export interface RoomRuntime {
   sink: EventSink;
   broadcast(frame: ServerFrame): void;
   /** Seal an unsequenced event: assign seq + ts, append to the sink, broadcast. */
-  commit(event: UnsequencedEvent): NexusEvent;
+  commit(event: UnsequencedEvent): SynCodeEvent;
   /** `commit`, attributed to a specific agent. See the implementation for why
    *  the primary agent is deliberately left unstamped. */
-  commitAs(agentId: AgentId, event: UnsequencedEvent): NexusEvent;
+  commitAs(agentId: AgentId, event: UnsequencedEvent): SynCodeEvent;
   /** The room's shared approval queue (phase 12). */
   approvals: ApprovalQueue;
   /** Broadcast the transient `fleet` frame — liveness, never membership. */
@@ -508,10 +508,10 @@ export function attachRoom(
     broadcastFleet(): void {
       runtime.broadcast({ kind: 'fleet', agents: fleetSnapshot(runtime) });
     },
-    commit(event: UnsequencedEvent): NexusEvent {
+    commit(event: UnsequencedEvent): SynCodeEvent {
       return runtime.commitAs(PRIMARY_AGENT_ID, event);
     },
-    commitAs(agentId: AgentId, event: UnsequencedEvent): NexusEvent {
+    commitAs(agentId: AgentId, event: UnsequencedEvent): SynCodeEvent {
       // Redact ONCE, here, and use that single object for all three
       // destinations. Previously the sink redacted into a new object while the
       // broadcast — and the return value — still carried the original, so a
@@ -544,7 +544,7 @@ export function attachRoom(
         seq: room.nextSeq(),
         ts: new Date().toISOString(),
         roomId: room.id,
-      } as NexusEvent);
+      } as SynCodeEvent);
       sink.append(sealed);
       runtime.broadcast({ kind: 'event', event: sealed });
       return sealed;

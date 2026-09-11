@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import { WorkspacePane } from '../WorkspacePane.js';
 import type { DocSession } from '../../workspace/docSession.js';
 import type { WorkspaceApi } from '../../workspace/workspaceApi.js';
@@ -56,7 +56,7 @@ function fakeSession(): DocSession {
 
 /** The agent's `tool_start` is what makes the pane select a file at all —
  *  WorkspacePane follows the agent's current file until someone pins one. */
-function eventsTouching(path: string): NexusEvent[] {
+function eventsTouching(path: string): SynCodeEvent[] {
   return [
     {
       type: 'tool_start',
@@ -66,7 +66,7 @@ function eventsTouching(path: string): NexusEvent[] {
       toolUseId: 't1',
       toolName: 'Read',
       input: { file_path: path },
-    } as NexusEvent,
+    } as SynCodeEvent,
   ];
 }
 

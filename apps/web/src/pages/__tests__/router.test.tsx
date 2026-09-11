@@ -14,7 +14,7 @@ describe('resolveRoute', () => {
   });
 
   it('still opens the room for a legacy /?room=&token= link', () => {
-    // Every link Nexus has ever issued looks like this. Breaking it would
+    // Every link SynCode has ever issued looks like this. Breaking it would
     // silently strand every room already shared with anyone.
     expect(resolveRoute('/', '?room=room_abc&token=deadbeef')).toBe('room');
   });
@@ -69,7 +69,7 @@ describe('the router actually dispatches each route', () => {
     globalThis.history.replaceState({}, '', '/download');
     render(<Router />);
 
-    expect(await screen.findByRole('heading', { name: /download nexus/i })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: /download syncode/i })).toBeTruthy();
     expect(screen.queryByRole('heading', { name: /one agent, one context window/i })).toBeNull();
   });
 

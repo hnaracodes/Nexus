@@ -28,10 +28,10 @@ function releasePayload(assetNames: string[]): {
 }
 
 const ALL_ASSETS = [
-  'Nexus-1.2.3-mac-arm64.dmg',
-  'Nexus-1.2.3-mac-x64.dmg',
-  'Nexus-1.2.3-win-x64.exe',
-  'Nexus-1.2.3-linux-x64.AppImage',
+  'SynCode-1.2.3-mac-arm64.dmg',
+  'SynCode-1.2.3-mac-x64.dmg',
+  'SynCode-1.2.3-win-x64.exe',
+  'SynCode-1.2.3-linux-x64.AppImage',
 ];
 
 function setUserAgent(ua: string): void {

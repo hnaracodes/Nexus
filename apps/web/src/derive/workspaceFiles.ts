@@ -1,4 +1,4 @@
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 
 /**
  * Pure derivations over the event log for the workspace pane — zero React,
@@ -61,7 +61,7 @@ function readFilePath(toolName: string, input: unknown): string | null {
 }
 
 /** Every distinct path the agent has touched, in first-touched order. */
-export function deriveTouchedFiles(events: NexusEvent[]): string[] {
+export function deriveTouchedFiles(events: SynCodeEvent[]): string[] {
   const seen = new Set<string>();
   const order: string[] = [];
   for (const event of events) {
@@ -82,7 +82,7 @@ export function deriveTouchedFiles(events: NexusEvent[]): string[] {
  * back to the most recently touched file once the agent goes idle, so the
  * pane still has something to show.
  */
-export function deriveCurrentFile(events: NexusEvent[]): string | null {
+export function deriveCurrentFile(events: SynCodeEvent[]): string | null {
   const settledToolUseIds = new Set<string>();
   let runningFile: string | null = null;
   for (let i = events.length - 1; i >= 0; i--) {
@@ -108,7 +108,7 @@ export interface FileEdit {
 }
 
 /** Every `Write`/`Edit` call with well-formed input, in log order. */
-export function deriveFileEdits(events: NexusEvent[]): FileEdit[] {
+export function deriveFileEdits(events: SynCodeEvent[]): FileEdit[] {
   const edits: FileEdit[] = [];
   for (const event of events) {
     if (event.type !== 'tool_start') continue;
@@ -121,7 +121,7 @@ export function deriveFileEdits(events: NexusEvent[]): FileEdit[] {
 }
 
 /** `filePath -> highest seq at which it was edited`. Feeds `useWorkspace`'s staleness check. */
-export function deriveLatestEditSeqByPath(events: NexusEvent[]): Map<string, number> {
+export function deriveLatestEditSeqByPath(events: SynCodeEvent[]): Map<string, number> {
   const result = new Map<string, number>();
   for (const edit of deriveFileEdits(events)) {
     const current = result.get(edit.filePath);

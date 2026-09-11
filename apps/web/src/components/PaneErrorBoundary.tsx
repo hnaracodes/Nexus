@@ -6,7 +6,7 @@ import type { ErrorInfo, ReactNode } from 'react';
  *
  * React 18 unmounts the ENTIRE tree on an uncaught render error — a deliberate
  * default, on the grounds that a half-rendered UI is more dangerous than none.
- * For Nexus that default is backwards: this product's reason to exist is that
+ * For SynCode that default is backwards: this product's reason to exist is that
  * people can watch an agent and block what it is about to do, and a cosmetic
  * failure in the workspace pane must never take the transcript and the
  * approval gate down with it. That is exactly what happened in production —

@@ -1,6 +1,6 @@
 /**
- * The Nexus event protocol. This file is a frozen contract: every module and
- * both sides of the wire import from it. Adding a member to NexusEvent is a
+ * The SynCode event protocol. This file is a frozen contract: every module and
+ * both sides of the wire import from it. Adding a member to SynCodeEvent is a
  * protocol change, not a feature change.
  */
 
@@ -482,7 +482,7 @@ export interface FileEdited extends EventEnvelope, AgentScoped {
 /** A snapshot larger than this is split or skipped rather than logged whole. */
 export const MAX_SNAPSHOT_BYTES = 512 * 1024;
 
-export type NexusEvent =
+export type SynCodeEvent =
   | RoomCreated
   | ParticipantJoined
   | ParticipantLeft
@@ -509,12 +509,12 @@ export type NexusEvent =
   | DocSnapshot
   | FileEdited;
 
-export type NexusEventType = NexusEvent['type'];
+export type SynCodeEventType = SynCodeEvent['type'];
 
 /** An event minus the fields the room assigns. What callers hand to the log. */
 export type UnsequencedEvent = {
-  [K in NexusEvent as K['type']]: Omit<K, 'seq' | 'ts' | 'roomId'>;
-}[NexusEventType];
+  [K in SynCodeEvent as K['type']]: Omit<K, 'seq' | 'ts' | 'roomId'>;
+}[SynCodeEventType];
 
 const LOGGED_TYPES = new Set<string>([
   'room_created',
@@ -559,7 +559,7 @@ export function loggedEventTypes(): readonly string[] {
   return [...LOGGED_TYPES];
 }
 
-export function isLoggedEvent(value: unknown): value is NexusEvent {
+export function isLoggedEvent(value: unknown): value is SynCodeEvent {
   if (typeof value !== 'object' || value === null) return false;
   const e = value as Record<string, unknown>;
   return (

@@ -1,4 +1,4 @@
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import type { FleetEntry, PresenceEntry, ServerFrame } from '@syncode/protocol/wire';
 
 export interface Message {
@@ -28,7 +28,7 @@ export interface RoomView {
    * would put a second source of truth beside the log and violate I3.
    * Deduplicated by the same `seq` guard as the rest of the reducer.
    */
-  events: NexusEvent[];
+  events: SynCodeEvent[];
   lastSeq: number;
   replaying: boolean;
   /** messageId -> accumulated streaming text. Never logged, never replayed. */
@@ -114,7 +114,7 @@ export function reduce(view: RoomView, frame: ServerFrame): RoomView {
     case 'workspace_changed':
       // Consumed, at last. The server has always broadcast this (`ws.ts:257`)
       // and the protocol has always declared it (`wire.ts:41-49`), but no client
-      // code read it, so an edit Nexus did not make never reached the pane.
+      // code read it, so an edit SynCode did not make never reached the pane.
       //
       // Deliberately does NOT refetch anything. Staleness and refetching belong
       // to `useWorkspace`, which owns the file cache; this reducer's only job is
@@ -162,7 +162,7 @@ export function reduce(view: RoomView, frame: ServerFrame): RoomView {
   }
 }
 
-function applyEvent(view: RoomView, event: NexusEvent): RoomView {
+function applyEvent(view: RoomView, event: SynCodeEvent): RoomView {
   const next: RoomView = { ...view, lastSeq: event.seq };
 
   switch (event.type) {

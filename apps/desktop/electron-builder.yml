@@ -16,8 +16,8 @@
 # in step with the `electron` devDependency in package.json.
 electronVersion: 44.0.0
 
-appId: com.nexus.desktop
-productName: Nexus
+appId: dev.syncode.desktop
+productName: SynCode
 directories:
   output: release
 # Uniform across all three platforms so the release workflow, the download
@@ -88,19 +88,19 @@ linux:
   #     cannot be safely used in file paths: @nexusdesktop
   #
   # macOS and Windows never hit this because they name the binary from
-  # `productName` ("Nexus") instead; only Linux uses `executableName`, so the
+  # `productName` ("SynCode") instead; only Linux uses `executableName`, so the
   # first Linux build ever run is the first time anyone could have seen it.
   #
   # This is the THIRD place the npm scope has leaked into something a user sees:
   # `app.getName()` put rooms in `~/Library/Application Support/@syncode/desktop`
-  # until `app.setName('Nexus')` fixed it (see main.ts), `productName` fixed the
+  # until `app.setName('SynCode')` fixed it (see main.ts), `productName` fixed the
   # bundle name, and this fixes the Linux executable. A scoped package name is
   # an npm implementation detail and every layer that derives an identity from
   # it has to be told otherwise, individually.
   #
   # Lowercase because it is a command people type and a path on disk; the
-  # window and the menu bar still read "Nexus" from `productName`.
-  executableName: nexus
+  # window and the menu bar still read "SynCode" from `productName`.
+  executableName: syncode
   # AppImage has no code-signing step of its own — nothing to fill in here.
   #
   # It DOES ship with the stock Electron icon, because this project has no icon
@@ -124,4 +124,4 @@ linux:
 publish:
   provider: github
   owner: hnaracodes
-  repo: Nexus
+  repo: SynCode

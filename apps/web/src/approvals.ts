@@ -1,4 +1,4 @@
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 
 export interface PendingApproval {
   requestId: string;
@@ -17,7 +17,7 @@ export interface SettledApproval {
 }
 
 /** Derived from the log, not stored — the log stays authoritative (I3). */
-export function deriveApprovals(events: NexusEvent[]): {
+export function deriveApprovals(events: SynCodeEvent[]): {
   pending: PendingApproval[];
   settled: SettledApproval[];
 } {

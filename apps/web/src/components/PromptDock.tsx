@@ -1,4 +1,4 @@
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import { ContextWindowBar } from './ContextWindowBar.js';
 import { ModelSelector } from './ModelSelector.js';
 import { PromptInput } from './PromptInput.js';
@@ -9,7 +9,7 @@ import { VoiceInputButton } from './VoiceInputButton.js';
 export interface PromptDockProps {
   roomId: string;
   token: string;
-  events: NexusEvent[];
+  events: SynCodeEvent[];
   driverId: string | null;
   selfId: string | null;
   promptDisabled: boolean;

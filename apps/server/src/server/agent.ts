@@ -1,6 +1,6 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { CanUseTool, HookJSONOutput, PermissionResult } from '@anthropic-ai/claude-agent-sdk';
-import type { NexusEvent, UnsequencedEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent, UnsequencedEvent } from '@syncode/protocol/events';
 import type { Room } from './rooms.js';
 import { createGithubMcpServer } from './publishTool.js';
 import { AsyncQueue } from './queue.js';
@@ -39,7 +39,7 @@ export interface AgentDeps {
    * log rather than from memory (I3) — currently the last published commit sha.
    * Supplied by `attachRoom`, which is the only place that holds the sink.
    */
-  readEvents?: () => NexusEvent[];
+  readEvents?: () => SynCodeEvent[];
   /**
    * The room's approval-queue seam (phase 12, D3). When supplied, this agent's
    * gate does not start a request's timeout clock until the room's queue says
@@ -163,10 +163,10 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
   );
 
   /**
-   * Bypass detection. The SDK gives Nexus no way to know when it has skipped a
+   * Bypass detection. The SDK gives SynCode no way to know when it has skipped a
    * permission check — a bypassed tool call is byte-identical to a gated one —
    * and that is precisely how the gate came to be dead in production without a
-   * single test, log line or alert noticing. So Nexus keeps its own books: every
+   * single test, log line or alert noticing. So SynCode keeps its own books: every
    * tool the gate decides on is recorded here, every tool that reports a result
    * is checked against it, and a result with no decision behind it is said out
    * loud in the room and written to the append-only log.
@@ -181,7 +181,7 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
   /**
    * One decision per tool USE, shared by both gate seams.
    *
-   * Nexus wires the gate into the SDK twice on purpose (see the options below),
+   * SynCode wires the gate into the SDK twice on purpose (see the options below),
    * and a future SDK may honour both. Redundancy at the seam must not become
    * redundancy at the human: without this, one tool call mints two requestIds
    * and puts two approval cards in the room. Under `firstResponseWins` those two
@@ -344,7 +344,7 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
                  *
                  * The SDK's own tools spell their target `file_path`, not
                  * `path` — Read, Write and Edit all use it — so both spellings
-                 * are checked. Nexus's provider-neutral tools use `path` and
+                 * are checked. SynCode's provider-neutral tools use `path` and
                  * are covered at the other choke point; a tool reachable
                  * through both is checked twice, which is harmless and cheaper
                  * than reasoning about which one applies.
@@ -440,7 +440,7 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
             type: 'agent_error',
             message:
               `SECURITY: ${toolName} ran without passing the room's approval gate. ` +
-              'The agent SDK executed a tool without consulting Nexus. Treat anything ' +
+              'The agent SDK executed a tool without consulting SynCode. Treat anything ' +
               'this room did since as ungoverned, and report this — it means the gate ' +
               'is not enforcing.',
           });
@@ -491,7 +491,7 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
     },
     async setModel(model: string | null): Promise<void> {
       // `session.setModel` is "Only available in streaming input mode"
-      // (runtimeTypes.d.ts:111) — Nexus qualifies, since it feeds an
+      // (runtimeTypes.d.ts:111) — SynCode qualifies, since it feeds an
       // async-iterable prompt (the `prompts` queue above), never a bare string.
       await session.setModel(model ?? undefined);
     },

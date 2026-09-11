@@ -1,6 +1,6 @@
 <div align="center">
 
-# Nexus
+# SynCode
 
 ### Turn an AI coding session from a process into a room.
 
@@ -32,11 +32,11 @@ re-explains context.
 > shared security boundary — read [Security model](#security-model--read-this-before-sharing-a-link)
 > before you send a room link to anyone.
 
-## Why Nexus
+## Why SynCode
 
 Pairing on an AI coding session today means screen-sharing, or one person
 drives while everyone else watches over their shoulder and loses the thread
-the moment they look away. Nexus instead puts **one agent session** behind a
+the moment they look away. SynCode instead puts **one agent session** behind a
 link. Everyone who opens it sees the same live transcript, can pick up the
 keyboard, and — the actual point of the project — has to collectively sign
 off before the agent does anything destructive.
@@ -45,7 +45,7 @@ off before the agent does anything destructive.
 <tr>
 <td width="50%" valign="top">
 
-### Without Nexus
+### Without SynCode
 
 - One person's editor, everyone else watches a shared screen
 - Context lives in one person's head and one terminal's scrollback
@@ -55,7 +55,7 @@ off before the agent does anything destructive.
 </td>
 <td width="50%" valign="top">
 
-### With Nexus
+### With SynCode
 
 - One link, N browsers, one live agent session
 - Full event log — reconnect, rejoin, or restart and the transcript is still there
@@ -166,7 +166,7 @@ before deploying it anywhere real.
 
 - **No isolation between rooms.** One host process, one filesystem. Room A
   can in principle reach room B's working directory. This is an accepted
-  tradeoff for this preview — Nexus is **not** multi-tenant. Per-room
+  tradeoff for this preview — SynCode is **not** multi-tenant. Per-room
   sandboxes are the fix, and they are not built yet.
 - **API keys never leave the server.** The room creator supplies an Anthropic
   Console API key once over HTTPS; it's held in memory, used only to

@@ -41,7 +41,7 @@ const RUN_WAYS = [
 
 const TROUBLE = [
   {
-    symptom: '"Nexus needs an Anthropic Console API key"',
+    symptom: '"SynCode needs an Anthropic Console API key"',
     cause:
       'You used a Claude Pro/Max login instead of a Console key. It must start with sk-ant-.',
   },

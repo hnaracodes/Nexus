@@ -3,16 +3,16 @@
  *
  * Claude's SDK runs tools itself; the room only sees a hook fire before the
  * SDK does. OpenAI and Gemini do not run tools at all — they emit a call and
- * wait for Nexus to send a result back. That means Nexus owns the execution
- * loop for those providers, and an execution loop Nexus owns is an execution
- * loop Nexus must gate itself, since there is no SDK-side pipeline left to
+ * wait for SynCode to send a result back. That means SynCode owns the execution
+ * loop for those providers, and an execution loop SynCode owns is an execution
+ * loop SynCode must gate itself, since there is no SDK-side pipeline left to
  * (accidentally or not) enforce it.
  *
  * THE LOAD-BEARING REQUIREMENT: a provider adapter that can execute a tool
  * without passing the room's gate is not an adapter, it is a hole. So this
  * module is built so that is structurally hard to do by accident:
  *
- *   - Every `NexusTool.execute` is a plain function on a plain object. Nothing
+ *   - Every `SynCodeTool.execute` is a plain function on a plain object. Nothing
  *     stops a careless adapter from calling `tool.execute(...)` directly — TS
  *     cannot enforce "call this other function instead" — but the ONLY
  *     function this module exports that is meant to run a tool is
@@ -39,7 +39,7 @@ import { exec } from 'node:child_process';
 import { statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, resolve as resolvePath } from 'node:path';
 import { promisify } from 'node:util';
-import type { NexusEvent, UnsequencedEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent, UnsequencedEvent } from '@syncode/protocol/events';
 import type { Room } from '../rooms.js';
 import type { Decision, PermissionGate } from '../permissions.js';
 import { lastPublishedSha } from '../publishTool.js';
@@ -68,10 +68,10 @@ export type EmitFn = (event: UnsequencedEvent) => void;
 export interface ToolContext {
   room: Room;
   emit: EmitFn;
-  readEvents?: () => NexusEvent[];
+  readEvents?: () => SynCodeEvent[];
 }
 
-export interface NexusTool {
+export interface SynCodeTool {
   name: string;
   description: string;
   /** JSON Schema, draft-07 compatible — handed to the provider as-is. */
@@ -119,7 +119,7 @@ function optionalString(input: unknown, field: string): string | undefined {
 
 // --- read_file ---------------------------------------------------------------
 
-const readFileTool: NexusTool = {
+const readFileTool: SynCodeTool = {
   name: 'read_file',
   description:
     "Read a file's contents from the room's working directory. The path must " +
@@ -153,7 +153,7 @@ const readFileTool: NexusTool = {
 
 // --- list_files ---------------------------------------------------------------
 
-const listFilesTool: NexusTool = {
+const listFilesTool: SynCodeTool = {
   name: 'list_files',
   description:
     'List one level of a directory in the room\'s working directory. Omit `path` ' +
@@ -243,7 +243,7 @@ function searchTree(room: Room, regex: RegExp, path: string, state: SearchState)
   }
 }
 
-const searchFilesTool: NexusTool = {
+const searchFilesTool: SynCodeTool = {
   name: 'search_files',
   description:
     'Search file contents under a directory (default: the whole workspace) for a ' +
@@ -350,7 +350,7 @@ function resolveWriteTarget(room: Room, requestedPath: string): string {
   return resolvePath(parentReal, name);
 }
 
-const writeFileTool: NexusTool = {
+const writeFileTool: SynCodeTool = {
   name: 'write_file',
   description:
     "Create or overwrite a file in the room's working directory with the given " +
@@ -376,7 +376,7 @@ const writeFileTool: NexusTool = {
 
 // --- edit_file ---------------------------------------------------------------
 
-const editFileTool: NexusTool = {
+const editFileTool: SynCodeTool = {
   name: 'edit_file',
   description:
     'Replace an exact, unique occurrence of text in an existing file. Fails if ' +
@@ -456,7 +456,7 @@ function formatCommandOutput(stdout: string, stderr: string): string {
   return parts.length === 0 ? '(no output)' : parts.join('\n\n');
 }
 
-const runCommandTool: NexusTool = {
+const runCommandTool: SynCodeTool = {
   name: 'run_command',
   description: "Run a shell command in the room's working directory.",
   inputSchema: {
@@ -500,7 +500,7 @@ const runCommandTool: NexusTool = {
 // --- publish_pull_request ---------------------------------------------------
 
 /**
- * `publish_pull_request`, reimplemented as a plain `NexusTool` rather than
+ * `publish_pull_request`, reimplemented as a plain `SynCodeTool` rather than
  * ported as an MCP server the way Claude gets it (`publishTool.ts`).
  *
  * It CANNOT port that way: the Responses API's `mcp` tool type is HOSTED —
@@ -516,7 +516,7 @@ const runCommandTool: NexusTool = {
  * auto-approved regardless of what any predicate says, so this is the one
  * tool whose gating is asserted as a literal `false`, not derived.
  */
-const publishPullRequestTool: NexusTool = {
+const publishPullRequestTool: SynCodeTool = {
   name: 'publish_pull_request',
   description:
     'Publish the current working tree to GitHub as a pull request. Every ' +
@@ -538,7 +538,7 @@ const publishPullRequestTool: NexusTool = {
   async execute(input, ctx) {
     const binding = ctx.room.github;
     if (binding === null) {
-      // Unreachable through `buildNexusTools`, which only includes this tool
+      // Unreachable through `buildSynCodeTools`, which only includes this tool
       // for a room with a binding — guarded anyway so a caller that mismatches
       // `ctx.room` against the tool list gets a clear message, not a
       // property-access crash three calls deep into `publish.ts`.
@@ -546,7 +546,7 @@ const publishPullRequestTool: NexusTool = {
     }
     const title = requireString(input, 'title');
     const body = requireString(input, 'body');
-    const readEvents = ctx.readEvents ?? ((): NexusEvent[] => []);
+    const readEvents = ctx.readEvents ?? ((): SynCodeEvent[] => []);
 
     const result = await publishToGithub({
       binding,
@@ -584,8 +584,8 @@ const publishPullRequestTool: NexusTool = {
  * a GitHub binding, mirroring `createGithubMcpServer`'s own "null means no
  * tool, not a tool that fails when called" choice.
  */
-export function buildNexusTools(room: Room): NexusTool[] {
-  const tools: NexusTool[] = [
+export function buildSynCodeTools(room: Room): SynCodeTool[] {
+  const tools: SynCodeTool[] = [
     readFileTool,
     listFilesTool,
     searchFilesTool,
@@ -606,13 +606,13 @@ export interface ToolCallResult {
 }
 
 /**
- * THE only way to run a `NexusTool`. See the module header for why this
+ * THE only way to run a `SynCodeTool`. See the module header for why this
  * function existing, alone, is what makes a provider adapter safe to write.
  *
  * Order, matching what Claude's own transcript already looks like
  * (`agent.ts`'s `translate()`): resolve the tool by name; emit `tool_start`
  * (the model's ATTEMPT to call a tool is worth recording whether or not
- * Nexus recognises the name — a hallucinated tool call should be visible in
+ * SynCode recognises the name — a hallucinated tool call should be visible in
  * the room, not silently swallowed); gate; execute only on `allow`; emit
  * `tool_result`. Both emitted events carry `toolUseId` and `toolName`, so the
  * transcript lines up with Claude's regardless of which provider is running.
@@ -647,7 +647,7 @@ function sandboxVerdict(input: unknown, roomCwd: string): { allowed: true } | { 
 }
 
 export async function dispatchToolCall(args: {
-  tools: readonly NexusTool[];
+  tools: readonly SynCodeTool[];
   gate: PermissionGate;
   emit: EmitFn;
   call: { toolUseId: string; name: string; input: unknown };

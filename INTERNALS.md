@@ -1,6 +1,6 @@
 # INTERNALS.md
 
-This document is for engineers about to change Nexus's server or client internals, not for people learning to use the app — that's `TUTORIAL.md`. Where `TUTORIAL.md` walks through running a room, `INTERNALS.md` walks through *why the code is shaped the way it is*: the exact mechanisms, the file:line evidence, and the bug each safeguard was added to prevent. Seven engineers independently read the real source and wrote what they found; nothing below is inferred or aspirational.
+This document is for engineers about to change SynCode's server or client internals, not for people learning to use the app — that's `TUTORIAL.md`. Where `TUTORIAL.md` walks through running a room, `INTERNALS.md` walks through *why the code is shaped the way it is*: the exact mechanisms, the file:line evidence, and the bug each safeguard was added to prevent. Seven engineers independently read the real source and wrote what they found; nothing below is inferred or aspirational.
 
 The seven subsystems look unrelated — a WebSocket handshake, a JSONL file, an async queue, a permission promise, a React reducer, a build graph, a set of security checks — but they all answer the same requirement: many humans, and soon many agents, must share one continuously-replayable event log without ever losing an event, misattributing one, or letting a client forge one. Read them in order and that requirement is what each section is quietly defending.
 
@@ -31,7 +31,7 @@ if (url.pathname !== '/ws') {
 
 ### Frames vs. events — a real type-level distinction, not just terminology
 
-`packages/protocol/src/wire.ts` defines two disjoint unions. `ClientFrame` is everything a browser may send: `prompt`, `request_control`, `grant_control`, `release_control`, `permission_decision`, `interrupt`, `set_model`. `ServerFrame` is everything the server may push, and its `event` variant is the only one that wraps a `NexusEvent` — the same type the append-only log stores. Every other `ServerFrame` variant (`assistant_delta`, `replay_complete`, `presence`, `workspace_changed`, `error`) is explicitly transient. The doc comment on the union states this as an invariant, not a convention:
+`packages/protocol/src/wire.ts` defines two disjoint unions. `ClientFrame` is everything a browser may send: `prompt`, `request_control`, `grant_control`, `release_control`, `permission_decision`, `interrupt`, `set_model`. `ServerFrame` is everything the server may push, and its `event` variant is the only one that wraps a `SynCodeEvent` — the same type the append-only log stores. Every other `ServerFrame` variant (`assistant_delta`, `replay_complete`, `presence`, `workspace_changed`, `error`) is explicitly transient. The doc comment on the union states this as an invariant, not a convention:
 
 ```ts
 /**
@@ -144,7 +144,7 @@ The log is a per-room JSONL file at `data/rooms/<roomId>.jsonl` (`apps/server/sr
 ```ts
 // apps/server/src/log/event-log.ts:26-31
 /** Append only. There is deliberately no update, delete, or compact (I3). */
-append(event: NexusEvent): void {
+append(event: SynCodeEvent): void {
   const redacted = redactEvent(event);
   appendFileSync(this.path, `${JSON.stringify(redacted)}\n`, 'utf8');
   if (this.#cache !== null) this.#cache.push(redacted);
@@ -180,7 +180,7 @@ const sealed = redactEvent({
   seq: room.nextSeq(),
   ts: new Date().toISOString(),
   roomId: room.id,
-} as NexusEvent);
+} as SynCodeEvent);
 sink.append(sealed);
 runtime.broadcast({ kind: 'event', event: sealed });
 return sealed;
@@ -196,7 +196,7 @@ That's the reason redaction lives at the write boundary and nowhere else: it's t
 
 ### `LOGGED_TYPES`: a second gate, easy to miss
 
-The `NexusEvent` union has 17 members, but only 15 survive a reload. `isLoggedEvent` (`packages/protocol/src/events.ts:355-367`) checks shape (`seq`/`ts`/`roomId`/`type` present and well-typed) *and* membership in a separate `LOGGED_TYPES` set. `event-log.ts`'s `parseLines` drops any line that fails `isLoggedEvent`:
+The `SynCodeEvent` union has 17 members, but only 15 survive a reload. `isLoggedEvent` (`packages/protocol/src/events.ts:355-367`) checks shape (`seq`/`ts`/`roomId`/`type` present and well-typed) *and* membership in a separate `LOGGED_TYPES` set. `event-log.ts`'s `parseLines` drops any line that fails `isLoggedEvent`:
 
 ```ts
 // apps/server/src/log/event-log.ts:56-60
@@ -208,7 +208,7 @@ try {
 if (isLoggedEvent(parsed)) events.push(parsed);
 ```
 
-The trap is explicit in the protocol source: adding a new variant to the `NexusEvent` union does not make it survive a restart. `append()` will happily write it — `redactEvent`/`appendFileSync` don't check the type at all — so the failure is silent and delayed: the JSONL file on disk has the event, `read()` right after a live `append()` returns it too (because of the in-memory `#cache` push), but the moment the process restarts and the cache is rebuilt from disk via `parseLines`, that event type vanishes. A test that only checks "does append+read round-trip in the same process" cannot see this; it needs an actual reload.
+The trap is explicit in the protocol source: adding a new variant to the `SynCodeEvent` union does not make it survive a restart. `append()` will happily write it — `redactEvent`/`appendFileSync` don't check the type at all — so the failure is silent and delayed: the JSONL file on disk has the event, `read()` right after a live `append()` returns it too (because of the in-memory `#cache` push), but the moment the process restarts and the cache is rebuilt from disk via `parseLines`, that event type vanishes. A test that only checks "does append+read round-trip in the same process" cannot see this; it needs an actual reload.
 
 ### Replay: deterministic, and driven only by the log
 
@@ -226,7 +226,7 @@ The trap is explicit in the protocol source: adding a new variant to the `NexusE
 
 ### `AsyncQueue` — why `query()` never returns
 
-The Agent SDK's `query()` takes `prompt: string | AsyncIterable<SDKUserMessage>`. Nexus always passes the second form, and the iterable it passes is a hand-rolled single-consumer queue (`apps/server/src/server/queue.ts:6-49`):
+The Agent SDK's `query()` takes `prompt: string | AsyncIterable<SDKUserMessage>`. SynCode always passes the second form, and the iterable it passes is a hand-rolled single-consumer queue (`apps/server/src/server/queue.ts:6-49`):
 
 ```ts
 export class AsyncQueue<T> implements AsyncIterable<T> {
@@ -253,7 +253,7 @@ Multiple humans pushing into the same queue mid-turn is not itself dangerous —
 
 > the SDK's `streamInput` (sdk.mjs:8449) is a bare `for await` that writes every yielded message straight to the CLI subprocess's stdin the instant the iterable produces it. It does NOT wait for the current turn to finish, and what the CLI does with a mid-turn message is undocumented
 
-So Nexus never lets a second prompt reach the queue while a turn is in flight. `createTurnGate()` (turnGate.ts:39-75) is a tiny synchronous state machine — one `busy` flag and one `buffer: PendingPrompt[]` — with no SDK import, no timers, no I/O:
+So SynCode never lets a second prompt reach the queue while a turn is in flight. `createTurnGate()` (turnGate.ts:39-75) is a tiny synchronous state machine — one `busy` flag and one `buffer: PendingPrompt[]` — with no SDK import, no timers, no I/O:
 
 ```ts
 submit(prompt: PendingPrompt): Batch | null {
@@ -318,7 +318,7 @@ async setModel(model: string | null): Promise<void> {
 },
 ```
 
-The SDK's `session.setModel` requires streaming-input mode, which Nexus always uses (the `AsyncQueue` above), so this call is always legal. The `null` → `undefined` bridge exists purely because the SDK's own signature wants `undefined` for "account default" and `null` is a type error otherwise. This is I1's active enforcement point for model switching: there is no code path in `agent.ts` that responds to a model change by tearing down `session` and calling `runQuery` again — the one `query()` created at agent.ts:212 is mutated in place for the room's entire lifetime.
+The SDK's `session.setModel` requires streaming-input mode, which SynCode always uses (the `AsyncQueue` above), so this call is always legal. The `null` → `undefined` bridge exists purely because the SDK's own signature wants `undefined` for "account default" and `null` is a type error otherwise. This is I1's active enforcement point for model switching: there is no code path in `agent.ts` that responds to a model change by tearing down `session` and calling `runQuery` again — the one `query()` created at agent.ts:212 is mutated in place for the room's entire lifetime.
 
 ### `translate()`: SDK messages to log events, and one hidden ordering rule
 
@@ -330,7 +330,7 @@ The SDK's `session.setModel` requires streaming-input mode, which Nexus always u
 
 ## 4. How a promise suspends an AI agent
 
-The gate has no thread to block and no coroutine to park. The SDK subprocess is asking an async function for an answer, and Nexus's entire suspension mechanism is that the function does not return until something else calls a closure it captured. Everything else in this section is bookkeeping around that one fact.
+The gate has no thread to block and no coroutine to park. The SDK subprocess is asking an async function for an answer, and SynCode's entire suspension mechanism is that the function does not return until something else calls a closure it captured. Everything else in this section is bookkeeping around that one fact.
 
 ### The Pending map and its settle closure
 
@@ -407,7 +407,7 @@ So the observed order for one governed tool call is: assistant message with `too
 
 ---
 
-*The `permission_decided` event that `settle()` eventually appends is, from the client's perspective, just one more `NexusEvent` folded by the pure reducer §5 describes next.*
+*The `permission_decided` event that `settle()` eventually appends is, from the client's perspective, just one more `SynCodeEvent` folded by the pure reducer §5 describes next.*
 
 ## 5. The client is a fold over the log
 
@@ -422,7 +422,7 @@ export function reduce(view: RoomView, frame: ServerFrame): RoomView {
 
 ### The seq guard
 
-`ServerFrame` carries two shapes of payload: transient wire frames (`assistant_delta`, `presence`, `error`, `workspace_changed`) and `{ kind: 'event', event: NexusEvent }`, where every `NexusEvent` carries a monotonic `seq`. The `'event'` case is the only one gated:
+`ServerFrame` carries two shapes of payload: transient wire frames (`assistant_delta`, `presence`, `error`, `workspace_changed`) and `{ kind: 'event', event: SynCodeEvent }`, where every `SynCodeEvent` carries a monotonic `seq`. The `'event'` case is the only one gated:
 
 ```ts
 case 'event':
@@ -450,7 +450,7 @@ Two derive modules — `diff.ts` and `workspaceFiles.ts` — compute values from
  */
 ```
 
-(`workspaceFiles.ts:3-9`). `deriveTouchedFiles`, `deriveCurrentFile`, `deriveFileEdits`, `deriveLatestEditSeqByPath` are all `(events: NexusEvent[]) => X` — no memoization inside the module, no listeners, no mutable accumulator. `deriveCurrentFile` (`workspaceFiles.ts:85-101`) even re-scans the *entire* event array backwards on every call to find the one unresolved tool call, matching `tool_result` to `tool_start` by `toolUseId` rather than position specifically so concurrent tool calls don't get misattributed. This is expensive relative to an incrementally-updated cache, but it is the same trade `RoomView.events` itself makes: keeping state as "replay the log" rather than "maintain a parallel projection" means there is exactly one place a bug in projection logic can hide, and it reproduces identically on every replay — no cache invalidation ordering to get wrong, because there is no cache to invalidate. `WorkspacePane.tsx:44` calls the memoized version, `useMemo(() => deriveLatestEditSeqByPath(events), [events])`, so React's memoization — not the derive module — is what avoids repeating the full scan on unrelated re-renders.
+(`workspaceFiles.ts:3-9`). `deriveTouchedFiles`, `deriveCurrentFile`, `deriveFileEdits`, `deriveLatestEditSeqByPath` are all `(events: SynCodeEvent[]) => X` — no memoization inside the module, no listeners, no mutable accumulator. `deriveCurrentFile` (`workspaceFiles.ts:85-101`) even re-scans the *entire* event array backwards on every call to find the one unresolved tool call, matching `tool_result` to `tool_start` by `toolUseId` rather than position specifically so concurrent tool calls don't get misattributed. This is expensive relative to an incrementally-updated cache, but it is the same trade `RoomView.events` itself makes: keeping state as "replay the log" rather than "maintain a parallel projection" means there is exactly one place a bug in projection logic can hide, and it reproduces identically on every replay — no cache invalidation ordering to get wrong, because there is no cache to invalidate. `WorkspacePane.tsx:44` calls the memoized version, `useMemo(() => deriveLatestEditSeqByPath(events), [events])`, so React's memoization — not the derive module — is what avoids repeating the full scan on unrelated re-renders.
 
 ### `useWorkspace`'s four states and log-driven staleness
 
@@ -465,7 +465,7 @@ export type CachedFile =
   | { status: 'stale'; result: FileReadResult; fetchedAtSeq: number };
 ```
 
-(`useWorkspace.ts:6-11`). The mechanism connecting this cache to the log is deliberately narrow: the hook is handed `editSeqByPath: Map<string, number>` — already computed by `deriveLatestEditSeqByPath` — and never imports `store.ts` or touches a `NexusEvent` itself (`useWorkspace.ts:22-26`, "**Never imports `store.ts`**"). An effect compares each `ready` entry's `fetchedAtSeq` against the current `editSeqByPath.get(path)` and flips it to `stale` when the log says a newer edit landed (`useWorkspace.ts:74-88`) — it never refetches automatically; staleness is surfaced as a UI affordance the viewer acts on. The comment at `useWorkspace.ts:27-32` states why reconnect needs no special case: a replay rebuilds `editSeqByPath` from the full log from scratch, and any cached file whose recorded `fetchedAtSeq` now compares behind goes stale through this same effect — "exactly one 'is this file current' code path, live or reconnected." This is the same idempotency principle as the `seq` guard in `reduce`, applied one layer up: correctness comes from comparing against a monotonic log position, not from tracking what already happened.
+(`useWorkspace.ts:6-11`). The mechanism connecting this cache to the log is deliberately narrow: the hook is handed `editSeqByPath: Map<string, number>` — already computed by `deriveLatestEditSeqByPath` — and never imports `store.ts` or touches a `SynCodeEvent` itself (`useWorkspace.ts:22-26`, "**Never imports `store.ts`**"). An effect compares each `ready` entry's `fetchedAtSeq` against the current `editSeqByPath.get(path)` and flips it to `stale` when the log says a newer edit landed (`useWorkspace.ts:74-88`) — it never refetches automatically; staleness is surfaced as a UI affordance the viewer acts on. The comment at `useWorkspace.ts:27-32` states why reconnect needs no special case: a replay rebuilds `editSeqByPath` from the full log from scratch, and any cached file whose recorded `fetchedAtSeq` now compares behind goes stale through this same effect — "exactly one 'is this file current' code path, live or reconnected." This is the same idempotency principle as the `seq` guard in `reduce`, applied one layer up: correctness comes from comparing against a monotonic log position, not from tracking what already happened.
 
 ### The exhaustiveness guard, and the frame nothing reads
 
@@ -729,7 +729,7 @@ of both checks, structurally, via a `bodyLimit` middleware wrapping the route
 ### 7.5 `github.ts`'s env scrub — deleted at import, not at use
 
 The GitHub App's client secret and private key are the first *server-wide*
-secrets Nexus holds — every prior secret was per-room. `startAgent` spawns the
+secrets SynCode holds — every prior secret was per-room. `startAgent` spawns the
 agent subprocess with `env: { ...process.env, ... }`, so anything in the
 server's environment is inheritable by an agent any participant can ask to
 run `printenv`. A leaked per-room key exposes one room; a leaked App private
@@ -797,7 +797,7 @@ Every "surprise / latent bug" aside the seven authors flagged while reading the 
 
 1. **`workspace_changed` frames are never logged and never consumed by the client.** A shell command or `git checkout` run outside the agent updates the server's filesystem watcher but never refreshes the workspace file-tree pane — only agent-driven edits (via logged events) do. Flagged explicitly as "a documented gap, not a decision" that survived phase 7 unnoticed because it's invisible in ordinary use. — `apps/web/src/store.ts:89-103` (client no-op case), `packages/protocol/src/wire.ts:41-49` (why it isn't logged), `apps/server/src/server/ws.ts:257` (server still broadcasts it).
 
-2. **`LOGGED_TYPES` is a second, easy-to-miss gate on the event log.** Adding a new variant to the `NexusEvent` union does not make it survive a restart: `append()` happily persists it and an in-process `read()` returns it (via the in-memory cache), but `parseLines` silently drops it after a real reload because `isLoggedEvent` also checks set membership. A test that only round-trips append+read in one process cannot see this — it needs an actual reload. — `packages/protocol/src/events.ts:355-367`, `apps/server/src/log/event-log.ts:56-60`.
+2. **`LOGGED_TYPES` is a second, easy-to-miss gate on the event log.** Adding a new variant to the `SynCodeEvent` union does not make it survive a restart: `append()` happily persists it and an in-process `read()` returns it (via the in-memory cache), but `parseLines` silently drops it after a real reload because `isLoggedEvent` also checks set membership. A test that only round-trips append+read in one process cannot see this — it needs an actual reload. — `packages/protocol/src/events.ts:355-367`, `apps/server/src/log/event-log.ts:56-60`.
 
 3. **The log's total ordering of `seq` is enforced only by convention, not by any lock or type.** The guarantee holds solely because `commitAs` stays fully synchronous between minting the number and appending it. If sealing ever moves behind an `await` — a real risk named for phase 8b's multi-agent work — two callers could interleave and silently produce a duplicate or gapped `seq`, corrupting every `readFrom(seq)`-based resume with no loud failure. — `apps/server/src/server/rooms.ts:92,103-104` (seq minted), `apps/server/src/server/ws.ts:171-208` (`commitAs`).
 

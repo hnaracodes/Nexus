@@ -79,7 +79,7 @@ export function RoomHeader({
   return (
     <header className="sticky top-0 z-10 flex min-h-[56px] items-center justify-between gap-4 border-b border-border bg-surface px-4 py-2">
       <div className="flex min-w-0 items-center gap-3">
-        <span className="shrink-0 text-lg font-semibold text-fg">Nexus</span>
+        <span className="shrink-0 text-lg font-semibold text-fg">SynCode</span>
         <span className="truncate text-sm text-fg-muted">{roomLabel}</span>
         <button
           type="button"

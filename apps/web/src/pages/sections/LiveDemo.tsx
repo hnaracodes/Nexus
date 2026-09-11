@@ -4,7 +4,7 @@ import { Crown, ShieldAlert, Check, X } from 'lucide-react';
 /**
  * The demo.
  *
- * Everything else on this page *asserts* that Nexus is one agent shared by
+ * Everything else on this page *asserts* that SynCode is one agent shared by
  * several people with collective approval. This section shows it: a scripted
  * room that plays the real flow beat by beat, with a caption naming what just
  * happened and why it matters.

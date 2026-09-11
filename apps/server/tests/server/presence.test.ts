@@ -1,16 +1,16 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { presenceFrame, projectPresence } from '../../src/server/presence.js';
 import { __resetRooms, createRoom } from '../../src/server/rooms.js';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 
 beforeEach(() => __resetRooms());
 
 const room = () =>
   createRoom({ apiKey: 'sk-ant-api03-TESTONLY-not-a-real-key', cwd: '/tmp', repoUrl: null });
 
-function log(...partials: Record<string, unknown>[]): NexusEvent[] {
+function log(...partials: Record<string, unknown>[]): SynCodeEvent[] {
   return partials.map(
-    (p, i) => ({ seq: i + 1, ts: '2026-07-28T00:00:00.000Z', roomId: 'room_a', ...p }) as NexusEvent,
+    (p, i) => ({ seq: i + 1, ts: '2026-07-28T00:00:00.000Z', roomId: 'room_a', ...p }) as SynCodeEvent,
   );
 }
 

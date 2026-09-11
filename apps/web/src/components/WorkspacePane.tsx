@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FolderTree, GitCompare, Pin, PinOff, Rows3 } from 'lucide-react';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import { deriveCurrentFile, deriveLatestEditSeqByPath, deriveTouchedFiles } from '../derive/workspaceFiles.js';
 import { withExternalChanges } from '../derive/externalChanges.js';
 import { useWorkspace } from '../workspace/useWorkspace.js';
@@ -14,7 +14,7 @@ import { CodeEditor } from './CodeEditor.js';
 import { FileTree } from './FileTree.js';
 
 export interface WorkspacePaneProps {
-  events: NexusEvent[];
+  events: SynCodeEvent[];
   api: WorkspaceApi;
   /**
    * Paths changed OUTSIDE the agent, from the transient `workspace_changed`
@@ -55,7 +55,7 @@ const TABS: Array<{ id: WorkspaceTab; label: string; Icon: typeof FolderTree }> 
  * state — per-person local UI state, no new room state, no arbitration.
  * Auto-follow the agent's current file is on by default; the pin toggle (or
  * manually picking a file in the tree) stops it. **Never imports `store.ts`**
- * — `events` arrives as plain `NexusEvent[]`, and file contents are cached
+ * — `events` arrives as plain `SynCodeEvent[]`, and file contents are cached
  * locally by `useWorkspace`, entirely outside the room's log-derived view.
  */
 export function WorkspacePane({

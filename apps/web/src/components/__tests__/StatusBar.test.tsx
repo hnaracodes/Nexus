@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import { StatusBar } from '../StatusBar.js';
 
 const PARTICIPANTS = [
@@ -73,7 +73,7 @@ describe('StatusBar', () => {
       roomId: 'room_a',
       repoUrl: null,
       github: { owner: 'acme', repo: 'widgets', defaultBranch: 'main' },
-    } as unknown as NexusEvent;
+    } as unknown as SynCodeEvent;
     render(
       <StatusBar
         events={[created]}

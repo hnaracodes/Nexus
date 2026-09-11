@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import {
   deriveCurrentFile,
   deriveFileEdits,
@@ -14,11 +14,11 @@ function ts(seq: number): string {
   return new Date(2026, 6, 28, 0, 0, seq).toISOString();
 }
 
-function toolStart(seq: number, toolUseId: string, toolName: string, input: unknown): NexusEvent {
+function toolStart(seq: number, toolUseId: string, toolName: string, input: unknown): SynCodeEvent {
   return { seq, ts: ts(seq), roomId: ROOM, type: 'tool_start', toolUseId, toolName, input };
 }
 
-function toolResult(seq: number, toolUseId: string): NexusEvent {
+function toolResult(seq: number, toolUseId: string): SynCodeEvent {
   return {
     seq,
     ts: ts(seq),
@@ -68,7 +68,7 @@ describe('parseFileToolInput', () => {
 
 describe('deriveTouchedFiles', () => {
   it('skips malformed tool_start input without throwing', () => {
-    const events: NexusEvent[] = [
+    const events: SynCodeEvent[] = [
       toolStart(1, 'tu1', 'Write', undefined),
       toolStart(2, 'tu2', 'Write', 'a string'),
       toolStart(3, 'tu3', 'Write', { content: 'no file_path' }),
@@ -77,7 +77,7 @@ describe('deriveTouchedFiles', () => {
   });
 
   it('lists distinct paths in first-touched order', () => {
-    const events: NexusEvent[] = [
+    const events: SynCodeEvent[] = [
       toolStart(1, 'tu1', 'Read', { file_path: 'b.ts' }),
       toolStart(2, 'tu2', 'Write', { file_path: 'a.ts', content: 'x' }),
       toolStart(3, 'tu3', 'Edit', { file_path: 'b.ts', old_string: 'x', new_string: 'y' }),
@@ -86,7 +86,7 @@ describe('deriveTouchedFiles', () => {
   });
 
   it('ignores tools with no file_path field', () => {
-    const events: NexusEvent[] = [toolStart(1, 'tu1', 'Bash', { command: 'ls' })];
+    const events: SynCodeEvent[] = [toolStart(1, 'tu1', 'Bash', { command: 'ls' })];
     expect(deriveTouchedFiles(events)).toEqual([]);
   });
 });
@@ -97,12 +97,12 @@ describe('deriveCurrentFile', () => {
   });
 
   it('reports the file of an unresolved tool_start', () => {
-    const events: NexusEvent[] = [toolStart(1, 'tu1', 'Edit', { file_path: 'a.ts', old_string: 'x', new_string: 'y' })];
+    const events: SynCodeEvent[] = [toolStart(1, 'tu1', 'Edit', { file_path: 'a.ts', old_string: 'x', new_string: 'y' })];
     expect(deriveCurrentFile(events)).toBe('a.ts');
   });
 
   it('matches tool_result by toolUseId, not by position', () => {
-    const events: NexusEvent[] = [
+    const events: SynCodeEvent[] = [
       toolStart(1, 'tu1', 'Read', { file_path: 'a.ts' }),
       toolStart(2, 'tu2', 'Edit', { file_path: 'b.ts', old_string: 'x', new_string: 'y' }),
       toolResult(3, 'tu2'),
@@ -112,7 +112,7 @@ describe('deriveCurrentFile', () => {
   });
 
   it('falls back to the most recently touched file once idle', () => {
-    const events: NexusEvent[] = [
+    const events: SynCodeEvent[] = [
       toolStart(1, 'tu1', 'Write', { file_path: 'a.ts', content: 'x' }),
       toolResult(2, 'tu1'),
       toolStart(3, 'tu2', 'Write', { file_path: 'b.ts', content: 'y' }),
@@ -124,7 +124,7 @@ describe('deriveCurrentFile', () => {
 
 describe('deriveFileEdits / deriveLatestEditSeqByPath', () => {
   it('collects only well-formed Write/Edit tool_start events', () => {
-    const events: NexusEvent[] = [
+    const events: SynCodeEvent[] = [
       toolStart(1, 'tu1', 'Read', { file_path: 'a.ts' }),
       toolStart(2, 'tu2', 'Write', { file_path: 'b.ts', content: 'hi' }),
       toolStart(3, 'tu3', 'Edit', { file_path: 'b.ts', old_string: 'hi', new_string: 'bye' }),

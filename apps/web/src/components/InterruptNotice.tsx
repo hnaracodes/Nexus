@@ -1,6 +1,6 @@
-import type { Interrupted, NexusEvent } from '@syncode/protocol/events';
+import type { Interrupted, SynCodeEvent } from '@syncode/protocol/events';
 
-function isInterrupted(event: NexusEvent): event is Interrupted {
+function isInterrupted(event: SynCodeEvent): event is Interrupted {
   return event.type === 'interrupted';
 }
 
@@ -11,7 +11,7 @@ function isInterrupted(event: NexusEvent): event is Interrupted {
  * the log and in the message list's system-line rendering, this is just the
  * "someone just hit stop" banner.
  */
-export function InterruptNotice({ events }: { events: NexusEvent[] }): JSX.Element | null {
+export function InterruptNotice({ events }: { events: SynCodeEvent[] }): JSX.Element | null {
   const latest = events.filter(isInterrupted).at(-1);
   if (latest === undefined) return null;
 

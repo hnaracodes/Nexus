@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { Pin, PinOff } from 'lucide-react';
-import type { AgentId, AgentProvider, NexusEvent } from '@syncode/protocol/events';
+import type { AgentId, AgentProvider, SynCodeEvent } from '@syncode/protocol/events';
 import type { FleetEntry } from '@syncode/protocol/wire';
 import type { PendingApproval } from '../approvals.js';
 import { useHotkeys } from '../hooks/useHotkeys.js';
@@ -87,7 +87,7 @@ export interface SideBarProps {
   onDecideSingle: (requestId: string, decision: 'allow' | 'deny', reason?: string) => void;
 
   // Changes
-  changesEvents: NexusEvent[];
+  changesEvents: SynCodeEvent[];
   gitStatus: GitStatusState;
 }
 

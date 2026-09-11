@@ -1,4 +1,4 @@
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import type { PresenceEntry, ServerFrame } from '@syncode/protocol/wire';
 import type { Room } from './rooms.js';
 
@@ -16,7 +16,7 @@ export function presenceFrame(room: Room): ServerFrame {
 }
 
 /** Rebuild the roster from a log slice. The log is authoritative (I3). */
-export function projectPresence(events: NexusEvent[]): {
+export function projectPresence(events: SynCodeEvent[]): {
   participants: PresenceEntry[];
   driverId: string | null;
 } {

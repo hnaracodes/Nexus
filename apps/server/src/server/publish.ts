@@ -160,7 +160,7 @@ function readSha(value: unknown, what: string): string {
 function readPullRequest(value: unknown): { prUrl: string; prNumber: number } {
   const pr = value as { number?: unknown; html_url?: unknown } | null | undefined;
   if (typeof pr?.number !== 'number' || typeof pr.html_url !== 'string') {
-    throw new Error('GitHub returned a pull request in a shape Nexus does not recognise.');
+    throw new Error('GitHub returned a pull request in a shape SynCode does not recognise.');
   }
   return { prUrl: pr.html_url, prNumber: pr.number };
 }
@@ -385,7 +385,7 @@ export async function publishToGithub(
   // Refuse, and write nothing.
   if (baseTreeBody.truncated === true) {
     throw new Error(
-      'Cannot publish: this repository is too large for Nexus to diff safely — GitHub truncated the file listing. Nothing was published.',
+      'Cannot publish: this repository is too large for SynCode to diff safely — GitHub truncated the file listing. Nothing was published.',
     );
   }
 

@@ -1,4 +1,4 @@
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 
 export type AgentStatus =
   | { state: 'idle' }
@@ -15,7 +15,7 @@ export type AgentStatus =
  * arrays are built per call.
  */
 export function deriveAgentStatus(
-  events: NexusEvent[],
+  events: SynCodeEvent[],
   pendingDeltas: Record<string, string>,
 ): AgentStatus {
   // --- awaiting: any permission_requested with no matching permission_decided ---

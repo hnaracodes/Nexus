@@ -103,7 +103,7 @@ export function Notice({ severity, message, action, onDismiss }: NoticeProps): J
 /**
  * Recovery dialog for WS close code 4409 (room recovered without its API
  * key — src/server/recovery.ts). Treats the key exactly as CreateRoom.tsx
- * does (I4): request body only, over `X-Nexus-Token`, never a URL, never
+ * does (I4): request body only, over `X-SynCode-Token`, never a URL, never
  * localStorage, cleared from state whether the request succeeds or fails.
  * This component only renders the dialog; detecting the 4409 close code and
  * deciding when to mount it belongs to the integration pass over App.tsx.
@@ -180,7 +180,7 @@ export function ReKeyDialog({
     try {
       const response = await fetch(`/api/rooms/${roomId}/key`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'X-Nexus-Token': token },
+        headers: { 'content-type': 'application/json', 'X-SynCode-Token': token },
         body: JSON.stringify({ apiKey }),
       });
       const payload = (await response.json().catch(() => null)) as { error?: string } | null;

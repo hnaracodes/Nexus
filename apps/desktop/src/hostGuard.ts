@@ -53,8 +53,8 @@ export function describeHostConflict(existing: HostedRoomInfo | undefined): Host
   return {
     blocked: true,
     message:
-      `Nexus is already hosting a room for "${existing.folderName}" in this window. ` +
-      `It can host only one room at a time. Click the Nexus dock icon to reopen that ` +
-      `room, or quit Nexus (Cmd+Q) to close it before opening a different folder.`,
+      `SynCode is already hosting a room for "${existing.folderName}" in this window. ` +
+      `It can host only one room at a time. Click the SynCode dock icon to reopen that ` +
+      `room, or quit SynCode (Cmd+Q) to close it before opening a different folder.`,
   };
 }

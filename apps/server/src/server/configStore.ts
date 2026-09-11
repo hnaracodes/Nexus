@@ -4,6 +4,7 @@ import type { AgentProvider } from '@syncode/protocol/events';
 import { isAgentProvider } from '@syncode/protocol/events';
 import type { AgentConfig, AgentConfigResult } from './agentConfig.js';
 import { parseAgentConfig } from './agentConfig.js';
+import { readEnv } from './env.js';
 
 /**
  * Persistence for saved agent configs and crew templates (phase 13, D3).
@@ -37,7 +38,7 @@ import { parseAgentConfig } from './agentConfig.js';
  *    room's four-eyes gate.
  */
 
-const DEFAULT_DATA_DIR = process.env['NEXUS_DATA_DIR'] ?? './data';
+const DEFAULT_DATA_DIR = readEnv('DATA_DIR') ?? './data';
 
 function configsDir(dataDir: string): string {
   return join(resolve(dataDir), 'configs');
@@ -214,7 +215,7 @@ function parseGraph(value: unknown): { problems: string[]; graph?: CrewGraph } {
     if (typeof id !== 'string' || id === '') problems.push(`\`graph.nodes[${index}].id\` is required.`);
     if (typeof configName !== 'string') problems.push(`\`graph.nodes[${index}].configName\` is required.`);
     if (typeof displayName !== 'string') problems.push(`\`graph.nodes[${index}].displayName\` is required.`);
-    if (!isAgentProvider(raw['provider'])) problems.push(`\`graph.nodes[${index}].provider\` is not a provider Nexus supports.`);
+    if (!isAgentProvider(raw['provider'])) problems.push(`\`graph.nodes[${index}].provider\` is not a provider SynCode supports.`);
     if (typeof raw['x'] !== 'number' || typeof raw['y'] !== 'number') {
       problems.push(`\`graph.nodes[${index}]\` needs numeric x and y.`);
     }
@@ -256,7 +257,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 function unknownFields(input: Record<string, unknown>, allowed: readonly string[]): string[] {
   return Object.keys(input)
     .filter((key) => !allowed.includes(key))
-    .map((key) => `\`${key}\` is not a field Nexus accepts on a crew.`);
+    .map((key) => `\`${key}\` is not a field SynCode accepts on a crew.`);
 }
 
 function parseMember(index: number, value: unknown): { problems: string[]; member?: CrewMember } {

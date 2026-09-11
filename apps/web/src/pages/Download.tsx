@@ -182,7 +182,7 @@ export function Download(): JSX.Element {
     <div className="min-h-screen bg-bg text-fg">
       <SiteHeader />
       <main id="main" className="mx-auto max-w-3xl px-4 py-16 sm:px-6">
-        <h1 className="text-3xl font-semibold text-fg sm:text-4xl">Download Nexus</h1>
+        <h1 className="text-3xl font-semibold text-fg sm:text-4xl">Download SynCode</h1>
         <p className="mt-3 max-w-prose text-base leading-relaxed text-fg-muted">
           The desktop app runs its own server on your machine — your rooms, your files, your
           Anthropic key. Built straight from source on every tagged release; nothing here is
@@ -201,7 +201,7 @@ export function Download(): JSX.Element {
           </h2>
           <p className="mt-3 text-sm leading-relaxed text-fg-muted">
             Nobody has bought an Apple Developer certificate or a Windows code-signing
-            certificate for Nexus yet. That is a deferred decision, not an accident — see the
+            certificate for SynCode yet. That is a deferred decision, not an accident — see the
             project&rsquo;s own notes on it. It means your operating system will warn you before
             it lets the app run, and that warning is expected, not a sign the download failed.
           </p>
@@ -209,9 +209,9 @@ export function Download(): JSX.Element {
             <div>
               <dt className="font-medium text-fg">On macOS</dt>
               <dd className="mt-1 leading-relaxed text-fg-muted">
-                You will see &ldquo;Apple could not verify that &lsquo;Nexus&rsquo; is free of
+                You will see &ldquo;Apple could not verify that &lsquo;SynCode&rsquo; is free of
                 malware.&rdquo; Do not click Trash. In Finder, <strong>right-click</strong> (or
-                Control-click) <code>Nexus.app</code>, choose <strong>Open</strong>, then confirm
+                Control-click) <code>SynCode.app</code>, choose <strong>Open</strong>, then confirm
                 in the dialog that appears. You only need to do this once.
               </dd>
             </div>
@@ -332,8 +332,8 @@ export function Download(): JSX.Element {
           <p className="font-medium text-fg">Advanced / last resort</p>
           <p className="mt-2 leading-relaxed text-fg-muted">
             If right-click &rarr; Open still refuses, you can remove macOS&rsquo;s quarantine flag
-            for this one app: <code>xattr -d com.apple.quarantine /Applications/Nexus.app</code>.
-            This disables Gatekeeper&rsquo;s malware check for Nexus specifically — only do this if
+            for this one app: <code>xattr -d com.apple.quarantine /Applications/SynCode.app</code>.
+            This disables Gatekeeper&rsquo;s malware check for SynCode specifically — only do this if
             you trust where you got the file. It is not the recommended step; the right-click
             instruction above is.
           </p>

@@ -1,4 +1,4 @@
-import type { AgentId, AgentProvider, NexusEvent } from './events.js';
+import type { AgentId, AgentProvider, SynCodeEvent } from './events.js';
 import { isAgentProvider } from './events.js';
 
 export interface PresenceEntry {
@@ -44,7 +44,7 @@ export type AgentStatus = 'idle' | 'working' | 'awaiting_approval' | 'error' | '
  * state. Every other frame is transient: no seq, never logged, never replayed.
  */
 export type ServerFrame =
-  | { kind: 'event'; event: NexusEvent }
+  | { kind: 'event'; event: SynCodeEvent }
   /**
    * `agentId` is not decoration. Streaming text is keyed by `messageId` in the
    * client's `pendingDeltas`, and with one agent per room that was sufficient.

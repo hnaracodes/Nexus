@@ -1,5 +1,5 @@
 import { GitBranch, GitPullRequest } from 'lucide-react';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import { deriveGithubBinding } from '../githubBinding.js';
 
 /**
@@ -14,7 +14,7 @@ export function RepoBranchBar({
   events,
   roomId,
 }: {
-  events: NexusEvent[];
+  events: SynCodeEvent[];
   roomId: string;
 }): JSX.Element {
   const github = deriveGithubBinding(events);

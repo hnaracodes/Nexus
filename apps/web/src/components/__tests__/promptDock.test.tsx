@@ -1,10 +1,10 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import { PromptDock } from '../PromptDock.js';
 import type { PromptDockProps } from '../PromptDock.js';
 
-const ROOM_CREATED: NexusEvent = {
+const ROOM_CREATED: SynCodeEvent = {
   type: 'room_created',
   seq: 1,
   ts: '2026-01-01T00:00:00.000Z',

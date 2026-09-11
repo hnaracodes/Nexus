@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { NexusEvent } from '@syncode/protocol/events';
+import type { SynCodeEvent } from '@syncode/protocol/events';
 import { ModelSelector } from '../ModelSelector.js';
 
 const MODELS_PAYLOAD = {
@@ -10,7 +10,7 @@ const MODELS_PAYLOAD = {
   ],
 };
 
-function modelChanged(model: string | null, seq = 1): NexusEvent {
+function modelChanged(model: string | null, seq = 1): SynCodeEvent {
   return {
     type: 'model_changed',
     seq,
@@ -53,7 +53,7 @@ describe('ModelSelector', () => {
       RequestInit,
     ];
     expect(url).toBe('/api/rooms/room_1/models');
-    expect((init.headers as Record<string, string>)['X-Nexus-Token']).toBe('tok_secret');
+    expect((init.headers as Record<string, string>)['X-SynCode-Token']).toBe('tok_secret');
 
     await waitFor(() => expect(screen.getByRole('option', { name: 'Sonnet 5' })).toBeInTheDocument());
     expect(screen.getByRole('option', { name: 'Opus 5' })).toBeInTheDocument();

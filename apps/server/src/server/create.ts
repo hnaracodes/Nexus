@@ -6,6 +6,7 @@ import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { mintCloneToken } from './github.js';
 import type { GithubBinding, GithubDeps } from './github.js';
+import { readEnv } from './env.js';
 
 /**
  * The one child-process shape this module spawns, named narrowly on purpose.
@@ -23,7 +24,7 @@ export type RunExecFile = (
 ) => Promise<{ stdout: string; stderr: string }>;
 
 const runExecFile: RunExecFile = promisify(execFile);
-const DEFAULT_WORKDIR = process.env['NEXUS_WORKDIR'] ?? './work';
+const DEFAULT_WORKDIR = readEnv('WORKDIR') ?? './work';
 const CLONE_TIMEOUT_MS = 120_000;
 const SAFE_ROOM_ID = /^[A-Za-z0-9_-]+$/;
 // Deliberately narrow: https only, no shell metacharacters, no credentials.
@@ -100,7 +101,7 @@ export function validateApiKeyShape(
     return {
       ok: false,
       message:
-        'Nexus needs an Anthropic Console API key beginning with "sk-ant-". Subscription logins (Free, Pro, Max) cannot be used by third-party tools.',
+        'SynCode needs an Anthropic Console API key beginning with "sk-ant-". Subscription logins (Free, Pro, Max) cannot be used by third-party tools.',
     };
   }
   return { ok: true, apiKey: value };
@@ -130,7 +131,7 @@ export function validateRepoUrl(
       ok: false,
       // Never echo the URL back — it is the thing carrying the credential.
       message:
-        'Remove the credentials from the repository URL. Nexus logs the URL, and the log is meant to be shareable.',
+        'Remove the credentials from the repository URL. SynCode logs the URL, and the log is meant to be shareable.',
     };
   }
 

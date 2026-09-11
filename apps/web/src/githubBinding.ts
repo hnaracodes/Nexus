@@ -1,4 +1,4 @@
-import type { GithubRepoRef, NexusEvent } from '@syncode/protocol/events';
+import type { GithubRepoRef, SynCodeEvent } from '@syncode/protocol/events';
 
 /**
  * The room's GitHub repository, derived from the log rather than held in state
@@ -14,9 +14,9 @@ import type { GithubRepoRef, NexusEvent } from '@syncode/protocol/events';
  * Callers only ever need "is this room GitHub-backed", so `== null` collapses
  * the two deliberately.
  */
-export function deriveGithubBinding(events: NexusEvent[]): GithubRepoRef | null {
+export function deriveGithubBinding(events: SynCodeEvent[]): GithubRepoRef | null {
   const created = events.find(
-    (event): event is Extract<NexusEvent, { type: 'room_created' }> =>
+    (event): event is Extract<SynCodeEvent, { type: 'room_created' }> =>
       event.type === 'room_created',
   );
   return created?.github ?? null;

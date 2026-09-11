@@ -6,7 +6,7 @@ import { __resetRooms, createRoom } from '../../src/server/rooms.js';
 /**
  * One tool call must cost the room exactly one decision.
  *
- * Nexus wires its gate into the SDK at BOTH available seams — a `PreToolUse`
+ * SynCode wires its gate into the SDK at BOTH available seams — a `PreToolUse`
  * hook (which is what enforces today) and `canUseTool` (retained so a future SDK
  * that restores it needs no change). That redundancy is deliberate and is what
  * makes the gate survive an SDK that changes its mind about which seam it

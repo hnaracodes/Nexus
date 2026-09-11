@@ -1,5 +1,6 @@
 import type { UnsequencedEvent } from '@syncode/protocol/events';
 import type { Room } from './rooms.js';
+import { readEnv } from './env.js';
 
 export const GRACE_MS = 30_000;
 
@@ -10,7 +11,7 @@ export const GRACE_MS = 30_000;
  * if the cancel is broken, because the timer has not fired yet.
  */
 function graceMs(): number {
-  const configured = Number(process.env['NEXUS_DRIVER_GRACE_MS']);
+  const configured = Number(readEnv('DRIVER_GRACE_MS'));
   return Number.isFinite(configured) && configured > 0 ? configured : GRACE_MS;
 }
 

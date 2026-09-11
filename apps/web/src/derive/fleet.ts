@@ -1,4 +1,4 @@
-import type { AgentId, AgentProvider, NexusEvent } from '@syncode/protocol/events';
+import type { AgentId, AgentProvider, SynCodeEvent } from '@syncode/protocol/events';
 import { PRIMARY_AGENT_ID, agentIdOf } from '@syncode/protocol/events';
 
 /**
@@ -98,7 +98,7 @@ function ensure<K, V>(map: Map<K, V>, key: K, make: () => V): V {
  * prompt falls back to the primary agent, exactly as it must for `agentIdOf`'s
  * "absence means primary, never unknown" rule to hold here too.
  */
-export function deriveAgentTranscripts(events: NexusEvent[]): Map<AgentId, Message[]> {
+export function deriveAgentTranscripts(events: SynCodeEvent[]): Map<AgentId, Message[]> {
   const byAgent = new Map<AgentId, Message[]>();
   const knownAgents = new Set<AgentId>([PRIMARY_AGENT_ID]);
 
@@ -300,7 +300,7 @@ export function deriveAgentTranscripts(events: NexusEvent[]): Map<AgentId, Messa
  * (every pre-v3 log, including production's, predates `agent_spawned`
  * entirely) and why later events overwrite earlier ones for the same id.
  */
-export function deriveFleetRoster(events: NexusEvent[]): AgentDescriptor[] {
+export function deriveFleetRoster(events: SynCodeEvent[]): AgentDescriptor[] {
   const byId = new Map<AgentId, AgentDescriptor>();
   byId.set(PRIMARY_AGENT_ID, {
     agentId: PRIMARY_AGENT_ID,
@@ -377,7 +377,7 @@ export function deriveFleetRoster(events: NexusEvent[]): AgentDescriptor[] {
  */
 export function routeDeltas(
   pendingDeltas: Record<string, PendingDelta>,
-  events: NexusEvent[],
+  events: SynCodeEvent[],
 ): Map<AgentId, Record<string, string>> {
   const result = new Map<AgentId, Record<string, string>>();
   for (const agent of deriveFleetRoster(events)) {
