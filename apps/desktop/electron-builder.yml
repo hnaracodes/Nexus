@@ -20,6 +20,12 @@ appId: com.nexus.desktop
 productName: Nexus
 directories:
   output: release
+# Uniform across all three platforms so the release workflow, the download
+# page (apps/web/src/pages/Download.tsx) and scripts/install.sh can all find
+# an asset by matching on this SHAPE — none of them hardcode a version, since
+# `${version}` is substituted from package.json (or the CI-overridden version
+# for a tagged release) at build time.
+artifactName: '${productName}-${version}-${os}-${arch}.${ext}'
 files:
   - dist/**/*
   - package.json
@@ -32,8 +38,13 @@ files:
 
 mac:
   category: public.app-category.developer-tools
+  # Both architectures, spelled out here rather than left to a CLI flag, so
+  # that "release.yml builds arm64 + x64" is true by reading this file alone.
   target:
-    - dmg
+    - target: dmg
+      arch:
+        - arm64
+        - x64
   # electron-builder reads signing/notarization credentials from the
   # environment, not from this file, so nothing secret is committed here.
   # FILL IN once Apple Developer ID certificates exist, by setting:
@@ -68,3 +79,15 @@ linux:
     - AppImage
   category: Development
   # AppImage has no code-signing step of its own — nothing to fill in here.
+
+# GitHub as the publish target: where `electron-builder --publish` (as run by
+# .github/workflows/release.yml on a `v*` tag) uploads dmg/nsis/AppImage
+# artifacts, and — later — the feed an auto-updater would read for new
+# versions. Phase 17e deliberately does NOT add `electron-updater`: CLAUDE.md
+# §11 is explicit that an auto-updater is remote code execution by design,
+# and it needs signing decided first. This block only wires up where a build
+# gets published; nothing in this app fetches from it at runtime.
+publish:
+  provider: github
+  owner: hnaracodes
+  repo: Nexus
