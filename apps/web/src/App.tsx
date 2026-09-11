@@ -1144,7 +1144,7 @@ function RoomShell({
       </PaneErrorBoundary>
       {/* --- END phase-17a VS Code shell --- */}
 
-      <JoinToasts events={view.events} selfId={view.selfId} />
+      <JoinToasts events={view.events} selfId={view.selfId} replaying={view.replaying} />
 
       <GrantControlPicker
         open={grantPickerOpen}

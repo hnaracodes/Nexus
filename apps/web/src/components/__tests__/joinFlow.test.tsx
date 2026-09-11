@@ -76,25 +76,25 @@ describe('JoinToasts', () => {
     // The whole log replays on every connect. Without a high-water mark, opening
     // a room that six people have passed through fires six toasts at once — and
     // fires them again on every reconnect.
-    render(<JoinToasts events={[joined(1, 'Ada'), joined(2, 'Grace')]} selfId="p_9" />);
+    render(<JoinToasts events={[joined(1, 'Ada'), joined(2, 'Grace')]} selfId="p_9" replaying={false} />);
     expect(screen.queryByText(/joined the room/i)).not.toBeInTheDocument();
   });
 
   it('waves in someone who arrives after the first render', () => {
-    const { rerender } = render(<JoinToasts events={[joined(1, 'Ada')]} selfId="p_9" />);
-    rerender(<JoinToasts events={[joined(1, 'Ada'), joined(2, 'Grace')]} selfId="p_9" />);
+    const { rerender } = render(<JoinToasts events={[joined(1, 'Ada')]} selfId="p_9" replaying={false} />);
+    rerender(<JoinToasts events={[joined(1, 'Ada'), joined(2, 'Grace')]} selfId="p_9" replaying={false} />);
     expect(screen.getByText('Grace')).toBeInTheDocument();
   });
 
   it('does not wave at you when the new arrival is you', () => {
-    const { rerender } = render(<JoinToasts events={[joined(1, 'Ada')]} selfId="2" />);
-    rerender(<JoinToasts events={[joined(1, 'Ada'), joined(2, 'Me')]} selfId="2" />);
+    const { rerender } = render(<JoinToasts events={[joined(1, 'Ada')]} selfId="2" replaying={false} />);
+    rerender(<JoinToasts events={[joined(1, 'Ada'), joined(2, 'Me')]} selfId="2" replaying={false} />);
     expect(screen.queryByText('Me')).not.toBeInTheDocument();
   });
 
   it('announces politely rather than interrupting', () => {
-    const { rerender, container } = render(<JoinToasts events={[joined(1, 'Ada')]} selfId="p_9" />);
-    rerender(<JoinToasts events={[joined(1, 'Ada'), joined(2, 'Grace')]} selfId="p_9" />);
+    const { rerender, container } = render(<JoinToasts events={[joined(1, 'Ada')]} selfId="p_9" replaying={false} />);
+    rerender(<JoinToasts events={[joined(1, 'Ada'), joined(2, 'Grace')]} selfId="p_9" replaying={false} />);
     expect(container.querySelector('[aria-live]')).toHaveAttribute('aria-live', 'polite');
   });
 });

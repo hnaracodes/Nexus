@@ -52,7 +52,7 @@ import {
 } from './rooms.js';
 import type { AgentDeps } from './agent.js';
 import { attachRoom, getRuntime, resolveParticipantId } from './ws.js';
-import { spawnAgent, stopAgent } from './fleet.js';
+import { spawnAgent, stopAgent, fleetSnapshot } from './fleet.js';
 import { securityHeaders } from './hardening.js';
 import { launchCrew } from './crews.js';
 import { hasCycle, startWorkflowRun } from './workflowRunner.js';
@@ -766,6 +766,31 @@ export function createServer(
       room.participants.set(participantId, { id: participantId, displayName, connected: true });
       runtime.commit({ type: 'participant_joined', participantId, displayName });
       runtime.broadcast(presenceFrame(room));
+      /**
+       * And the FLEET, to this socket alone.
+       *
+       * `broadcastFleet()` fires when the fleet changes — spawn, stop, model
+       * switch, crew run. A socket that connects after the last of those
+       * receives events, `replay_complete` and `presence`, and then nothing
+       * about the fleet at all, so its fleet view stays empty and its agent
+       * count stays at one until somebody happens to change something.
+       *
+       * The frame cannot be recovered from the replay this socket just got:
+       * it is deliberately transient and unlogged ("liveness, never
+       * membership" — see `broadcastFleet`'s comment in ws.ts), and transient
+       * state has to be handed to a joiner explicitly. Presence, right above,
+       * has always done exactly this; the fleet simply never did.
+       *
+       * Found by opening a room holding eight live agents in a browser and
+       * reading "1 agent" in the status bar. Every suite was green, because
+       * every test that asserts on a fleet frame first does something that
+       * triggers one.
+       *
+       * Sent to THIS socket rather than broadcast: a person joining does not
+       * change anyone else's fleet, and re-broadcasting to the whole room on
+       * every join is noise that grows with the number of people watching.
+       */
+      ws.send(JSON.stringify({ kind: 'fleet', agents: fleetSnapshot(runtime) }));
 
       ws.on('message', (data) => {
         const frame = parseClientFrame(String(data));
