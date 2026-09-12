@@ -10,9 +10,21 @@ primary_region = 'sjc'
   dockerfile = 'Dockerfile'
 
 [env]
+  # BOTH names, on purpose. `readEnv()` prefers SYNCODE_ and falls back to
+  # NEXUS_, so the code is happy with either — but a deploy that fails and rolls
+  # the IMAGE back while keeping the new CONFIG would leave a pre-rename server
+  # reading only NEXUS_*, finding nothing, and falling back to a relative
+  # ./data inside the container. It would boot clean and write the append-only
+  # event log to a directory that vanishes on the next restart. Two lines to
+  # make a partial rollback survivable.
+  SYNCODE_DATA_DIR = '/data'
   NEXUS_DATA_DIR = '/data'
   PORT = '8080'
+  SYNCODE_WORKDIR = '/data/work'
   NEXUS_WORKDIR = '/data/work'
+  # The HOST is deliberately still nexus-mvp: every room link anyone holds
+  # names it, and the link is the credential.
+  SYNCODE_PUBLIC_URL = 'https://nexus-mvp.fly.dev'
   NEXUS_PUBLIC_URL = 'https://nexus-mvp.fly.dev'
 
 [[mounts]]
