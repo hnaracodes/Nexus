@@ -827,7 +827,44 @@ export function createServer(
   // so an absolute path is fine — only *relative* ones are cwd-sensitive.
   const clientDir =
     readEnv('CLIENT_DIR') ?? fileURLToPath(new URL('../../../web/dist', import.meta.url));
+  /**
+   * CACHE HEADERS, and the two rules are deliberately opposite.
+   *
+   * Neither route set one before, so the SPA shell was served with only
+   * `Last-Modified` — which lets a browser cache it heuristically and skip
+   * revalidating. A returning visitor was then handed a STALE `index.html`,
+   * which names a content-hashed bundle, and after a deploy that hash is gone:
+   * `/assets/index-<old>.js` returns 404. They see the previous page or a
+   * broken one, redeploying does not help them, and from the outside it looks
+   * exactly like the deploy never happened. It was reported that way.
+   *
+   * The shell's URL never changes while its content does on every deploy, so it
+   * must be revalidated every time — `no-cache` means "ask first", not "do not
+   * store", so a 304 still saves the bytes.
+   *
+   * A hashed asset is the mirror image: its URL changes whenever its content
+   * does, so the bytes behind one can never differ and it is safe forever.
+   * `immutable` additionally tells the browser not to revalidate even on a
+   * reload.
+   *
+   * Verified against a running server, not just the suite — and the first
+   * attempt to do so lied. `curl` reported no headers at all, which looked like
+   * the middleware failing; the real cause was an OLD server still holding
+   * :8099 while the new one had died on EADDRINUSE, so every request was being
+   * answered by the previous build. CLAUDE.md warns about exactly that port on
+   * this machine. Kill by PID and re-check before believing a negative result.
+   */
+  app.use('/assets/*', async (c, next) => {
+    await next();
+    c.header('Cache-Control', 'public, max-age=31536000, immutable');
+  });
   app.use('/assets/*', serveStatic({ root: clientDir }));
+  for (const path of PAGE_ROUTES) {
+    app.get(path, async (c, next) => {
+      await next();
+      c.header('Cache-Control', 'no-cache');
+    });
+  }
   for (const path of PAGE_ROUTES) {
     app.get(path, serveStatic({ path: `${clientDir}/index.html` }));
   }

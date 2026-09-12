@@ -73,3 +73,45 @@ describe('static page route allow-list', () => {
     expect(await response.text()).toContain('npm run build:client');
   });
 });
+
+/**
+ * A deploy must actually reach people who have visited before.
+ *
+ * The SPA shell was served with no `Cache-Control` at all — only
+ * `Last-Modified` — so browsers applied heuristic caching and a returning
+ * visitor could be handed a stale `index.html`. That HTML names a
+ * content-hashed bundle (`/assets/index-<hash>.js`), and after a deploy the old
+ * hash is GONE: it 404s. So the visitor gets the previous page, or a broken
+ * one, and no amount of redeploying fixes it — which is exactly what "I checked
+ * the page and it's still not updated" looks like from the outside.
+ *
+ * The two rules are opposite and both matter:
+ *   - the shell must be revalidated every time (its content changes, its URL
+ *     does not),
+ *   - the hashed assets can be cached forever (their URL changes whenever their
+ *     content does, which is the entire point of the hash).
+ */
+describe('cache headers', () => {
+  it('makes the SPA shell revalidate, so a deploy is not invisible to returning visitors', async () => {
+    const { app } = createServer();
+    for (const path of PAGE_PATHS) {
+      const response = await app.fetch(new Request(`http://localhost${path}`));
+      const cacheControl = response.headers.get('cache-control') ?? '';
+      expect(cacheControl, `${path} must not be heuristically cached`).toMatch(
+        /no-cache|no-store|max-age=0/,
+      );
+    }
+  });
+
+  it('lets content-hashed assets be cached indefinitely', async () => {
+    const { app } = createServer();
+    const response = await app.fetch(
+      new Request('http://localhost/assets/index-DEADBEEF.js'),
+    );
+    // Whether the file exists is beside the point; the header policy is applied
+    // by the route, and a hashed URL can never serve different bytes later.
+    const cacheControl = response.headers.get('cache-control') ?? '';
+    expect(cacheControl).toMatch(/immutable/);
+    expect(cacheControl).toMatch(/max-age=\d{6,}/);
+  });
+});
