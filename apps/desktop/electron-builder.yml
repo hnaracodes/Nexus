@@ -36,6 +36,12 @@ files:
   # packaged .app, not by reading this list.
   - join.html
 
+# Runs after the .app is assembled and BEFORE the dmg is built, which is the
+# only window in which the bundle can still be signed. See build/adhoc-sign.cjs:
+# without it, a downloaded build is reported as "damaged" rather than merely
+# unsigned, and right-click -> Open cannot rescue it.
+afterPack: build/adhoc-sign.cjs
+
 mac:
   category: public.app-category.developer-tools
   # Both architectures, spelled out here rather than left to a CLI flag, so
@@ -57,7 +63,11 @@ mac:
   # UNSIGNED, un-notarized one: installable locally after a Gatekeeper
   # right-click-to-open, but not distributable to other Macs without one of
   # those warnings.
-  hardenedRuntime: true
+  # hardenedRuntime is OFF until there is a real Developer ID. It is only
+  # meaningful alongside notarization, it requires a matching entitlements file
+  # that Electron is fussy about, and enabling it with an ad-hoc signature buys
+  # nothing while adding a way for the app to fail to launch.
+  hardenedRuntime: false
   gatekeeperAssess: false
 
 win:
