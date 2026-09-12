@@ -1288,6 +1288,6 @@ if (entry.endsWith('index.ts') || entry.endsWith('index.js')) {
   const { server } = createServer();
   const port = Number(process.env['PORT'] ?? 8080);
   server.listen(port, '0.0.0.0', () => {
-    console.log(`nexus listening on :${port}`);
+    console.log(`syncode listening on :${port}`);
   });
 }
