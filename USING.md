@@ -66,24 +66,24 @@ now — and unsigned, which is what they will notice first.
 
 ### The current situation, plainly
 
-**v0.2.3 is published and all four builds are downloadable.** Verified by
-downloading and installing them, not by looking at the releases page:
+**v0.3.0 is published — the first SynCode-named builds — and all four are
+downloadable.** Verified by installing them, not by reading the releases page:
 
 | Asset | Size |
 |---|---|
-| `Nexus-0.2.3-mac-arm64.dmg` | 177 MB |
-| `Nexus-0.2.3-mac-x64.dmg` | 181 MB |
-| `Nexus-0.2.3-win-x64.exe` | 146 MB |
-| `Nexus-0.2.3-linux-x86_64.AppImage` | 183 MB |
-
-Those filenames still say **Nexus** because v0.2.3 was built before the rename
-and a published artifact cannot be renamed after the fact. The next tagged
-release produces `SynCode-…` files. `install.sh` reads the product name out of
-whatever it downloads rather than assuming either, so the same one-liner
-installs both.
+| `SynCode-0.3.0-mac-arm64.dmg` | 177 MB |
+| `SynCode-0.3.0-mac-x64.dmg` | 181 MB |
+| `SynCode-0.3.0-win-x64.exe` | 146 MB |
+| `SynCode-0.3.0-linux-x86_64.AppImage` | 183 MB |
 
 Each ships a `.sha256` sidecar, and the installer refuses anything that does not
 match it.
+
+`v0.2.3` and earlier are named `Nexus-…` because they were built before the
+rename and a published artifact cannot be renamed after the fact. `install.sh`
+reads the product name out of whatever it downloads rather than assuming
+either, so the same one-liner installs both — checked against both releases on
+macOS and on x86_64 Linux.
 
 It took three tags to get here, which is worth knowing before you cut the next
 one. `v0.2.0` died on a twelve-day-old CI break (the desktop typecheck needed a
@@ -97,8 +97,8 @@ from the Actions tab** (`workflow_dispatch`) without spending a version number.
 To cut the next one:
 
 ```bash
-git tag v0.2.4        # NOT v.1.0.0 — the dot after the v is refused by the tag guard
-git push origin v0.2.4
+git tag v0.3.1        # NOT v.1.0.0 — the dot after the v is refused by the tag guard
+git push origin v0.3.1
 ```
 
 The workflow runs `npm run verify`, builds all three platforms, writes a
