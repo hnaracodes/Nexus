@@ -5,8 +5,27 @@ import { openLog } from '../log/event-log.js';
 import { projectFleet, reconstruct } from '../log/replay.js';
 import { claimLocalPath } from './localHost.js';
 import { restoreRoom } from './rooms.js';
+import { readEnv } from './env.js';
 
-const DEFAULT_DATA_DIR = process.env['NEXUS_DATA_DIR'] ?? './data';
+/**
+ * Missed by the SynCode rename: every other module that needs this directory
+ * (`event-log.ts`, `create.ts`, `localHost.ts`) reads it through `readEnv()`,
+ * which checks `SYNCODE_DATA_DIR` before falling back to the legacy
+ * `NEXUS_DATA_DIR`. This one read `process.env['NEXUS_DATA_DIR']` directly —
+ * and the desktop app's `useWritablePaths()` only ever sets the NEW name, so
+ * this constant silently fell back to the relative path `./data` on every
+ * single local-folder room creation.
+ *
+ * `./data` resolves against `process.cwd()`, which for a packaged,
+ * Finder-launched Electron app is not the app's own directory and is
+ * typically not writable at all — the exact failure this repo already fixed
+ * once, for `create.ts`'s workdir, before the rename reopened it here:
+ * `writeRoomMeta`'s `mkdirSync` throws (commonly `EACCES`), uncaught, mid
+ * request, and the desktop app's generic "Could not create a room for that
+ * folder" fallback is all a user ever sees — regardless of which folder they
+ * picked, because the failure has nothing to do with the folder at all.
+ */
+const DEFAULT_DATA_DIR = readEnv('DATA_DIR') ?? './data';
 
 /**
  * Non-secret room metadata. There is deliberately no apiKey field: a recovered
