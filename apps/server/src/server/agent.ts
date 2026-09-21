@@ -10,6 +10,7 @@ import type { Decision, PermissionGate, RequestVisibility } from './permissions.
 import { createTurnGate } from './turnGate.js';
 import { checkCommand, checkPath } from './sandbox.js';
 import { buildAgentEnv } from './subprocessEnv.js';
+import { agentExecutablePath, electronRunAsNodeEnv } from './agentExecutable.js';
 import type { Batch, PendingPrompt, Roster } from './turnGate.js';
 import { toUserMessage } from './errors.js';
 
@@ -300,7 +301,33 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
        * inverts that: the next deployment secret is dropped because it was
        * never allowed, not because it matched a pattern.
        */
-      env: buildAgentEnv(process.env, room.getApiKey()),
+      /**
+       * NOT the SDK's own default. That default is the bare string "node",
+       * resolved through this process's PATH — which for the desktop app is
+       * whatever `buildAgentEnv` allow-listed from the Electron main
+       * process's own environment, and a Finder-launched app's PATH comes
+       * only from `/etc/paths`/`/etc/paths.d`, never a shell rc file. A real
+       * install failed here: "Failed to spawn Claude Code process: spawn
+       * node ENOENT", because the user's actual Node (nvm, in practice) was
+       * never on that PATH. `process.execPath` needs no PATH lookup at all —
+       * see `agentExecutable.ts` for the reproduction and the fix, verified
+       * against the real SDK under the exact PATH a GUI launch gets.
+       */
+      // The SDK's own type restricts this to 'node' | 'bun' | 'deno' — a
+      // runtime-FAMILY selector — but its actual spawn code (sdk.mjs, verified
+      // by reading it) just hands whatever string this is straight to
+      // `spawn()` as the command; it never checks it against those literals.
+      // An arbitrary absolute path works today, verified directly against the
+      // installed SDK (agentExecutable.ts's own comment has the repro). The
+      // cast is honest about that gap rather than fighting it with `as any`.
+      executable: agentExecutablePath() as 'node',
+      env: {
+        ...buildAgentEnv(process.env, room.getApiKey()),
+        // Only meaningful when `executable` above is Electron's own binary
+        // (i.e., inside the desktop app) — see agentExecutable.ts. A no-op on
+        // the hosted server, where process.execPath is already plain Node.
+        ...electronRunAsNodeEnv(),
+      },
       /**
        * THE GATE. Not `canUseTool` — a PreToolUse hook.
        *
