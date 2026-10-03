@@ -7,6 +7,7 @@ import { resolveListenPort, serverOrigin } from './serverHost.js';
 import { isAllowedNavigation } from './navigationGuard.js';
 import { parseRoomLink } from './launcher.js';
 import { migrateUserData } from './userDataMigration.js';
+import { findRoomForFolder } from './existingRoom.js';
 import {
   folderConsentMessage,
   folderDisplayName,
@@ -429,34 +430,73 @@ function registerJoinHandlers(getJoinWindow: () => BrowserWindow | null): void {
       return 'Could not start the local server.';
     }
 
-    let response: Response;
-    try {
-      response = await fetch(`${origin}/api/rooms`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ apiKey, localPath }),
-      });
-    } catch {
-      return 'Could not reach the local server.';
+    /**
+     * REOPEN BEFORE CREATE.
+     *
+     * Opening a folder that already has a room goes back to that room instead
+     * of asking the server for a second one. The server refuses a second room
+     * on one directory ("That folder is already open in another room."), and
+     * recovery re-claims every folder for its old room on every launch — so
+     * once a folder had ever had a room, this button could never work for it
+     * again. Reported as "now i cant create rooms for my folders": all three
+     * of the user's projects were refused, each by a room they could not reach.
+     *
+     * The room's credentials come from this app's own data directory (see
+     * `existingRoom.ts` for why that and not a new server endpoint), and the
+     * room is brought back to life through the existing "re-enter API key"
+     * route, which is token-authenticated and re-attaches the agent. If any
+     * step fails — the room was never recovered, the key is rejected — fall
+     * through to creating a fresh room rather than leaving the host stuck.
+     */
+    let room: { roomId: string; token: string } | undefined;
+    const existing = findRoomForFolder(
+      process.env['SYNCODE_DATA_DIR'] ?? joinPath(app.getPath('userData'), 'data'),
+      localPath,
+    );
+    if (existing !== undefined) {
+      try {
+        const keyed = await fetch(`${origin}/api/rooms/${existing.roomId}/key`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'X-SynCode-Token': existing.token },
+          body: JSON.stringify({ apiKey }),
+        });
+        if (keyed.ok) room = existing;
+      } catch {
+        // Fall through to creation below.
+      }
     }
 
-    const body = (await response.json().catch(() => null)) as
-      | { roomId?: string; token?: string; error?: string }
-      | null;
-    if (!response.ok || body?.roomId === undefined || body.token === undefined) {
-      return body?.error ?? 'Could not create a room for that folder.';
+    if (room === undefined) {
+      let response: Response;
+      try {
+        response = await fetch(`${origin}/api/rooms`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ apiKey, localPath }),
+        });
+      } catch {
+        return 'Could not reach the local server.';
+      }
+
+      const body = (await response.json().catch(() => null)) as
+        | { roomId?: string; token?: string; error?: string }
+        | null;
+      if (!response.ok || body?.roomId === undefined || body.token === undefined) {
+        return body?.error ?? 'Could not create a room for that folder.';
+      }
+      room = { roomId: body.roomId, token: body.token };
     }
 
     const joinUrl = new URL(origin);
-    joinUrl.searchParams.set('room', body.roomId);
-    joinUrl.searchParams.set('token', body.token);
+    joinUrl.searchParams.set('room', room.roomId);
+    joinUrl.searchParams.set('token', room.token);
     const url = joinUrl.toString();
 
     // Recorded with the exact URL and a display name for the folder, not
     // just the id/token pair — `describeHostConflict` needs the name for its
     // message, and `activate` needs the URL to reopen this same room rather
     // than a fresh one (see the field's own doc comment above).
-    hostedRoom = { id: body.roomId, token: body.token, folderName: folderDisplayName(localPath), url };
+    hostedRoom = { id: room.roomId, token: room.token, folderName: folderDisplayName(localPath), url };
     if (shareMenuItem !== undefined) shareMenuItem.enabled = true;
 
     // Shown BEFORE the room window opens — this IS "after the room exists,
