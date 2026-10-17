@@ -693,6 +693,20 @@ function safeEqual(a: string, b: string): boolean {
  * person" — without this check the two collapse into one roster row whose name
  * flips between them, and the second inherits the first's driver token.
  */
+/**
+ * True when `participantId` is a participant of `room` AND `resumeToken` is
+ * the secret this server issued to it. REST routes have no socket to read an
+ * identity from, so a route that must know WHO is calling (the driver-only
+ * workflow run) asks for the same pair the WS reconnect path already trusts.
+ * Constant-time compare, like the reconnect path.
+ */
+export function verifyParticipant(room: Room, participantId: string, resumeToken: string): boolean {
+  if (!PARTICIPANT_ID_PATTERN.test(participantId)) return false;
+  if (!room.participants.has(participantId)) return false;
+  const expected = tokensFor(room).get(participantId);
+  return expected !== undefined && safeEqual(expected, resumeToken);
+}
+
 export function resolveParticipantId(
   room: Room,
   requestedId: string | null,

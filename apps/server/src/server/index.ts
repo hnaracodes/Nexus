@@ -52,12 +52,13 @@ import {
   roomCount,
 } from './rooms.js';
 import type { AgentDeps } from './agent.js';
-import { attachRoom, getRuntime, resolveParticipantId } from './ws.js';
+import { attachRoom, getRuntime, resolveParticipantId, verifyParticipant } from './ws.js';
 import { spawnAgent, stopAgent, fleetSnapshot } from './fleet.js';
 import { securityHeaders } from './hardening.js';
 import { launchCrew } from './crews.js';
 import { hasCycle, startWorkflowRun } from './workflowRunner.js';
-import { deleteConfig, deleteCrew, readConfigs, readCrew, readCrews, saveConfig, saveCrew } from './configStore.js';
+import { createRunRegistry, runKey } from './workflowRuns.js';
+import { deleteConfig, deleteCrew, readConfig, readConfigs, readCrew, readCrews, saveConfig, saveCrew } from './configStore.js';
 import {
   cancelAutoRelease,
   claimIfVacant,
@@ -590,6 +591,7 @@ export function createServer(
     return join(DATA_DIR_ROOT, 'roomdata', roomId);
   }
 
+  const runRegistry = createRunRegistry();
   // --- BEGIN phase-13 config + crew routes ---
   // Scoped under a room and guarded by `requireRoom`, which calls
   // `authorize()`. Configs are not strictly room state — they are user assets
@@ -629,7 +631,20 @@ export function createServer(
     // there would close a real cycle in the module graph while looking for one
     // in the data.
     const graph = body?.graph;
-    if (graph !== undefined && hasCycle(graph as Parameters<typeof hasCycle>[0])) {
+    // `hasCycle` walks `nodes`/`edges` directly, so it is only safe on a body
+    // that has that shape. Anything else is left for `saveCrew` to refuse with
+    // its own readable problems rather than throwing here into a bare 500.
+    const g = graph as { nodes?: unknown; edges?: unknown } | null | undefined;
+    const looksLikeGraph =
+      typeof g === 'object' &&
+      g !== null &&
+      Array.isArray(g.nodes) &&
+      Array.isArray(g.edges) &&
+      g.nodes.every((n) => typeof n === 'object' && n !== null && typeof (n as { id?: unknown }).id === 'string') &&
+      g.edges.every(
+        (e) => typeof e === 'object' && e !== null && typeof (e as { from?: unknown }).from === 'string',
+      );
+    if (looksLikeGraph && hasCycle(graph as Parameters<typeof hasCycle>[0])) {
       return c.json({ problems: ['This workflow has a cycle, so it could never finish.'] }, 400);
     }
 
@@ -678,24 +693,70 @@ export function createServer(
     const prompt = typeof body.prompt === 'string' ? body.prompt : '';
     if (prompt.trim() === '') return c.json({ error: 'A run needs a prompt.' }, 400);
 
-    const driverId = guarded.room.driverId;
+    // DRIVER-ONLY, like spawn/stop over the socket. A REST call has no socket,
+    // so the caller proves WHO they are with the same participant id + resume
+    // secret the reconnect path trusts. The refusal text is surfaced verbatim
+    // by the UI. With no driver at all the room is open-floor and anyone
+    // holding the token may run, matching the WS rule.
+    const room = guarded.room;
+    const claimedId = c.req.header('X-SynCode-Participant') ?? '';
+    const claimedSecret = c.req.header('X-SynCode-Resume') ?? '';
+    const caller = claimedId !== '' && verifyParticipant(room, claimedId, claimedSecret) ? claimedId : null;
+    if (room.driverId !== null && (caller === null || !isDriver(room, caller))) {
+      return c.json({ error: 'Only the driver can run a workflow.' }, 403);
+    }
+
+    // Resolve every config first, like `launchCrew`: a node whose config was
+    // deleted would otherwise error mid-run and silently skip its descendants.
+    const scope = roomScope(room.id);
+    const missing = [
+      ...new Set(crew.graph.nodes.filter((n) => readConfig(n.configName, scope) === null).map((n) => n.configName)),
+    ];
+    if (missing.length > 0) {
+      const one = missing.length === 1;
+      return c.json(
+        {
+          error: `This workflow uses ${one ? 'a config' : 'configs'} that ${one ? 'is' : 'are'} not saved: ${missing
+            .map((m) => `"${m}"`)
+            .join(', ')}. Save ${one ? 'it' : 'them'} or pick another.`,
+        },
+        400,
+      );
+    }
+
+    // Attributed to the verified caller (the driver), server-side (I2').
+    const attributedId = caller ?? room.driverId;
+    const by = {
+      participantId: attributedId ?? 'unknown',
+      displayName: (attributedId === null ? undefined : room.participants.get(attributedId)?.displayName) ?? 'Someone',
+    };
     const result = startWorkflowRun({
       runtime,
       graph: crew.graph,
       prompt,
-      // Attributed to whoever holds the driver token. A run is started by a
-      // person, and every node's `agent_spawned` and synthetic `user_prompt`
-      // carries that attribution server-side (I2').
-      by: {
-        participantId: driverId ?? 'unknown',
-        displayName:
-          (driverId === null ? undefined : guarded.room.participants.get(driverId)?.displayName) ??
-          'Someone',
-      },
+      by,
+      rolePrompt: (n) => readConfig(n.configName, scope)?.prompt,
     });
     if (!result.ok) return c.json({ error: result.reason }, 400);
+    runRegistry.start({
+      key: runKey(room.id, crew.name),
+      run: result.run,
+      nodeIds: crew.graph.nodes.map((n) => n.id),
+      onTick: () => runtime.broadcastFleet(),
+      alive: () => getRuntime(room.id) === runtime,
+    });
     runtime.broadcastFleet();
     return c.json({ nodes: [...result.run.nodeAgentIds.entries()] });
+  });
+
+  /** What the last run of this workflow is doing: which agent became which
+   *  node, and each node's status. Fleet membership still comes from the log
+   *  and liveness from the `fleet` frame; this only maps node -> agent. */
+  app.get('/api/rooms/:id/crews/:name/run', (c) => {
+    const guarded = requireRoom(c);
+    if (guarded instanceof Response) return guarded;
+    const snapshot = runRegistry.snapshot(runKey(guarded.room.id, c.req.param('name') ?? ''));
+    return snapshot === undefined ? c.json({ error: 'No run for that workflow.' }, 404) : c.json(snapshot);
   });
   // --- END phase-13 config + crew routes ---
 
