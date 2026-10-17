@@ -112,7 +112,7 @@ export function VoiceInputButton({
       aria-label={listening ? 'Stop voice input' : 'Start voice input'}
       title={listening ? 'Stop voice input' : 'Start voice input'}
       className={`flex min-h-11 min-w-11 items-center justify-center rounded border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg ${
-        listening ? 'border-accent text-accent' : 'border-border text-fg-muted hover:text-fg'
+        listening ? 'border-accent text-accent-fg' : 'border-border text-fg-muted hover:text-fg'
       }`}
     >
       <Mic size={16} aria-hidden="true" />

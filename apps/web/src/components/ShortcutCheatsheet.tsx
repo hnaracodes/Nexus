@@ -65,7 +65,7 @@ export function ShortcutCheatsheet({
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-bg/70 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-40 flex items-start justify-center p-4 pt-[12vh]" onClick={onClose}>
       <div
         ref={dialogRef}
         role="dialog"
@@ -74,7 +74,7 @@ export function ShortcutCheatsheet({
         tabIndex={-1}
         onKeyDown={handleKeyDown}
         onClick={(event) => event.stopPropagation()}
-        className="max-h-[80vh] w-full max-w-md overflow-auto rounded-lg border border-border bg-surface p-6 shadow-[0_8px_24px_rgba(0,0,0,0.4)] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="max-h-[70vh] w-full max-w-md overflow-auto rounded border border-border bg-surface p-5 shadow-[0_8px_24px_rgba(0,0,0,0.5)] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-fg">Keyboard shortcuts</h2>

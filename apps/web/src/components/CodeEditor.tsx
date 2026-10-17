@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { AlertTriangle, Binary, FileWarning, Loader2, RefreshCw } from 'lucide-react';
 import { Compartment, EditorState } from '@codemirror/state';
-import { EditorView, lineNumbers } from '@codemirror/view';
-import { syntaxHighlighting } from '@codemirror/language';
+import { EditorView, drawSelection, highlightActiveLine, highlightActiveLineGutter, lineNumbers } from '@codemirror/view';
+import { bracketMatching, syntaxHighlighting } from '@codemirror/language';
 import type { CachedFile } from '../workspace/useWorkspace.js';
 import { loadLanguage } from '../workspace/cmLanguage.js';
 import { nexusEditorTheme, nexusHighlightStyle } from '../workspace/cmTheme.js';
@@ -32,6 +32,14 @@ export interface CodeEditorProps {
    * if it belonged to a peer.
    */
   selfId?: string;
+  /** Hide the path header (the shell shows breadcrumbs instead). A stale
+   *  file's refresh banner still renders. */
+  hideHeader?: boolean;
+  /** Reports the caret as 1-based line/column, on mount and on every move. */
+  onCursorChange?: (cursor: { line: number; col: number }) => void;
+  /** Reports the full document text after every change — local edit or remote
+   *  CRDT merge. Used to keep the Markdown preview live. */
+  onDocChange?: (text: string) => void;
 }
 
 /**
@@ -54,7 +62,16 @@ export interface CodeEditorProps {
  * gated on the same condition, so there is no state where one says writable
  * and the other doesn't.
  */
-export function CodeEditor({ path, cached, onRefresh, docSession, selfId }: CodeEditorProps): JSX.Element {
+export function CodeEditor({
+  path,
+  cached,
+  onRefresh,
+  docSession,
+  selfId,
+  hideHeader = false,
+  onCursorChange,
+  onDocChange,
+}: CodeEditorProps): JSX.Element {
   if (path === null) {
     return (
       <div className="flex h-full min-h-0 flex-1 items-center justify-center p-6 text-center text-sm text-fg-muted">
@@ -65,10 +82,16 @@ export function CodeEditor({ path, cached, onRefresh, docSession, selfId }: Code
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="flex items-center gap-2 border-b border-border bg-surface px-3 py-2 text-xs">
-        <span aria-label="Current file" className="truncate font-mono text-fg">
-          {path}
-        </span>
+      <div
+        className={`items-center gap-2 bg-surface px-3 py-1.5 text-xs ${
+          hideHeader && cached?.status !== 'stale' ? 'hidden' : 'flex'
+        }`}
+      >
+        {!hideHeader && (
+          <span aria-label="Current file" className="truncate font-mono text-fg">
+            {path}
+          </span>
+        )}
         {cached?.status === 'stale' && (
           <button
             type="button"
@@ -114,6 +137,8 @@ export function CodeEditor({ path, cached, onRefresh, docSession, selfId }: Code
             content={cached.result.content}
             docSession={docSession}
             selfId={selfId}
+            onCursorChange={onCursorChange}
+            onDocChange={onDocChange}
           />
         )}
       </div>
@@ -141,11 +166,15 @@ function CodeMirrorSurface({
   content,
   docSession,
   selfId,
+  onCursorChange,
+  onDocChange,
 }: {
   path: string;
   content: string;
   docSession?: DocSession;
   selfId?: string;
+  onCursorChange?: ((cursor: { line: number; col: number }) => void) | undefined;
+  onDocChange?: ((text: string) => void) | undefined;
 }): JSX.Element {
   const host = useRef<HTMLDivElement | null>(null);
   const view = useRef<EditorView | null>(null);
@@ -159,9 +188,19 @@ function CodeMirrorSurface({
    *  or, once collaborative, by `cmCollab.ts` applying the CRDT's own text. */
   const initial = useRef(content);
   const collab = useRef({ docSession, selfId });
+  /** Read through a ref: the extensions are built once per file, but the
+   *  parent's callbacks change identity on every render. */
+  const callbacks = useRef({ onCursorChange, onDocChange });
+  callbacks.current = { onCursorChange, onDocChange };
   /** Gates BOTH `EditorState.readOnly` and `EditorView.editable` below —
    *  see `CodeEditor`'s doc comment on why they must never disagree. */
   const writable = collab.current.docSession !== undefined;
+
+  function reportCursor(state: EditorState): void {
+    const head = state.selection.main.head;
+    const line = state.doc.lineAt(head);
+    callbacks.current.onCursorChange?.({ line: line.number, col: head - line.from + 1 });
+  }
 
   useEffect(() => {
     if (host.current === null) return undefined;
@@ -171,6 +210,14 @@ function CodeMirrorSurface({
         doc: initial.current,
         extensions: [
           lineNumbers(),
+          highlightActiveLineGutter(),
+          highlightActiveLine(),
+          bracketMatching(),
+          drawSelection(),
+          EditorView.updateListener.of((update) => {
+            if (update.docChanged) callbacks.current.onDocChange?.(update.state.doc.toString());
+            if (update.docChanged || update.selectionSet) reportCursor(update.state);
+          }),
           syntaxHighlighting(nexusHighlightStyle, { fallback: true }),
           EditorState.readOnly.of(!writable),
           EditorView.editable.of(writable),
@@ -183,6 +230,7 @@ function CodeMirrorSurface({
       }),
     });
     view.current = instance;
+    reportCursor(instance.state);
     return () => {
       instance.destroy();
       view.current = null;

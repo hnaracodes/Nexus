@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FolderTree, GitCompare, ShieldAlert, Users } from 'lucide-react';
+import { FolderTree, GitCompare, MessageSquare, Network, Search, ShieldAlert, Users } from 'lucide-react';
 import { deriveApprovals } from './approvals.js';
 import type { PendingApproval } from './approvals.js';
 import { ConnectionStatus } from './components/ConnectionStatus.js';
@@ -13,11 +13,8 @@ import { PRIMARY_AGENT_ID, agentIdOf } from '@syncode/protocol/events';
 // phase-5a import anchor
 import { MalformedLink } from './pages/MalformedLink.js';
 // phase-7b import anchor
-import { FleetPane } from './components/FleetPane.js';
-import { Button } from './components/Button.js';
-import { Canvas } from './canvas/Canvas.js';
-import { RunOverlay } from './canvas/RunOverlay.js';
-import type { Graph } from './canvas/graph.js';
+// phase-18 agents-view import anchor
+import { AgentsView } from './canvas/AgentsView.js';
 import type { FleetApprovalRequest } from './components/ApprovalQueue.js';
 import { PaneErrorBoundary } from './components/PaneErrorBoundary.js';
 import { createWorkspaceApi } from './workspace/workspaceApi.js';
@@ -28,7 +25,6 @@ import type { GitStatusEntry } from './workspace/types.js';
 import { deriveCurrentFile, deriveLatestEditSeqByPath, deriveTouchedFiles } from './derive/workspaceFiles.js';
 import { withExternalChanges } from './derive/externalChanges.js';
 // phase-7c import anchor
-import { PromptDock } from './components/PromptDock.js';
 import { JoinGate, readStoredName, storeName } from './components/JoinGate.js';
 import { JoinToasts } from './components/JoinToasts.js';
 // phase-5b import anchor
@@ -36,14 +32,7 @@ import { useHotkeys } from './hooks/useHotkeys.js';
 import type { Hotkey } from './hooks/useHotkeys.js';
 import { RoomHeader } from './components/RoomHeader.js';
 import { deriveGithubBinding } from './githubBinding.js';
-import { PublishedPrCard } from './components/PublishedPr.js';
-import { deriveLatestPublishedPr } from './publishedPr.js';
-import { MessageList } from './components/MessageList.js';
-import { PendingPrompts } from './components/PendingPrompts.js';
-import { InterruptNotice } from './components/InterruptNotice.js';
 import { deriveAgentStatus } from './agentStatus.js';
-import { Avatar } from './components/Avatar.js';
-import { DriverRequestNotice } from './components/DriverRequestNotice.js';
 import { ShortcutCheatsheet } from './components/ShortcutCheatsheet.js';
 import { RoomSwitcher } from './components/RoomSwitcher.js';
 import type { RecentRoom } from './rooms.js';
@@ -55,13 +44,23 @@ import { ReKeyDialog } from './components/Notice.js';
 import { ActivityBar } from './components/ActivityBar.js';
 import type { ActivityBarItem, SideBarView } from './components/ActivityBar.js';
 import { SideBar } from './components/SideBar.js';
-import { TabStrip, isTabDirty } from './components/TabStrip.js';
+import { AGENTS_TAB_ID, isTabDirty } from './components/TabStrip.js';
 import type { OpenTab } from './components/TabStrip.js';
 import { Panel } from './components/Panel.js';
+import type { PanelTab } from './components/Panel.js';
 import { StatusBar } from './components/StatusBar.js';
-import { CodeEditor } from './components/CodeEditor.js';
 import type { GitStatusState } from './components/ChangesTab.js';
-import { LAYOUT } from './design/tokens.js';
+import { AuxBar } from './components/AuxBar.js';
+import type { AuxView } from './components/AuxBar.js';
+import { AgentChatView } from './components/AgentChatView.js';
+import { EditorArea } from './components/EditorArea.js';
+import { OutputPanel } from './components/OutputPanel.js';
+import { DiffPanel } from './components/DiffPanel.js';
+import { ResizeHandle } from './components/ResizeHandle.js';
+import { QuickOpenDialog } from './components/QuickOpenDialog.js';
+import { GrantControlPicker } from './components/GrantControlPicker.js';
+import { fileKind, languageLabel } from './workspace/fileKinds.js';
+import { AUX_BAR, PANEL, SIDE_BAR } from './layout/dimensions.js';
 
 function readParams(): { roomId: string; token: string; displayName: string } {
   const params = new URLSearchParams(globalThis.location.search);
@@ -135,188 +134,6 @@ class CloseCodeTrackingSocket implements WebSocketLike {
   }
 }
 
-/** A minimal participant picker for `⌘⇧G` — grant control without opening the roster. */
-function GrantControlPicker({
-  open,
-  participants,
-  selfId,
-  onGrant,
-  onClose,
-}: {
-  open: boolean;
-  participants: RoomView['participants'];
-  selfId: string | null;
-  onGrant: (participantId: string) => void;
-  onClose: () => void;
-}): JSX.Element | null {
-  if (!open) return null;
-  const candidates = participants.filter((p) => p.participantId !== selfId && p.connected);
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-bg/70 p-4"
-      onClick={onClose}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Grant control"
-        onClick={(event) => event.stopPropagation()}
-        onKeyDown={(event) => {
-          if (event.key === 'Escape') {
-            event.preventDefault();
-            event.stopPropagation();
-            onClose();
-          }
-        }}
-        className="w-full max-w-sm rounded-lg border border-border bg-surface p-4 shadow-[0_8px_24px_rgba(0,0,0,0.4)]"
-      >
-        <h2 className="mb-2 text-sm font-semibold text-fg">Grant control to…</h2>
-        {candidates.length === 0 ? (
-          <p className="text-sm text-fg-muted">No one else is here yet.</p>
-        ) : (
-          <ul className="flex flex-col gap-1">
-            {candidates.map((p) => (
-              <li key={p.participantId}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onGrant(p.participantId);
-                    onClose();
-                  }}
-                  className="flex min-h-11 w-full items-center gap-2 rounded px-2 text-left text-sm text-fg hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-                >
-                  <Avatar participantId={p.participantId} displayName={p.displayName} size="sm" />
-                  {p.displayName}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/**
- * `⌘P` quick-open: types a substring, picks a file, it opens as a tab. There
- * is no existing "list every file in the tree" endpoint (`WorkspaceApi.getTree`
- * is one directory at a time, matching `FileTree`'s own lazy expansion), so
- * this walks the tree itself once per open — capped in both directions
- * (`MAX_RESULTS` files, `MAX_DEPTH` levels) so a huge or unusually deep repo
- * cannot turn one keypress into an unbounded fetch storm.
- */
-const QUICK_OPEN_MAX_RESULTS = 500;
-const QUICK_OPEN_MAX_DEPTH = 8;
-
-function QuickOpenDialog({
-  open,
-  api,
-  onOpen,
-  onClose,
-}: {
-  open: boolean;
-  api: ReturnType<typeof createWorkspaceApi>;
-  onOpen: (path: string) => void;
-  onClose: () => void;
-}): JSX.Element | null {
-  const [query, setQuery] = useState('');
-  const [allFiles, setAllFiles] = useState<string[] | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    if (!open) {
-      setQuery('');
-      setAllFiles(null);
-      return undefined;
-    }
-    let cancelled = false;
-    const found: string[] = [];
-
-    async function walk(path: string, depth: number): Promise<void> {
-      if (cancelled || found.length >= QUICK_OPEN_MAX_RESULTS || depth > QUICK_OPEN_MAX_DEPTH) return;
-      const entries = await api.getTree(path).catch(() => []);
-      for (const entry of entries) {
-        if (cancelled || found.length >= QUICK_OPEN_MAX_RESULTS) return;
-        if (entry.type === 'file') {
-          found.push(entry.path);
-        } else {
-          await walk(entry.path, depth + 1);
-        }
-      }
-    }
-
-    void walk('', 0).then(() => {
-      if (!cancelled) setAllFiles(found);
-    });
-    const focusId = window.setTimeout(() => inputRef.current?.focus(), 0);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(focusId);
-    };
-  }, [open, api]);
-
-  if (!open) return null;
-
-  const matches =
-    allFiles === null
-      ? []
-      : allFiles.filter((path) => path.toLowerCase().includes(query.toLowerCase())).slice(0, 50);
-
-  function pick(path: string): void {
-    onOpen(path);
-    onClose();
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-bg/70 p-4 pt-24" onClick={onClose}>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Go to file"
-        onClick={(event) => event.stopPropagation()}
-        onKeyDown={(event) => {
-          if (event.key === 'Escape') {
-            event.preventDefault();
-            event.stopPropagation();
-            onClose();
-          } else if (event.key === 'Enter' && matches[0] !== undefined) {
-            event.preventDefault();
-            pick(matches[0]);
-          }
-        }}
-        className="w-full max-w-lg rounded-lg border border-border bg-surface p-2 shadow-[0_8px_24px_rgba(0,0,0,0.4)]"
-      >
-        <input
-          ref={inputRef}
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Go to file…"
-          aria-label="Go to file"
-          className="min-h-11 w-full rounded border border-border-strong bg-bg px-2 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-        />
-        <ul className="mt-2 max-h-72 overflow-y-auto">
-          {allFiles === null && <li className="p-2 text-xs text-fg-muted">Loading files…</li>}
-          {allFiles !== null && matches.length === 0 && (
-            <li className="p-2 text-xs text-fg-muted">No matching files.</li>
-          )}
-          {matches.map((path) => (
-            <li key={path}>
-              <button
-                type="button"
-                onClick={() => pick(path)}
-                className="flex min-h-9 w-full items-center rounded px-2 text-left font-mono text-xs text-fg hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-              >
-                {path}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
-  );
-}
-
 /**
  * Which tab is active after closing one — the whole of `closeTab`'s logic,
  * pulled out as a pure function so it can actually be tested.
@@ -337,6 +154,8 @@ export function closeTabState(
   current: { paths: string[]; active: string | null },
   path: string,
 ): { paths: string[]; active: string | null } {
+  // `paths` holds tab IDS: workspace paths, plus the reserved `AGENTS_TAB_ID`.
+  // The rule is identical for both kinds of tab.
   const idx = current.paths.indexOf(path);
   if (idx === -1) return current;
   const paths = current.paths.filter((p) => p !== path);
@@ -344,6 +163,18 @@ export function closeTabState(
   if (current.active !== path) return { paths, active: current.active };
   const active = paths.length === 0 ? null : (paths[Math.min(idx, paths.length - 1)] ?? null);
   return { paths, active };
+}
+
+/**
+ * Whether Cmd/Ctrl+Shift+V should toggle the Markdown preview for this key
+ * event. It declines (so the browser keeps the key) unless the active tab is a
+ * Markdown file — and ALWAYS inside a plain text box: in the prompt box that
+ * chord is "paste as plain text". Inside CodeMirror (a contenteditable div) it
+ * applies, since an editor has no use for that chord.
+ */
+export function previewHotkeyApplies(target: EventTarget | null, activeFilePath: string | null): boolean {
+  if (activeFilePath === null || fileKind(activeFilePath) !== 'markdown') return false;
+  return !(target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement);
 }
 
 export default function App(): JSX.Element {
@@ -512,20 +343,6 @@ function RoomShell({
    * `null` means the primary agent, which is what a solo room always shows.
    */
   const [focusedAgentId, setFocusedAgentId] = useState<AgentId | null>(null);
-  /**
-   * The workflow graph on screen, if any.
-   *
-   * The canvas lives INSIDE the room rather than on its own page, and that is
-   * the phase-14 claim made structural: it is a VIEW over the orchestration
-   * model, so it renders where the model actually is. A standalone page would
-   * have had no live `fleet` frame and could only ever have drawn a graph that
-   * was not running — which is a diagram, not a canvas.
-   */
-  const [canvasGraph, setCanvasGraph] = useState<Graph | null>(null);
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  /** Saved crews that actually carry a graph — the only ones the canvas can draw. */
-  const [graphCrews, setGraphCrews] = useState<Array<{ name: string; graph: Graph }>>([]);
-  const [runError, setRunError] = useState<string | null>(null);
   const [promptText, setPromptText] = useState('');
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [cheatsheetOpen, setCheatsheetOpen] = useState(false);
@@ -539,12 +356,28 @@ function RoomShell({
   // --- phase-17a: the VS Code-shaped shell's own state ---
   const [sideBarOpen, setSideBarOpen] = useState(true);
   const [sideBarView, setSideBarView] = useState<SideBarView>('explorer');
+  const [sideBarWidth, setSideBarWidth] = useState<number>(SIDE_BAR.default);
+  const [searchFocusNonce, setSearchFocusNonce] = useState(0);
+  // phase-18b: the right-hand auxiliary bar (Chat / Approvals / Fleet). Open by
+  // default only where it can sit beside the editor; below `lg` it is an overlay.
+  const [auxOpen, setAuxOpen] = useState(() => globalThis.innerWidth >= 1024);
+  const [auxView, setAuxView] = useState<AuxView>('chat');
+  const [auxWidth, setAuxWidth] = useState<number>(AUX_BAR.default);
   const [panelOpen, setPanelOpen] = useState(true);
-  const [panelHeight, setPanelHeight] = useState<number>(LAYOUT.panelDefaultHeight);
+  const [panelHeight, setPanelHeight] = useState<number>(PANEL.default);
+  const [panelTab, setPanelTab] = useState<PanelTab>('output');
+  /** The changed file whose diff the DIFF tab shows. */
+  const [diffPath, setDiffPath] = useState<string | null>(null);
+  /** Markdown tabs whose side-by-side preview is open — per tab, remembered. */
+  const [previewIds, setPreviewIds] = useState<Set<string>>(new Set());
+  /** Caret of the most recent editor, tagged with its path so a stale value
+   *  from a previous tab is never shown against the current one. */
+  const [cursor, setCursor] = useState<{ path: string; line: number; col: number } | null>(null);
   /**
-   * The open-files tab strip. One state object (not two) so a close never
-   * observes a stale `active` from a separate, not-yet-applied `tabs` update —
-   * see `closeTab` below.
+   * The open editor tabs. One state object (not two) so a close never observes
+   * a stale `active` from a separate, not-yet-applied `tabs` update — see
+   * `closeTab` below. `paths` holds tab ids: workspace paths and the reserved
+   * `AGENTS_TAB_ID` for the Agents tab.
    */
   const [tabState, setTabState] = useState<{ paths: string[]; active: string | null }>({
     paths: [],
@@ -624,24 +457,6 @@ function RoomShell({
   const hasFleet = view.fleet.length > 1;
   const approvalCount = hasFleet ? fleetApprovals.length : pendingApprovals.length;
 
-  useEffect(() => {
-    // Room-scoped and token-carrying, like every other write-capable route
-    // here — see ConfigLibrary.tsx for why an unscoped config endpoint was the
-    // wrong answer even though a config is not room state.
-    void fetch(`/api/rooms/${encodeURIComponent(params.roomId)}/configs`, {
-      headers: { 'X-SynCode-Token': params.token },
-    })
-      .then((r) => (r.ok ? r.json() : { crews: [] }))
-      .then((body: { crews?: Array<{ name: string; graph?: Graph }> }) => {
-        setGraphCrews(
-          (body.crews ?? [])
-            .filter((c): c is { name: string; graph: Graph } => c.graph !== undefined)
-            .map((c) => ({ name: c.name, graph: c.graph })),
-        );
-      })
-      .catch(() => setGraphCrews([]));
-  }, [params.roomId, params.token]);
-
   const workspaceApi = useMemo(
     () => createWorkspaceApi({ roomId: params.roomId, token: params.token }),
     [params.roomId, params.token],
@@ -697,26 +512,63 @@ function RoomShell({
     }));
   }
 
-  function closeTab(path: string): void {
-    setTabState((current) => closeTabState(current, path));
+  function closeTab(id: string): void {
+    setTabState((current) => closeTabState(current, id));
+  }
+
+  /** Opens the Agents tab (once) or refocuses it. */
+  function openAgentsTab(): void {
+    setTabState((current) => ({
+      paths: current.paths.includes(AGENTS_TAB_ID) ? current.paths : [...current.paths, AGENTS_TAB_ID],
+      active: AGENTS_TAB_ID,
+    }));
+  }
+
+  /** Reveals the aux bar on a given view — also the force-open an approval uses. */
+  function openAux(next: AuxView): void {
+    setAuxView(next);
+    setAuxOpen(true);
+  }
+
+  /** A changed file was clicked in Source Control: open it AND show its diff. */
+  function openChangedFile(path: string): void {
+    selectFile(path);
+    setDiffPath(path);
+    setPanelTab('diff');
+    setPanelOpen(true);
+  }
+
+  const activeFilePath =
+    tabState.active !== null && tabState.active !== AGENTS_TAB_ID ? tabState.active : null;
+  const activeKind = activeFilePath === null ? null : fileKind(activeFilePath);
+
+  function togglePreview(): void {
+    if (activeFilePath === null) return;
+    setPreviewIds((current) => {
+      const next = new Set(current);
+      if (!next.delete(activeFilePath)) next.add(activeFilePath);
+      return next;
+    });
   }
 
   // Auto-follow: every time the agent's current file changes, open (or
   // refocus) a tab for it — unless a person has taken manual control
-  // (`autoFollow === false`). Flipping `autoFollow` back on re-runs this with
+  // (`autoFollow === false`). It NEVER steals the editor from the Agents tab:
+  // while that tab is active a followed file opens in the background. Flipping `autoFollow` back on re-runs this with
   // the same `currentFile`, which is what makes "Following" immediately jump
   // back to what the agent is doing rather than waiting for the NEXT change.
   useEffect(() => {
     if (!autoFollow || currentFile === null) return;
     setTabState((current) => ({
       paths: current.paths.includes(currentFile) ? current.paths : [...current.paths, currentFile],
-      active: currentFile,
+      active: current.active === AGENTS_TAB_ID ? current.active : currentFile,
     }));
   }, [autoFollow, currentFile]);
 
   useEffect(() => {
     const path = tabState.active;
-    if (path === null) return;
+    // Images are fetched as bytes by `ImagePreview`, not as text here.
+    if (path === null || path === AGENTS_TAB_ID || fileKind(path) === 'image') return;
     if (workspace.files.has(path)) return;
     workspace.fetchFile(path);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -731,7 +583,7 @@ function RoomShell({
   // local-edit callback on `DocSession` to subscribe to instead.
   useEffect(() => {
     const path = tabState.active;
-    if (path === null || docSession === null) return;
+    if (path === null || path === AGENTS_TAB_ID || docSession === null) return;
     const cached = workspace.files.get(path);
     const cachedContent =
       cached !== undefined &&
@@ -764,7 +616,7 @@ function RoomShell({
   // A pending approval is the most governance-critical thing on screen (§1)
   // — surfacing it behind a click a person has to think to make would be a
   // visibility regression, not a tidy sidebar. So a NEWLY appeared request
-  // (fleet or solo) switches the side bar to Approvals on its own; a request
+  // (fleet or solo) switches the aux bar to Approvals on its own; a request
   // that was already pending when this ran (or one already decided) does not
   // re-trigger it, and a person who has since switched to another view for
   // an OLDER request is not yanked back.
@@ -781,8 +633,11 @@ function RoomShell({
     }
     seenApprovalIds.current = currentIds;
     if (hasNew) {
-      setSideBarView('approvals');
-      setSideBarOpen(true);
+      // Force-open the aux bar on Approvals, even if it was collapsed or on
+      // Chat. A person collapsing it by hand is allowed; the next NEW request
+      // opens it again.
+      setAuxView('approvals');
+      setAuxOpen(true);
     }
   }, [hasFleet, fleetApprovals, pendingApprovals]);
 
@@ -821,8 +676,37 @@ function RoomShell({
     { combo: 'mod+enter', handler: submitPrompt, allowInInput: true, description: 'Send prompt' },
     { combo: 'escape', handler: handleInterruptHotkey, allowInInput: true, description: 'Interrupt the agent (press twice)' },
     { combo: 'mod+b', handler: () => setSideBarOpen((open) => !open), allowInInput: true, description: 'Toggle the side bar' },
+    { combo: 'mod+alt+b', handler: () => setAuxOpen((open) => !open), allowInInput: true, description: 'Toggle the agent bar' },
     { combo: 'mod+j', handler: () => setPanelOpen((open) => !open), allowInInput: true, description: 'Toggle the panel' },
     { combo: 'mod+p', handler: () => setQuickOpenOpen(true), allowInInput: true, description: 'Go to file' },
+    {
+      combo: 'mod+shift+v',
+      handler: togglePreview,
+      allowInInput: true,
+      when: (event) => previewHotkeyApplies(event.target, activeFilePath),
+      description: 'Toggle Markdown preview',
+    },
+    {
+      combo: 'mod+shift+e',
+      handler: () => {
+        setSideBarView('explorer');
+        setSideBarOpen(true);
+      },
+      allowInInput: true,
+      description: 'Show the Explorer',
+    },
+    {
+      combo: 'mod+shift+f',
+      handler: () => {
+        setSideBarView('search');
+        setSideBarOpen(true);
+        setSearchFocusNonce((n) => n + 1);
+      },
+      allowInInput: true,
+      description: 'Search files',
+    },
+    { combo: 'mod+alt+c', handler: () => openAux('chat'), allowInInput: true, description: 'Show Chat' },
+    { combo: 'mod+alt+a', handler: () => openAux('approvals'), allowInInput: true, description: 'Show Approvals' },
     { combo: '?', handler: () => setCheatsheetOpen(true), description: 'Show keyboard shortcuts' },
   ];
   useHotkeys(hotkeys);
@@ -851,20 +735,34 @@ function RoomShell({
     });
   }
 
-  const activityItems: ActivityBarItem[] = [
+  // A fleet that shrinks back to one agent must not leave the aux bar on a
+  // Fleet view that no longer exists.
+  const effectiveAuxView: AuxView = auxView === 'fleet' && !hasFleet ? 'chat' : auxView;
+
+  const leftItems: ActivityBarItem[] = [
     { id: 'explorer', label: 'Explorer', Icon: FolderTree },
-    ...(hasFleet ? [{ id: 'fleet' as const, label: 'Fleet', Icon: Users, badge: view.fleet.length }] : []),
+    { id: 'search', label: 'Search', Icon: Search },
+    { id: 'changes', label: 'Source Control', Icon: GitCompare },
+  ];
+  const auxItems: ActivityBarItem<AuxView>[] = [
+    { id: 'chat', label: 'Chat', Icon: MessageSquare },
     { id: 'approvals', label: 'Approvals', Icon: ShieldAlert, badge: approvalCount },
-    { id: 'changes', label: 'Changes', Icon: GitCompare },
+    ...(hasFleet ? [{ id: 'fleet' as const, label: 'Fleet', Icon: Users, badge: view.fleet.length }] : []),
   ];
 
-  const tabStripTabs: OpenTab[] = tabState.paths.map((path) => ({ path, dirty: dirtyPaths[path] ?? false }));
-  const activeCached = tabState.active !== null ? workspace.files.get(tabState.active) : undefined;
+  const tabStripTabs: OpenTab[] = tabState.paths.map((id) =>
+    id === AGENTS_TAB_ID
+      ? { id, kind: 'agents', dirty: false }
+      : { id, kind: 'file', dirty: dirtyPaths[id] ?? false },
+  );
+  const activeCached = activeFilePath !== null ? workspace.files.get(activeFilePath) : undefined;
 
   return (
-    <div className="flex h-screen flex-col bg-bg">
+    <div className="flex h-screen flex-col bg-bg text-fg">
       <NoticeStack notices={notices} />
 
+      {/* Title bar: the old RoomHeader, re-skinned. Roster + driver controls,
+          agent activity, Cmd+K and ? all live here still. */}
       <RoomHeader
         roomLabel={roomLabel}
         roomLink={roomLink}
@@ -885,18 +783,15 @@ function RoomShell({
       <ErrorBanner message={bannerMessage} onDismiss={() => setDismissedCount(view.errorCount)} />
       {/* --- END phase-3d error banner slot --- */}
 
-      {/* --- BEGIN phase-17a VS Code shell --- */}
-      {/* Five regions: activity bar, side bar, editor (tab strip + CodeEditor),
-          bottom panel (transcript), status bar. Below Tailwind's `lg`
-          breakpoint (1024px — this project defines no custom breakpoints, so
-          `lg:` is the stock value, not the ~900px an earlier comment claimed)
-          the side bar is
-          positioned as an overlay rather than taking permanent horizontal
-          space (`lg:` below) — see the phase-17a plan's "responsive floor". */}
+      {/* --- BEGIN phase-18b VS Code shell --- */}
+      {/* Left: activity bar + side bar (FILES). Centre: editor tabs over a
+          bottom panel. Right: auxiliary bar (AGENTS) + secondary activity bar.
+          Below Tailwind's `lg` breakpoint (1024px) BOTH side bars are fixed
+          overlays rather than permanent columns. */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <PaneErrorBoundary label="The activity bar">
           <ActivityBar
-            items={activityItems}
+            items={leftItems}
             activeView={sideBarOpen ? sideBarView : null}
             onSelect={(nextView) => {
               if (sideBarOpen && sideBarView === nextView) {
@@ -910,222 +805,211 @@ function RoomShell({
         </PaneErrorBoundary>
 
         {sideBarOpen && (
-          <div className="fixed inset-y-0 left-12 z-20 lg:static lg:z-auto">
-            {/* A last-resort boundary for anything in the side bar OUTSIDE the
-                per-view boundary `SideBar` now owns (its header, its own
-                layout). Keyed by view for the same reason that one is: an
-                error boundary never resets itself, so without a key a single
-                throw would freeze this region for the rest of the session.
-                View content is caught deeper and never reaches here — see the
-                long comment in SideBar.tsx. */}
-            <PaneErrorBoundary key={sideBarView} label="The side bar">
-              <SideBar
-                view={sideBarView}
-                workspaceApi={workspaceApi}
-                selectedPath={tabState.active}
-                touchedPaths={touchedFiles}
-                onSelectFile={selectFile}
-                autoFollow={autoFollow}
-                onToggleFollow={() => setAutoFollow((follow) => !follow)}
-                fleetAgents={view.fleet}
-                focusedAgentId={focusedAgentId}
-                onFocusAgent={setFocusedAgentId}
-                onSpawnAgent={(spawnParams) => connection?.send({ kind: 'spawn_agent', ...spawnParams })}
-                onStopAgent={(agentId) => connection?.send({ kind: 'stop_agent', agentId })}
-                hasFleet={hasFleet}
-                fleetApprovals={fleetApprovals}
-                singleApprovals={pendingApprovals}
-                now={now}
-                onDecideFleet={(requestId, agentId, decision, reason) =>
-                  connection?.send({
-                    kind: 'permission_decision',
-                    requestId,
-                    decision,
-                    agentId,
-                    ...(reason === undefined ? {} : { reason }),
-                  })
-                }
-                onDecideSingle={(requestId, decision, reason) =>
-                  connection?.send(
-                    reason === undefined
-                      ? { kind: 'permission_decision', requestId, decision }
-                      : { kind: 'permission_decision', requestId, decision, reason },
-                  )
-                }
-                changesEvents={view.events}
-                gitStatus={gitStatus}
+          <>
+            <div
+              className="fixed bottom-[22px] left-12 top-8 z-20 shrink-0 border-r border-border lg:static lg:z-auto"
+              style={{ width: sideBarWidth, maxWidth: 'calc(100vw - 96px)' }}
+            >
+              {/* Keyed by view for the same reason SideBar keys its inner one:
+                  a boundary never resets itself, so without a key one throw
+                  would freeze this region for the rest of the session. */}
+              <PaneErrorBoundary key={sideBarView} label="The side bar">
+                <SideBar
+                  view={sideBarView}
+                  workspaceApi={workspaceApi}
+                  selectedPath={activeFilePath}
+                  touchedPaths={touchedFiles}
+                  onSelectFile={selectFile}
+                  autoFollow={autoFollow}
+                  onToggleFollow={() => setAutoFollow((follow) => !follow)}
+                  searchFocusNonce={searchFocusNonce}
+                  changesEvents={view.events}
+                  gitStatus={gitStatus}
+                  onOpenChangedFile={openChangedFile}
+                />
+              </PaneErrorBoundary>
+            </div>
+            <div className="hidden lg:block">
+              <ResizeHandle
+                label="Resize side bar"
+                orientation="vertical"
+                value={sideBarWidth}
+                min={SIDE_BAR.min}
+                max={SIDE_BAR.max}
+                onChange={setSideBarWidth}
               />
-            </PaneErrorBoundary>
-          </div>
+            </div>
+          </>
         )}
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <PaneErrorBoundary label="The editor">
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              {graphCrews.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2 text-xs text-fg-muted">
-                  <span>Workflows:</span>
-                  {graphCrews.map((crew) => (
-                    <button
-                      key={crew.name}
-                      type="button"
-                      onClick={() => {
-                        setCanvasGraph(crew.graph);
-                        setRunError(null);
-                      }}
-                      className="rounded border border-border px-2 py-1 text-fg hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                    >
-                      {crew.name}
-                    </button>
-                  ))}
-                  {canvasGraph !== null && (
-                    <>
-                      <Button
-                        onClick={() => {
-                          const crew = graphCrews.find((c) => c.graph === canvasGraph);
-                          if (crew === undefined) return;
-                          setRunError(null);
-                          void fetch(
-                            `/api/rooms/${encodeURIComponent(params.roomId)}/crews/${encodeURIComponent(crew.name)}/run`,
-                            {
-                              method: 'POST',
-                              headers: {
-                                'X-SynCode-Token': params.token,
-                                'content-type': 'application/json',
-                              },
-                              body: JSON.stringify({ prompt: promptText.trim() || 'Begin.' }),
-                            },
-                          )
-                            .then(async (r) => {
-                              if (r.ok) return;
-                              const body = (await r.json().catch(() => ({}))) as { error?: string };
-                              // Every node in a graph is an agent that will ask
-                              // permission; a refusal here is usually the fleet's
-                              // resource cap, and the person needs to be told
-                              // which rather than left guessing.
-                              setRunError(body.error ?? 'Could not start that workflow.');
-                            })
-                            .catch(() => setRunError('Could not reach the server.'));
-                        }}
-                      >
-                        Run
-                      </Button>
-                      <button
-                        type="button"
-                        onClick={() => setCanvasGraph(null)}
-                        className="rounded border border-border px-2 py-1 hover:bg-surface-2"
-                      >
-                        Close
-                      </button>
-                    </>
-                  )}
-                  {runError !== null && <span className="text-danger">{runError}</span>}
-                </div>
-              )}
-
-              {canvasGraph !== null && (
-                <div className="relative m-3 h-72 shrink-0 overflow-hidden rounded-lg border border-border">
-                  <Canvas
-                    graph={canvasGraph}
-                    selectedNodeId={selectedNodeId}
-                    onSelect={setSelectedNodeId}
-                    onNodeMove={(id, x, y) =>
-                      setCanvasGraph((g) =>
-                        g === null
-                          ? g
-                          : { ...g, nodes: g.nodes.map((n) => (n.id === id ? { ...n, x, y } : n)) },
-                      )
-                    }
+            <EditorArea
+              tabs={tabStripTabs}
+              activeId={tabState.active}
+              onSelectTab={(id) => setTabState((current) => ({ ...current, active: id }))}
+              onCloseTab={closeTab}
+              api={workspaceApi}
+              cached={activeCached}
+              onRefresh={workspace.refetchFile}
+              docSession={docSession}
+              selfId={view.selfId}
+              previewOpen={activeFilePath !== null && previewIds.has(activeFilePath)}
+              onTogglePreview={togglePreview}
+              onCursorChange={(path, c) => setCursor({ path, ...c })}
+              agentsView={
+                <>
+                  {/* --- BEGIN phase-18 agents-view slot: the shell owns WHERE, canvas/ owns WHAT. --- */}
+                  <AgentsView
+                    roomId={params.roomId}
+                    token={params.token}
+                    fleet={view.fleet}
+                    focusedAgentId={focusedAgentId}
+                    onFocusAgent={setFocusedAgentId}
+                    onSpawnAgent={(spawnParams) => connection?.send({ kind: 'spawn_agent', ...spawnParams })}
+                    onStopAgent={(agentId) => connection?.send({ kind: 'stop_agent', agentId })}
+                    onOpenAgentChat={(agentId) => {
+                      setFocusedAgentId(agentId);
+                      openAux('chat');
+                    }}
                   />
-                  {/* Live status comes from the transient `fleet` frame; MEMBERSHIP
-                      still comes from the log. Not a third source of truth. */}
-                  <RunOverlay graph={canvasGraph} fleet={view.fleet} />
-                </div>
-              )}
-
-              <TabStrip
-                tabs={tabStripTabs}
-                activePath={tabState.active}
-                onSelect={(path) => setTabState((current) => ({ ...current, active: path }))}
-                onClose={closeTab}
-              />
-              <div className="min-h-0 flex-1 overflow-hidden">
-                <CodeEditor
-                  path={tabState.active}
-                  cached={activeCached}
-                  onRefresh={workspace.refetchFile}
-                  {...(docSession === null ? {} : { docSession })}
-                  {...(view.selfId === null ? {} : { selfId: view.selfId })}
-                />
-              </div>
-            </div>
+                  {/* --- END phase-18 agents-view slot --- */}
+                </>
+              }
+            />
           </PaneErrorBoundary>
 
-          <PaneErrorBoundary label="The transcript panel">
+          <PaneErrorBoundary label="The panel">
             <Panel
               open={panelOpen}
               onToggleOpen={() => setPanelOpen((open) => !open)}
               height={panelHeight}
               onHeightChange={setPanelHeight}
-              agentStatus={agentStatus}
-              now={now}
+              activeTab={panelTab}
+              onTabChange={(tab) => {
+                setPanelTab(tab);
+                setPanelOpen(true);
+              }}
             >
-              <PublishedPrCard
-                pr={deriveLatestPublishedPr(view.events)}
-                selfId={view.selfId}
-                replaying={view.replaying}
-              />
-
-              <DriverRequestNotice
-                events={view.events}
-                selfId={view.selfId}
-                driverId={view.driverId}
-                onGrant={(participantId) => connection?.send({ kind: 'grant_control', toParticipantId: participantId })}
-                onDismiss={(participantId) =>
-                  setDismissedDriverRequests((current) => new Set(current).add(participantId))
-                }
-                dismissedParticipantIds={dismissedDriverRequests}
-              />
-
-              <div className="min-h-0 flex-1">
-                <MessageList events={focusedEvents} pendingDeltas={view.pendingDeltas} />
-              </div>
-
-              {/*
-                The input is gated on connection state only, never on the driver token —
-                that is the point of I2'. Anyone may speak; the server orders, attributes
-                and batches, and the agent resolves genuine conflicts in the driver's
-                favour. Adding a driver check here would undo the feature.
-              */}
-              {/* --- BEGIN phase-3b stop-button slot --- */}
-              <InterruptNotice events={view.events} />
-              {/* Rehomed from the retired SideRail. This is about what is ABOUT to
-                  be sent, so it belongs next to the input rather than off in a rail. */}
-              <PendingPrompts
-                events={view.events}
-                onResend={(text) => connection?.send({ kind: 'prompt', text })}
-              />
-              <PromptDock
-                roomId={params.roomId}
-                token={params.token}
-                events={view.events}
-                driverId={view.driverId}
-                selfId={view.selfId}
-                promptDisabled={status !== 'open'}
-                promptValue={promptText}
-                onPromptChange={setPromptText}
-                onSubmitPrompt={(text) => {
-                  connection?.send({ kind: 'prompt', text });
-                  setPromptText('');
-                }}
-                onStop={() => connection?.send({ kind: 'interrupt' })}
-                stopBusy={false}
-                onSetModel={(model) => connection?.send({ kind: 'set_model', model })}
-              />
-              {/* --- END phase-3b stop-button slot --- */}
+              {panelTab === 'output' ? (
+                <OutputPanel events={view.events} focusedAgentId={focusedAgentId} />
+              ) : (
+                <DiffPanel api={workspaceApi} path={diffPath} />
+              )}
             </Panel>
           </PaneErrorBoundary>
         </div>
+
+        {auxOpen && (
+          <>
+            <div className="hidden lg:block">
+              <ResizeHandle
+                label="Resize agent bar"
+                orientation="vertical"
+                value={auxWidth}
+                min={AUX_BAR.min}
+                max={AUX_BAR.max}
+                invert
+                onChange={setAuxWidth}
+              />
+            </div>
+            <div
+              className="fixed bottom-[22px] right-12 top-8 z-20 shrink-0 border-l border-border lg:static lg:z-auto"
+              style={{ width: auxWidth, maxWidth: 'calc(100vw - 96px)' }}
+            >
+              <PaneErrorBoundary key={effectiveAuxView} label="The agent bar">
+                <AuxBar
+                  view={effectiveAuxView}
+                  chat={
+                    <AgentChatView
+                      roomId={params.roomId}
+                      token={params.token}
+                      events={view.events}
+                      focusedEvents={focusedEvents}
+                      pendingDeltas={view.pendingDeltas}
+                      replaying={view.replaying}
+                      fleet={view.fleet}
+                      focusedAgentId={focusedAgentId}
+                      onFocusAgent={setFocusedAgentId}
+                      driverId={view.driverId}
+                      selfId={view.selfId}
+                      promptDisabled={status !== 'open'}
+                      promptValue={promptText}
+                      onPromptChange={setPromptText}
+                      onSubmitPrompt={(text) => {
+                        connection?.send({ kind: 'prompt', text });
+                        setPromptText('');
+                      }}
+                      onStop={() => connection?.send({ kind: 'interrupt' })}
+                      onSetModel={(model) => connection?.send({ kind: 'set_model', model })}
+                      onResendPrompt={(text) => connection?.send({ kind: 'prompt', text })}
+                      onGrantControl={(participantId) =>
+                        connection?.send({ kind: 'grant_control', toParticipantId: participantId })
+                      }
+                      dismissedDriverRequests={dismissedDriverRequests}
+                      onDismissDriverRequest={(participantId) =>
+                        setDismissedDriverRequests((current) => new Set(current).add(participantId))
+                      }
+                      approvalCount={approvalCount}
+                      onReviewApprovals={() => openAux('approvals')}
+                    />
+                  }
+                  fleetAgents={view.fleet}
+                  focusedAgentId={focusedAgentId}
+                  onFocusAgent={setFocusedAgentId}
+                  onSpawnAgent={(spawnParams) => connection?.send({ kind: 'spawn_agent', ...spawnParams })}
+                  onStopAgent={(agentId) => connection?.send({ kind: 'stop_agent', agentId })}
+                  hasFleet={hasFleet}
+                  fleetApprovals={fleetApprovals}
+                  singleApprovals={pendingApprovals}
+                  now={now}
+                  onDecideFleet={(requestId, agentId, decision, reason) =>
+                    connection?.send({
+                      kind: 'permission_decision',
+                      requestId,
+                      decision,
+                      agentId,
+                      ...(reason === undefined ? {} : { reason }),
+                    })
+                  }
+                  onDecideSingle={(requestId, decision, reason) =>
+                    connection?.send(
+                      reason === undefined
+                        ? { kind: 'permission_decision', requestId, decision }
+                        : { kind: 'permission_decision', requestId, decision, reason },
+                    )
+                  }
+                />
+              </PaneErrorBoundary>
+            </div>
+          </>
+        )}
+
+        {/* The right activity bar never collapses, so its approvals badge is
+            on screen even with every other region closed. */}
+        <PaneErrorBoundary label="The agent activity bar">
+          <ActivityBar
+            side="right"
+            items={auxItems}
+            activeView={auxOpen ? effectiveAuxView : null}
+            onSelect={(next) => {
+              if (auxOpen && effectiveAuxView === next) {
+                setAuxOpen(false);
+              } else {
+                openAux(next);
+              }
+            }}
+            actions={[
+              {
+                id: 'agents',
+                label: 'Agents',
+                Icon: Network,
+                active: tabState.active === AGENTS_TAB_ID,
+                onClick: openAgentsTab,
+              },
+            ]}
+          />
+        </PaneErrorBoundary>
       </div>
 
       <PaneErrorBoundary label="The status bar">
@@ -1140,9 +1024,18 @@ function RoomShell({
           // merely stale.
           agentCount={Math.max(1, view.fleet.length)}
           status={status}
+          cursor={
+            cursor !== null && cursor.path === activeFilePath && activeKind !== 'image'
+              ? { line: cursor.line, col: cursor.col }
+              : null
+          }
+          language={activeFilePath !== null ? languageLabel(activeFilePath) : null}
+          approvalCount={approvalCount}
+          onOpenAgents={openAgentsTab}
+          onOpenApprovals={() => openAux('approvals')}
         />
       </PaneErrorBoundary>
-      {/* --- END phase-17a VS Code shell --- */}
+      {/* --- END phase-18b VS Code shell --- */}
 
       <JoinToasts events={view.events} selfId={view.selfId} replaying={view.replaying} />
 
