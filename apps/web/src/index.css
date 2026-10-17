@@ -6,79 +6,71 @@
 @layer base {
   :root {
     /*
-      "Graphite". A near-neutral dark shell so the room sits beside an editor
-      without competing with it, and so syntax highlighting in the workspace
-      pane is the most saturated thing on screen.
+      VS Code Dark+ / Dark Modern, everywhere: the room and the marketing
+      pages alike. #1E1E1E editor, #252526 side bar, #333333 activity bars,
+      #007ACC status bar, #0078D4 focus/fill.
 
-      --accent is EMBER, and splitting it from green is a semantic decision
-      rather than a taste one. Green previously did four jobs at once — driver
-      token, agent running, primary CTA, and approved-state — so "this is a
-      button" and "this was approved" rendered identically. In a product whose
-      premise is that people can see what the agent is about to do, that
-      collision is a correctness problem. Ember owns interactive/identity;
-      --success owns approved/running only.
+      --accent is a FILL (buttons, badges, tab top bars). It is 3.6:1 on --bg,
+      so accent-coloured TEXT and icons use --accent-fg instead. --success owns
+      approved/running only; --danger is the error colour.
 
-      --danger is ROSE, not the obvious red. A red at hue ~4 sits 1.2:1 from
-      ember and the two are individually legible but nearly indistinguishable
-      FROM EACH OTHER — "primary action" and "destructive action" reading alike
-      is the worst possible confusion here. Contrast between accents matters as
-      much as contrast against the background.
-
-      --nexus is the blob character's blue. Deliberately outside the brand
-      spectrum: he is a character in the product, not a piece of its chrome,
-      and the cool blue is what makes him pop against a warm page.
+      --nexus is the blob character's blue, deliberately outside the palette.
     */
     /* CHANNEL TRIPLETS, not hex — and this is load-bearing. Tailwind can only
        honour an opacity modifier (`bg-danger/70`, `border-accent/45`) when the
        colour is `rgb(var(--x) / <alpha-value>)`, which needs raw channels. With
        hex values here, every such class compiled to NOTHING and the build
-       stayed green: buttons lost their borders and hover states, card borders
-       vanished. Use `rgb(var(--token))` anywhere you need one of these in plain
-       CSS. tokens.ts keeps the hex copies, for Shiki and for humans. */
-    --bg: 19 19 22;  /* #131316 */
-    --surface: 26 26 30;  /* #1A1A1E */
-    --surface-2: 36 36 42;  /* #24242A */
-    --muted: 30 30 35;  /* #1E1E23 */
-    --border: 46 46 54;  /* #2E2E36 */
-    /* Interactive boundaries (inputs, secondary buttons) need 3:1 per WCAG
-       1.4.11. --border is a divider and deliberately near-invisible; anything
-       a person can operate uses this instead. */
-    --border-strong: 106 106 117;  /* #6A6A75 */
-    --fg: 232 232 236;  /* #E8E8EC */
-    --fg-muted: 155 155 166;  /* #9B9BA6 */
-    --accent: 240 136 62;  /* #F0883E */
-    --accent-dim: 58 33 19;  /* #3A2113 */
-    /* Landing spectrum. The room uses --accent alone; the marketing surface
-       opens out into all four so it reads rich rather than tinted. */
-    --accent-2: 232 121 249;  /* #E879F9 */
-    --accent-3: 167 139 250;  /* #A78BFA */
-    --lime: 163 230 53;  /* #A3E635 */
+       stayed green. Use `rgb(var(--token))` in plain CSS. tokens.ts keeps the
+       hex copies; pages/__tests__/tokens.test.ts fails if the two drift. */
+    --bg: 30 30 30;  /* #1E1E1E */
+    --surface: 37 37 38;  /* #252526 */
+    --surface-2: 42 45 46;  /* #2A2D2E */
+    --muted: 45 45 45;  /* #2D2D2D */
+    --border: 60 60 60;  /* #3C3C3C */
+    --border-strong: 110 110 110;  /* #6E6E6E */
+    --fg: 204 204 204;  /* #CCCCCC */
+    --fg-muted: 157 157 157;  /* #9D9D9D */
+    --accent: 0 120 212;  /* #0078D4 */
+    --accent-dim: 4 57 94;  /* #04395E */
+    --on-accent: 255 255 255;  /* #FFFFFF */
+    --success: 137 209 133;  /* #89D185 */
+    --accent-2: 197 134 192;  /* #C586C0 */
+    --accent-3: 86 156 214;  /* #569CD6 */
+    --lime: 181 206 168;  /* #B5CEA8 */
     --nexus: 90 169 255;  /* #5AA9FF */
-    --success: 70 196 106;  /* #46C46A */
-    --warn: 227 179 65;  /* #E3B341 */
-    --danger: 251 113 133;  /* #FB7185 */
-    --info: 88 184 240;  /* #58B8F0 */
-    /* Label colour for a solid --accent fill. Near-black, not white: white on
-       #F0883E is 2.2:1 and unreadable. */
-    --on-accent: 20 16 11;  /* #14100B */
-    --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-    /* JetBrains Mono replaces the system stack everywhere --font-mono is already
-       used — code, diffs, room ids, terminal chrome — rather than adding mono as
-       a new label treatment. The system stack stays as the fallback chain. */
-    --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
+    --warn: 204 167 0;  /* #CCA700 */
+    --danger: 244 135 113;  /* #F48771 */
+    --info: 55 148 255;  /* #3794FF */
+    --accent-fg: 55 148 255;  /* #3794FF */
+    --accent-hover: 17 119 187;  /* #1177BB */
+    --activity: 51 51 51;  /* #333333 */
+    --activity-fg: 133 133 133;  /* #858585 */
+    --activity-fg-active: 255 255 255;  /* #FFFFFF */
+    --titlebar: 60 60 60;  /* #3C3C3C */
+    --tab-strip: 37 37 38;  /* #252526 */
+    --tab-inactive: 45 45 45;  /* #2D2D2D */
+    --tab-active: 30 30 30;  /* #1E1E1E */
+    --status: 0 122 204;  /* #007ACC */
+    --status-fg: 255 255 255;  /* #FFFFFF */
+    --status-alert: 158 106 3;  /* #9E6A03 */
+    --status-error: 199 46 15;  /* #C72E0F */
+    --input: 60 60 60;  /* #3C3C3C */
+    --selection: 38 79 120;  /* #264F78 */
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, 'Ubuntu', 'Droid Sans', sans-serif;
+    /* Code, diffs, room ids and terminal chrome. System monospaces only: no
+       webfont request. */
+    --font-mono: Menlo, Consolas, 'SF Mono', 'Cascadia Code', ui-monospace, monospace;
     color-scheme: dark;
   }
 
   /*
-    The whole product is dark, marketing included.
+    The whole product is dark (Dark+), marketing included.
 
     There used to be a light-mode override here for the marketing surface. It
     was removed deliberately: it fired on OS preference, which meant roughly
     half of all visitors never saw the design the product is actually built
-    around, and the landing page's entire visual argument — a warm spectrum
-    glowing out of a near-black shell — does not survive inversion. A dark-first
-    palette flipped naively is also where contrast bugs breed (#F0883E on white
-    is 2.0:1).
+    around, and the landing page's entire visual argument — a blue/purple/green spectrum
+    glowing out of a near-black shell — does not survive inversion.
 
     `.surface-marketing` is still set on <body> by the router for the landing
     and legal routes. It is now a hook for marketing-only treatments — the
@@ -91,6 +83,16 @@
     color: rgb(var(--fg));
     font-family: var(--font-sans);
   }
+
+  ::selection { background-color: rgb(var(--selection)); }
+
+  /* VS Code-style scrollbars: 10px, translucent thumb, transparent track. */
+  * { scrollbar-width: thin; scrollbar-color: rgb(121 121 121 / 0.4) transparent; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background-color: rgb(121 121 121 / 0.4); }
+  ::-webkit-scrollbar-thumb:hover { background-color: rgb(121 121 121 / 0.7); }
+  ::-webkit-scrollbar-corner { background: transparent; }
 
   /* A focus ring is never removed, only restyled. */
   :focus-visible {
@@ -154,7 +156,7 @@
 
   /* Primary CTA hover — a flat fill shift and a 1px lift, no soft glow. */
   .glow-accent { transition: background-color 150ms ease-out, transform 150ms ease-out; }
-  .glow-accent:hover { background-color: rgb(var(--accent-dim)); transform: translateY(-1px); }
+  .glow-accent:hover { background-color: rgb(var(--accent-hover)); transform: translateY(-1px); }
 
   /* Card hover — border intensifies, nothing lifts or casts a shadow. */
   .card-lift { transition: border-color 150ms ease-out, background-color 150ms ease-out; }

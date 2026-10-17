@@ -17,7 +17,7 @@ export function MalformedLink(): JSX.Element {
       </p>
       <a
         href="/new"
-        className="mt-2 inline-flex min-h-11 items-center justify-center rounded px-4 py-2 font-medium text-bg bg-accent transition-colors duration-150 ease-out hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+        className="mt-2 inline-flex min-h-11 items-center justify-center rounded px-4 py-2 font-medium text-on-accent bg-accent transition-colors duration-150 ease-out hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
       >
         Open a new room
       </a>

@@ -20,7 +20,7 @@ export function Hero(): JSX.Element {
 
       <div className="mx-auto grid max-w-6xl items-center gap-14 lg:grid-cols-2">
         <div ref={copyRef}>
-          <p className="hero-rise inline-flex items-center gap-2 rounded-md border border-accent/30 bg-accent/10 px-3 py-1 text-sm font-medium text-accent" style={{ ['--d' as string]: '60ms' }}>
+          <p className="hero-rise inline-flex items-center gap-2 rounded-md border border-accent/30 bg-accent/10 px-3 py-1 text-sm font-medium text-accent-fg" style={{ ['--d' as string]: '60ms' }}>
             <ShieldCheck size={16} aria-hidden="true" />
             Four-eyes approval, built in
           </p>

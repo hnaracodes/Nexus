@@ -40,7 +40,7 @@ export function Governance(): JSX.Element {
             </pre>
             <div className="flex flex-wrap gap-3">
               <span className="flex items-center gap-1 rounded-md bg-accent-dim px-3 py-2 text-sm font-medium text-fg">
-                <CheckCircle2 size={16} className="text-accent" />
+                <CheckCircle2 size={16} className="text-accent-fg" />
                 Approve
               </span>
               <span className="flex items-center gap-1 rounded-md bg-surface-2 px-3 py-2 text-sm font-medium text-fg">

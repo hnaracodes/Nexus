@@ -30,7 +30,7 @@ export function SecurityHonesty(): JSX.Element {
     >
       <div className="mx-auto max-w-6xl">
         <div className="max-w-3xl">
-          <p className="text-sm font-semibold text-accent">Trust model</p>
+          <p className="text-sm font-semibold text-accent-fg">Trust model</p>
           <h2
             id="security-honesty-heading"
             className="mt-3 text-3xl font-bold tracking-[-0.02em] text-fg sm:text-4xl"
@@ -49,7 +49,7 @@ export function SecurityHonesty(): JSX.Element {
               key={fact.title}
               className="card-lift rounded-lg border border-border bg-bg/60 p-6"
             >
-              <fact.icon size={22} className="text-accent" aria-hidden="true" />
+              <fact.icon size={22} className="text-accent-fg" aria-hidden="true" />
               <h3 className="mt-4 text-lg font-semibold text-fg">{fact.title}</h3>
               <p className="mt-2 text-base leading-relaxed text-fg-muted">{fact.body}</p>
             </div>

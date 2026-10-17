@@ -31,7 +31,7 @@ export function Problem(): JSX.Element {
               key={title}
               className="card-lift rounded-lg border border-border bg-surface p-6 hover:border-accent/40"
             >
-              <Icon size={20} className="text-accent" aria-hidden="true" />
+              <Icon size={20} className="text-accent-fg" aria-hidden="true" />
               <h3 className="mt-4 text-lg font-semibold text-fg">{title}</h3>
               <p className="mt-2 text-base leading-relaxed text-fg-muted">{body}</p>
             </div>

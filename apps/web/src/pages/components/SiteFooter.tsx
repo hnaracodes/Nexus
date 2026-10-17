@@ -43,7 +43,7 @@ export function SiteFooter(): JSX.Element {
           <div className="lg:col-span-2">
             <a
               href="/"
-              className="inline-flex items-center gap-2 font-mono text-lg font-semibold tracking-tight text-fg transition-colors duration-150 hover:text-accent"
+              className="inline-flex items-center gap-2 font-mono text-lg font-semibold tracking-tight text-fg transition-colors duration-150 hover:text-accent-fg"
             >
               <span aria-hidden="true" className="h-2 w-2 rounded-full bg-accent" />
               syncode
@@ -71,7 +71,7 @@ export function SiteFooter(): JSX.Element {
                   <li key={link.href}>
                     <a
                       href={link.href}
-                      className="inline-block text-sm text-fg-muted transition-colors duration-150 hover:text-accent"
+                      className="inline-block text-sm text-fg-muted transition-colors duration-150 hover:text-accent-fg"
                     >
                       {link.label}
                     </a>

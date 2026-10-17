@@ -39,7 +39,7 @@ export function Invariants(): JSX.Element {
               className="card-lift rounded-lg border border-border bg-surface p-6 hover:border-accent/40"
             >
               <h3 className="flex items-baseline gap-2 text-lg font-semibold text-fg">
-                <span className="font-mono text-sm text-accent">{inv.id}</span>
+                <span className="font-mono text-sm text-accent-fg">{inv.id}</span>
                 {inv.plain}
               </h3>
               <p className="mt-3 rounded-md bg-bg p-3 font-mono text-xs leading-relaxed text-fg-muted">
