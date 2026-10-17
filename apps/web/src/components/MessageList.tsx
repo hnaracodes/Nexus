@@ -230,7 +230,7 @@ function renderTranscriptRow(row: TranscriptRow, depth: number): JSX.Element {
           <div className="mb-1 flex items-center gap-1 text-xs font-semibold text-fg-muted">
             <span>{row.displayName}</span>
             {row.wasDriver === true && (
-              <Crown size={14} className="text-accent" aria-label="was driving" role="img" />
+              <Crown size={14} className="text-accent-fg" aria-label="was driving" role="img" />
             )}
           </div>
           <Markdown text={row.text} />
@@ -344,7 +344,7 @@ export function MessageList({
                 still renders as code (see markdown.tsx), so the text does not
                 reflow jarringly the moment the closing fence lands. */}
             <Markdown text={text} />
-            <span aria-hidden="true" className="animate-nexus-caret text-accent">
+            <span aria-hidden="true" className="animate-nexus-caret text-accent-fg">
               ▍
             </span>
           </li>

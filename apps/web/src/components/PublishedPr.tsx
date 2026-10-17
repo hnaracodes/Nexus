@@ -56,7 +56,7 @@ export function PublishedPrCard({
   return (
     <div className="mx-4 my-2 rounded border border-accent/40 bg-surface-2 p-3">
       <div className="flex items-center gap-2 text-sm font-semibold text-fg">
-        <GitPullRequest size={16} className="text-accent" aria-hidden="true" />
+        <GitPullRequest size={16} className="text-accent-fg" aria-hidden="true" />
         <span>
           {pr.created ? 'Opened' : 'Updated'} pull request #{pr.prNumber}
         </span>

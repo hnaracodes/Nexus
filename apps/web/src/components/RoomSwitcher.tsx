@@ -126,7 +126,7 @@ export function RoomSwitcher({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-bg/70 pt-24"
+      className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh]"
       onClick={onClose}
     >
       <div
@@ -136,7 +136,7 @@ export function RoomSwitcher({
         aria-label="Switch room"
         onKeyDown={handleKeyDown}
         onClick={(event) => event.stopPropagation()}
-        className="w-full max-w-md rounded-lg border border-border bg-surface shadow-[0_8px_24px_rgba(0,0,0,0.4)]"
+        className="w-full max-w-md rounded border border-border bg-surface shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
       >
         <div className="flex items-center gap-2 border-b border-border px-4 py-3">
           <Command size={16} className="shrink-0 text-fg-muted" aria-hidden="true" />

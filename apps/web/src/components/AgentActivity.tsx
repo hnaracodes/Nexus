@@ -24,7 +24,7 @@ export function AgentActivity({ status, now }: { status: AgentStatus; now: numbe
 
     case 'thinking':
       return (
-        <div role="status" aria-live="polite" className="flex items-center gap-2 text-accent">
+        <div role="status" aria-live="polite" className="flex items-center gap-2 text-accent-fg">
           <Circle size={16} strokeWidth={2} fill="currentColor" className="animate-nexus-pulse" aria-hidden="true" />
           <span className="text-sm">Thinking…</span>
         </div>
@@ -32,7 +32,7 @@ export function AgentActivity({ status, now }: { status: AgentStatus; now: numbe
 
     case 'streaming':
       return (
-        <div role="status" aria-live="polite" className="flex items-center gap-2 text-accent">
+        <div role="status" aria-live="polite" className="flex items-center gap-2 text-accent-fg">
           <Circle size={16} strokeWidth={2} fill="currentColor" className="animate-nexus-pulse" aria-hidden="true" />
           <span className="text-sm">Responding…</span>
         </div>
@@ -42,7 +42,7 @@ export function AgentActivity({ status, now }: { status: AgentStatus; now: numbe
       const Icon = toolIcon(status.toolName);
       const seconds = Math.max(0, Math.floor((now - status.startedAt) / 1000));
       return (
-        <div role="status" aria-live="polite" className="flex items-center gap-2 text-accent">
+        <div role="status" aria-live="polite" className="flex items-center gap-2 text-accent-fg">
           <Icon size={16} strokeWidth={2} aria-hidden="true" />
           <span className="text-sm">
             Running <code className="font-mono">{status.toolName}</code> · {seconds}s

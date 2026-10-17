@@ -153,7 +153,7 @@ export function FileTree({ api, selectedPath, touchedPaths, onSelect }: FileTree
       ref={containerRef}
       role="tree"
       aria-label="Workspace files"
-      className="h-full min-h-0 w-64 shrink-0 overflow-y-auto border-r border-border bg-surface p-2 text-sm"
+      className="h-full min-h-0 w-full min-w-0 overflow-y-auto p-1 text-sm"
       onKeyDown={handleKeyDown}
     >
       {dirs.get('')?.status === 'loading' && rows.length === 0 && (
@@ -179,8 +179,8 @@ export function FileTree({ api, selectedPath, touchedPaths, onSelect }: FileTree
             onFocus={() => setFocusedPath(row.entry.path)}
             onClick={() => activate(row.entry)}
             style={{ paddingLeft: `${row.depth * 16 + 4}px` }}
-            className={`flex min-h-[28px] cursor-pointer items-center gap-1.5 rounded px-1 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface ${
-              isSelected ? 'bg-accent-dim text-fg' : 'text-fg-muted hover:bg-surface-2 hover:text-fg'
+            className={`flex min-h-[24px] cursor-pointer items-center gap-1.5 px-1 py-0.5 text-[13px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-accent ${
+              isSelected ? 'bg-accent-dim text-fg' : 'text-fg hover:bg-surface-2'
             }`}
           >
             {isDir ? (

@@ -11,6 +11,8 @@ export type GitStatusState =
 export interface ChangesTabProps {
   events: SynCodeEvent[];
   gitStatus: GitStatusState;
+  /** When given, working-tree rows become buttons that report the clicked path. */
+  onSelectFile?: (path: string) => void;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -32,7 +34,7 @@ function statusLabel(code: string): string {
  * that component retires — reusing `deriveApprovals(events).settled`
  * verbatim, same derivation, new renderer. Git status renders below it.
  */
-export function ChangesTab({ events, gitStatus }: ChangesTabProps): JSX.Element {
+export function ChangesTab({ events, gitStatus, onSelectFile }: ChangesTabProps): JSX.Element {
   const { settled } = deriveApprovals(events);
 
   return (
@@ -51,7 +53,7 @@ export function ChangesTab({ events, gitStatus }: ChangesTabProps): JSX.Element 
                 className="flex items-start gap-2 rounded border border-border bg-surface px-2 py-1 text-xs"
               >
                 {approval.decision === 'allow' ? (
-                  <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-accent" aria-hidden="true" />
+                  <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-success" aria-hidden="true" />
                 ) : (
                   <XCircle size={14} className="mt-0.5 shrink-0 text-danger" aria-hidden="true" />
                 )}
@@ -83,12 +85,25 @@ export function ChangesTab({ events, gitStatus }: ChangesTabProps): JSX.Element 
           ) : (
             <ul className="flex flex-col gap-1">
               {gitStatus.entries.map((entry) => (
-                <li
-                  key={entry.path}
-                  className="flex items-center gap-2 rounded border border-border bg-surface px-2 py-1 font-mono text-xs"
-                >
-                  <span className="w-20 shrink-0 uppercase text-fg-muted">{statusLabel(entry.status)}</span>
-                  <span className="flex-1 truncate text-fg">{entry.path}</span>
+                <li key={entry.path}>
+                  {onSelectFile === undefined ? (
+                    <div className="flex items-center gap-2 rounded border border-border bg-surface px-2 py-1 font-mono text-xs">
+                      <span className="w-20 shrink-0 uppercase text-fg-muted">{statusLabel(entry.status)}</span>
+                      <span className="flex-1 truncate text-fg">{entry.path}</span>
+                    </div>
+                  ) : (
+                    // Opens the file AND reveals its diff in the bottom panel —
+                    // the caller decides both; this row only reports the click.
+                    <button
+                      type="button"
+                      onClick={() => onSelectFile(entry.path)}
+                      title={`Open ${entry.path} and show its diff`}
+                      className="flex w-full items-center gap-2 rounded border border-border bg-surface px-2 py-1 text-left font-mono text-xs hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-accent"
+                    >
+                      <span className="w-20 shrink-0 uppercase text-fg-muted">{statusLabel(entry.status)}</span>
+                      <span className="flex-1 truncate text-fg">{entry.path}</span>
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>

@@ -42,6 +42,7 @@ function makeApi(): WorkspaceApi {
     getGitStatus: vi.fn().mockResolvedValue([]),
     getGitDiff: vi.fn().mockResolvedValue({ path: '', diff: '' }),
     getModels: vi.fn().mockResolvedValue([]),
+    getFileBlob: vi.fn().mockRejectedValue(new Error('no raw route')),
   };
 }
 

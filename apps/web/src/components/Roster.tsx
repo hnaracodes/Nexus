@@ -25,7 +25,7 @@ export function Roster({
   const pendingByParticipant = new Map(pendingDriverRequests.map((r) => [r.participantId, r]));
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-2">
       <ul className="flex items-center gap-2">
         {participants.map((p) => {
           const isDriver = p.participantId === driverId;
@@ -35,8 +35,8 @@ export function Roster({
           return (
             <li
               key={p.participantId}
-              className={`flex min-h-11 items-center gap-1.5 rounded px-2 py-1 text-sm ${
-                p.connected ? 'bg-surface text-fg' : 'bg-muted text-fg-muted'
+              className={`flex min-h-6 items-center gap-1.5 rounded px-1.5 text-xs ${
+                p.connected ? 'text-fg' : 'text-fg-muted'
               }`}
               title={p.connected ? p.displayName : `${p.displayName} — disconnected (30s grace period)`}
             >
@@ -68,7 +68,7 @@ export function Roster({
                 <button
                   type="button"
                   onClick={() => onGrantControl?.(p.participantId)}
-                  className="ml-1 min-h-11 rounded px-2 text-xs text-accent underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+                  className="ml-1 min-h-6 rounded px-1.5 text-xs text-accent-fg underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
                 >
                   give control
                 </button>
@@ -82,7 +82,7 @@ export function Roster({
         <button
           type="button"
           onClick={onReleaseControl}
-          className="min-h-11 rounded border border-border px-2 py-1 text-xs text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+          className="min-h-6 rounded border border-border px-2 text-xs text-fg hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
         >
           Release control
         </button>
@@ -90,7 +90,7 @@ export function Roster({
         <button
           type="button"
           onClick={onRequestControl}
-          className="min-h-11 rounded border border-border px-2 py-1 text-xs text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+          className="min-h-6 rounded border border-border px-2 text-xs text-fg hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
         >
           Request control
         </button>

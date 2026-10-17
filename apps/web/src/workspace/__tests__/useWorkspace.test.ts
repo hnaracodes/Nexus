@@ -11,6 +11,7 @@ function makeApi(overrides: Partial<WorkspaceApi> = {}): WorkspaceApi {
     getGitStatus: vi.fn().mockResolvedValue([]),
     getGitDiff: vi.fn().mockResolvedValue({ path: '', diff: '' }),
     getModels: vi.fn().mockResolvedValue([]),
+    getFileBlob: vi.fn().mockRejectedValue(new Error('no raw route')),
     ...overrides,
   };
 }

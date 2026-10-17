@@ -118,7 +118,7 @@ function Hunk({
           )}
           <span
             className={`w-4 shrink-0 select-none text-center ${
-              line.kind === 'add' ? 'text-accent' : line.kind === 'remove' ? 'text-danger' : 'text-fg-muted'
+              line.kind === 'add' ? 'text-accent-fg' : line.kind === 'remove' ? 'text-danger' : 'text-fg-muted'
             }`}
             aria-hidden="true"
           >

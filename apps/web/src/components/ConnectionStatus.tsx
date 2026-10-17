@@ -10,18 +10,23 @@ const LABEL: Record<Status, string> = {
 
 const TONE: Record<Status, string> = {
   connecting: 'border-warn text-warn',
-  open: 'border-accent text-accent',
+  open: 'border-accent text-accent-fg',
   reconnecting: 'border-warn text-warn',
   closed: 'border-danger text-danger',
 };
 
 /**
- * A token-coloured connection pill. Colour never carries the meaning alone —
- * the icon (Wifi live, WifiOff otherwise) and the text label both restate it.
+ * A token-coloured connection indicator. Colour never carries the meaning
+ * alone — the icon (Wifi live, WifiOff otherwise) and the text label both
+ * restate it.
+ *
+ * `variant="inline"` drops the pill and inherits the surrounding text colour,
+ * for the status bar, where the bar itself changes colour when disconnected.
  */
 export function ConnectionStatus({
   status,
   retrySecondsLeft,
+  variant = 'pill',
 }: {
   status: Status;
   /**
@@ -30,6 +35,7 @@ export function ConnectionStatus({
    * working; the integration pass wires this once `connect()` exposes it.
    */
   retrySecondsLeft?: number;
+  variant?: 'pill' | 'inline';
 }): JSX.Element {
   const Icon = status === 'open' || status === 'connecting' ? Wifi : WifiOff;
   const suffix =
@@ -40,9 +46,13 @@ export function ConnectionStatus({
   return (
     <span
       role="status"
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${TONE[status]}`}
+      className={
+        variant === 'inline'
+          ? 'inline-flex items-center gap-1.5'
+          : `inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${TONE[status]}`
+      }
     >
-      <Icon size={16} aria-hidden="true" />
+      <Icon size={variant === 'inline' ? 12 : 16} aria-hidden="true" />
       {LABEL[status]}
       {suffix}
     </span>
