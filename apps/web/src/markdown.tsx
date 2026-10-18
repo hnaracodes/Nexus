@@ -67,7 +67,7 @@ export function renderInline(text: string, keyPrefix = 'i'): ReactNode[] {
   let node: ReactNode;
   if (kind === 'code') {
     node = (
-      <code key={key} className="rounded bg-surface-2 px-1 py-0.5 font-mono text-[0.9em] text-accent">
+      <code key={key} className="rounded bg-surface-2 px-1 py-0.5 font-mono text-[0.9em] text-accent-fg">
         {inner}
       </code>
     );
@@ -84,7 +84,7 @@ export function renderInline(text: string, keyPrefix = 'i'): ReactNode[] {
           href={href}
           target="_blank"
           rel="noreferrer noopener"
-          className="text-accent underline decoration-accent/40 underline-offset-2 hover:decoration-accent"
+          className="text-accent-fg underline decoration-accent/40 underline-offset-2 hover:decoration-accent"
         >
           {renderInline(inner, `${key}l`)}
         </a>

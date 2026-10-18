@@ -35,11 +35,9 @@ const SIZES: Record<ButtonSize, string> = {
 };
 
 const VARIANTS: Record<ButtonVariant, string> = {
-  // Solid accent with a near-black label — white on #6AA5FF is 2.4:1 and
-  // unreadable. The inset highlight is a single hairline, not a gradient:
-  // enough to give the fill a light source, cheap enough to stay crisp.
+  // Solid Dark+ accent with a white label (on-accent).
   primary:
-    'bg-accent text-on-accent shadow-[inset_0_1px_0_rgba(255,255,255,0.22)] ' +
+    'bg-accent text-on-accent ' +
     'hover:brightness-110 active:brightness-95',
   // border-strong, not border: this is an operable control and WCAG 1.4.11
   // wants 3:1 on its boundary.
