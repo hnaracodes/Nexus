@@ -162,22 +162,24 @@ export interface RunOverlayProps {
 const NO_AGENTS: ReadonlyMap<string, AgentId> = new Map();
 
 /**
- * One status badge per node, absolutely positioned at that node's canvas
- * coordinates. A sibling layer to whatever renders the static graph (H3's
- * `Canvas`/`NodeCard`, not yet built as of this file) — `pointer-events-none`
- * throughout because this overlay only reports state, it never captures a
- * drag or a click meant for the node underneath it.
+ * One status badge per node, placed ABOVE its card at world coordinates
+ * `(node.x, node.y - BADGE_OFFSET)`. It must be rendered INSIDE the canvas's
+ * pan/zoom layer (`Canvas` `children`), so it moves and scales with the cards;
+ * outside that layer the badges detach after the first pan. The card already
+ * shows the node's name, so the name here is screen-reader only.
  *
- * The exact offset from `(node.x, node.y)` is provisional: it anchors to the
- * node's own coordinate, the same point a node card will render at, but this
- * file cannot know a real card's rendered box (jsdom has no layout either —
- * plan landmine 1) and may need a pixel tweak once H3 lands.
+ * `pointer-events-none` throughout: this overlay only reports state, it never
+ * captures a drag or a click meant for the node underneath it. The offset is a
+ * WORLD-unit constant (a badge is about 22px tall); a node near y = 0 puts its
+ * badge at negative world y, which is harmless inside the unclipped layer.
  */
+export const BADGE_OFFSET = 24;
+
 export function RunOverlay({ graph, fleet, nodeAgentIds = NO_AGENTS }: RunOverlayProps): JSX.Element {
   const states = computeRunStates(graph, fleet, nodeAgentIds);
 
   return (
-    <div className="pointer-events-none absolute inset-0" aria-label="Workflow run status">
+    <div className="pointer-events-none absolute left-0 top-0" aria-label="Workflow run status">
       {graph.nodes.map((node) => {
         const state = states.get(node.id) ?? NOT_SPAWNED;
         const meta = STATUS_META[state.status];
@@ -190,9 +192,9 @@ export function RunOverlay({ graph, fleet, nodeAgentIds = NO_AGENTS }: RunOverla
             data-node-id={node.id}
             data-run-status={state.status}
             className="absolute flex flex-col items-start gap-0.5"
-            style={{ left: node.x, top: node.y }}
+            style={{ left: node.x, top: node.y - BADGE_OFFSET }}
           >
-            <span className="truncate text-xs font-medium text-fg">{node.displayName}</span>
+            <span className="sr-only">{node.displayName}</span>
             <span
               role="status"
               // 'assertive' interrupts, matching `AgentActivity.tsx`'s own

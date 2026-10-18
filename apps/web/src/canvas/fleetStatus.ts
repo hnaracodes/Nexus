@@ -15,6 +15,16 @@ export interface StatusMeta {
   iconClassName: string;
 }
 
+/**
+ * WHY `awaiting_approval` has its own icon, its own pulsing animation and its
+ * own warn tone (and a heavier row treatment where it renders): it is the one
+ * state where the fleet is blocked on a HUMAN. If twelve agents are each
+ * waiting for the room and the list looks like twelve idle rows, the
+ * four-eyes gate is technically working and practically invisible. It is also
+ * carried by TEXT ("Needs approval", with a count), never colour alone.
+ * These tables only REPORT the gate; nothing here may act on it or imply
+ * consent.
+ */
 export const STATUS_META: Record<AgentStatus, StatusMeta> = {
   idle: { label: 'Idle', icon: Circle, tone: 'text-fg-muted', iconClassName: '' },
   working: { label: 'Working', icon: Loader2, tone: 'text-accent', iconClassName: 'animate-spin' },

@@ -2,6 +2,7 @@ import type { AgentId } from '@syncode/protocol/events';
 import type { ConfigBody } from './presets.js';
 import type { Graph } from './graph.js';
 import { toCrewBody } from './graphOps.js';
+import type { Identity } from './identity.js';
 
 /**
  * The typed, room-scoped client for the config / crew / run routes. Every call
@@ -57,19 +58,27 @@ export interface RoomApi {
   saveConfig(body: ConfigBody): Promise<ApiResult<SavedConfig>>;
   deleteCrew(name: string): Promise<ApiResult<true>>;
   saveCrew(name: string, graph: Graph): Promise<ApiResult<SavedCrew>>;
-  run(name: string, prompt: string): Promise<ApiResult<{ nodes: Array<[string, AgentId]> }>>;
+  run(
+    name: string,
+    prompt: string,
+    identities?: readonly Identity[],
+  ): Promise<ApiResult<{ nodes: Array<[string, AgentId]> }>>;
   runStatus(name: string): Promise<ApiResult<RunStatus>>;
 }
 
 export function createRoomApi(roomId: string, token: string): RoomApi {
   const base = `/api/rooms/${encodeURIComponent(roomId)}`;
 
-  async function call<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<ApiResult<T>> {
+  async function call<T>(
+    path: string,
+    init: { method?: string; body?: unknown; headers?: Record<string, string> } = {},
+  ): Promise<ApiResult<T>> {
     try {
       const res = await fetch(`${base}${path}`, {
         method: init.method ?? 'GET',
         headers: {
           'X-SynCode-Token': token,
+          ...init.headers,
           ...(init.body === undefined ? {} : { 'content-type': 'application/json' }),
         },
         ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
@@ -97,7 +106,30 @@ export function createRoomApi(roomId: string, token: string): RoomApi {
       const r = await call<{ crew: SavedCrew }>('/crews', { method: 'POST', body: toCrewBody(name, graph) });
       return r.ok ? { ok: true, data: r.data.crew } : r;
     },
-    run: (name, prompt) => call(`/crews/${seg(name)}/run`, { method: 'POST', body: { prompt } }),
+    run: async (name, prompt, identities = []) => {
+      // Driver-only on the server. Try each identity this browser holds for
+      // the room; a 403 is the server saying "not the driver", so try the
+      // next, and surface the LAST refusal verbatim if none is.
+      type Started = { nodes: Array<[string, AgentId]> };
+      const attempts: Array<Identity | null> = identities.length === 0 ? [null] : [...identities];
+      let last: ApiResult<Started> | null = null;
+      for (const identity of attempts) {
+        last = await call<Started>(`/crews/${seg(name)}/run`, {
+          method: 'POST',
+          body: { prompt },
+          ...(identity === null
+            ? {}
+            : {
+                headers: {
+                  'X-SynCode-Participant': identity.participantId,
+                  'X-SynCode-Resume': identity.resumeToken,
+                },
+              }),
+        });
+        if (last.ok || last.status !== 403) return last;
+      }
+      return last as ApiResult<Started>;
+    },
     runStatus: (name) => call<RunStatus>(`/crews/${seg(name)}/run`),
   };
 }

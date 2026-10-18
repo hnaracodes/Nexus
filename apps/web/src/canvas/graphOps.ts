@@ -1,7 +1,7 @@
 import type { AgentProvider } from '@syncode/protocol/events';
-import { detectCycle, topologicalLayers } from './graph.js';
+import { detectCycle, topologicalLayers, validate } from './graph.js';
 import type { Edge, Graph, Node } from './graph.js';
-import { uniqueName } from './presets.js';
+import { MAX_NAME, uniqueName } from './presets.js';
 
 /**
  * Pure graph editing, view math and wire shaping for the agents builder. No
@@ -101,8 +101,34 @@ export function moveNode(graph: Graph, id: string, x: number, y: number): Graph 
   };
 }
 
+/**
+ * Patch a node. A display name is trimmed, capped at the wire's 80 characters
+ * and made unique among the OTHER nodes (a blank name keeps the old one) -
+ * `spawn_agent` refuses blank or over-long names, and two identically named
+ * nodes would be indistinguishable in the fleet. A non-finite position keeps
+ * the old one.
+ */
 export function updateNode(graph: Graph, id: string, patch: Partial<Omit<Node, 'id'>>): Graph {
-  return { ...graph, nodes: graph.nodes.map((n) => (n.id === id ? { ...n, ...patch } : n)) };
+  return {
+    ...graph,
+    nodes: graph.nodes.map((n) => {
+      if (n.id !== id) return n;
+      const next: Node = { ...n, ...patch };
+      if (patch.displayName !== undefined) {
+        const wanted = patch.displayName.trim().slice(0, MAX_NAME);
+        next.displayName =
+          wanted === ''
+            ? n.displayName
+            : uniqueName(
+                wanted,
+                graph.nodes.filter((o) => o.id !== id).map((o) => o.displayName),
+              );
+      }
+      next.x = finite(next.x, n.x);
+      next.y = finite(next.y, n.y);
+      return next;
+    }),
+  };
 }
 
 export function removeNode(graph: Graph, id: string): Graph {
@@ -262,4 +288,30 @@ export function layoutModeFor(width: number): LayoutMode {
   if (width >= 760) return 'wide';
   if (width >= 480) return 'medium';
   return 'narrow';
+}
+
+// -------------------------------------------------------------- preflight ---
+
+/**
+ * Everything that would make Save or Run fail, in words, found BEFORE a round
+ * trip. An empty list means nothing known to this view stands in the way; the
+ * server still has the last word and its refusal is shown verbatim.
+ */
+export function saveBlockers(name: string, graph: Graph, configNames: ReadonlySet<string>): string[] {
+  const out: string[] = [];
+  if (name.trim() === '') out.push('Give the workflow a name.');
+  if (graph.nodes.length === 0) out.push('Add at least one agent.');
+  const result = validate(graph);
+  if (!result.ok) out.push(...result.problems);
+  for (const n of graph.nodes) {
+    if (!configNames.has(n.configName)) {
+      out.push(`"${n.displayName}" uses the config "${n.configName}", which is not saved.`);
+    }
+  }
+  return out;
+}
+
+/** Ids of the nodes that run directly before `id`. */
+export function upstreamOf(graph: Graph, id: string): string[] {
+  return graph.edges.filter((e) => e.to === id).map((e) => e.from);
 }

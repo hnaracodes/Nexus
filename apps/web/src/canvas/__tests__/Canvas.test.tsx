@@ -52,7 +52,7 @@ describe('Canvas', () => {
 
     const { container } = render(<Canvas graph={g} selectedNodeId={null} onSelect={vi.fn()} />);
 
-    expect(container.querySelectorAll('line')).toHaveLength(2);
+    expect(container.querySelectorAll('line[data-edge-from]')).toHaveLength(2);
     expect(container.querySelector('[data-edge-from="a"][data-edge-to="b"]')).not.toBeNull();
     expect(container.querySelector('[data-edge-from="b"][data-edge-to="c"]')).not.toBeNull();
     // Not the reverse pairing, and not a third phantom edge.
@@ -102,6 +102,6 @@ describe('Canvas', () => {
       screen.getByText('Edge from "a" to "ghost" names a node that does not exist: "ghost".'),
     ).toBeInTheDocument();
     // The dangling edge draws nothing rather than crashing on a missing endpoint.
-    expect(document.querySelectorAll('line')).toHaveLength(0);
+    expect(document.querySelectorAll('line[data-edge-from]')).toHaveLength(0);
   });
 });
