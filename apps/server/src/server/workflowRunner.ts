@@ -120,6 +120,14 @@ export interface StartWorkflowRunArgs {
   /** Test seam threaded through to every node's `spawnAgent` call. Defaults
    *  to a fresh random id per node. */
   nextAgentId?: () => AgentId;
+  /**
+   * The node's saved role (its config's system prompt), if any. When it
+   * returns text, `promptFor` prefixes it to the node's prompt. The role
+   * travels as ORDINARY prompt text: it is visible in the log, attributed, and
+   * passes the same gate as everything else. A function rather than a file
+   * read so this module stays free of fs and the caller owns config scoping.
+   */
+  rolePrompt?: (node: WorkflowNode) => string | undefined;
 }
 
 export type StartWorkflowRunResult = { ok: true; run: WorkflowRun } | { ok: false; reason: string };
@@ -296,6 +304,12 @@ export function startWorkflowRun(args: StartWorkflowRunArgs): StartWorkflowRunRe
    *  join) gets each labelled by source, since an unlabelled concatenation of
    *  two agents' output would read as one voice instead of two. */
   function promptFor(node: WorkflowNode): string {
+    const role = args.rolePrompt?.(node);
+    const body = inputFor(node);
+    return role !== undefined && role.trim() !== '' ? `${role}\n\n${body}` : body;
+  }
+
+  function inputFor(node: WorkflowNode): string {
     const ups = upstream.get(node.id) ?? [];
     if (ups.length === 0) return prompt;
     if (ups.length === 1) {

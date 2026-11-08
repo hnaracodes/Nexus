@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from 'react';
-import { AlertOctagon, Circle, Loader2, Plus, ShieldAlert, XCircle } from 'lucide-react';
+import { MessageSquare, Plus } from 'lucide-react';
 import type { AgentId, AgentProvider } from '@syncode/protocol/events';
 import { AGENT_PROVIDERS } from '@syncode/protocol/events';
 import type { AgentStatus, FleetEntry } from '@syncode/protocol/wire';
 import { Button } from './Button.js';
+import { PROVIDER_LABEL, STATUS_META, statusText } from '../canvas/fleetStatus.js';
 
 /**
  * The fleet sidebar (phase 12, F5). Renders `RoomView.fleet` — the transient,
@@ -34,6 +35,8 @@ export interface FleetPaneProps {
   onFocus: (agentId: AgentId) => void;
   onSpawn: (params: { displayName: string; provider: AgentProvider; model: string | null }) => void;
   onStop: (agentId: AgentId) => void;
+  /** Optional: adds a per-row control asking the shell to show this agent's conversation. */
+  onOpenChat?: (agentId: AgentId) => void;
 }
 
 // Anthropic is the ratified first provider (CLAUDE.md §4) — the sensible
@@ -41,51 +44,11 @@ export interface FleetPaneProps {
 // ordering, which `noUncheckedIndexedAccess` won't let us index into blindly anyway.
 const DEFAULT_PROVIDER: AgentProvider = 'anthropic';
 
-const PROVIDER_LABEL: Record<AgentProvider, string> = {
-  anthropic: 'Anthropic',
-  openai: 'OpenAI',
-  google: 'Google',
-};
-
-/**
- * `awaiting_approval` gets its own icon, its own tone AND — critically — a row
- * background and left bar (applied where the row renders, not here) so it does
- * not read as "a slightly different colour of the same row" at twenty entries.
- * `error` gets a lighter version of the same treatment: also actionable, never
- * as loud as the state that is actively blocking a human.
- */
-const STATUS_META: Record<AgentStatus, { label: string; icon: typeof Circle; tone: string; iconClassName: string }> = {
-  idle: { label: 'Idle', icon: Circle, tone: 'text-fg-muted', iconClassName: '' },
-  working: { label: 'Working', icon: Loader2, tone: 'text-accent', iconClassName: 'animate-spin' },
-  awaiting_approval: {
-    label: 'Needs approval',
-    icon: ShieldAlert,
-    tone: 'text-warn',
-    iconClassName: 'animate-nexus-pulse',
-  },
-  error: { label: 'Error', icon: AlertOctagon, tone: 'text-danger', iconClassName: '' },
-  stopped: { label: 'Stopped', icon: XCircle, tone: 'text-fg-muted', iconClassName: '' },
-};
-
-/**
- * The label a screen reader announces and a sighted user reads — colour is
- * never the only carrier (MASTER.md's rule, restated in the phase-12 plan as a
- * governance requirement: `awaiting_approval` is the state where the fleet is
- * blocked on a human, so it must be findable by TEXT, not just by CSS class).
- */
-function statusText(agent: FleetEntry): string {
-  const meta = STATUS_META[agent.status];
-  if (agent.status === 'awaiting_approval' && agent.pendingApprovals > 0) {
-    return `${meta.label} · ${agent.pendingApprovals} pending`;
-  }
-  return meta.label;
-}
-
 const FOCUS_RING =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ' +
   'focus-visible:ring-offset-2 focus-visible:ring-offset-surface';
 
-export function FleetPane({ agents, focusedAgentId, onFocus, onSpawn, onStop }: FleetPaneProps): JSX.Element {
+export function FleetPane({ agents, focusedAgentId, onFocus, onSpawn, onStop, onOpenChat }: FleetPaneProps): JSX.Element {
   const [spawning, setSpawning] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [provider, setProvider] = useState<AgentProvider>(DEFAULT_PROVIDER);
@@ -229,6 +192,13 @@ export function FleetPane({ agents, focusedAgentId, onFocus, onSpawn, onStop }: 
                   a governance control that is present but clipped is worse
                   than absent — it looks available and is not. The label beside
                   it truncates instead, which is what `min-w-0` above unlocks. */}
+              {onOpenChat !== undefined && (
+                <span className="shrink-0">
+                  <Button variant="ghost" size="sm" aria-label={`Open chat with ${agent.displayName}`} onClick={() => onOpenChat(agent.agentId)}>
+                    <MessageSquare size={14} aria-hidden="true" />
+                  </Button>
+                </span>
+              )}
               {!isStopped && (
                 <span className="shrink-0">
                   <Button variant="danger" size="sm" aria-label={`Stop ${agent.displayName}`} onClick={() => onStop(agent.agentId)}>
