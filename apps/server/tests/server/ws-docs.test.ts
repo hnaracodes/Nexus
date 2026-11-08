@@ -36,6 +36,7 @@ const KEY = 'sk-ant-api03-TESTONLY-not-a-real-key';
 
 let port = 0;
 let started: ReturnType<typeof createServer>;
+const openSockets: WebSocket[] = [];
 
 beforeAll(async () => {
   started = createServer();
@@ -48,6 +49,9 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  // Close every client first: `server.close()` waits for open connections, so a
+  // test that failed before its own `socket.close()` would otherwise hang here.
+  for (const s of openSockets) s.terminate();
   await new Promise<void>((resolve) => started.server.close(() => resolve()));
 });
 
@@ -80,6 +84,7 @@ function connect(room: ReturnType<typeof createRoom>, name: string): Promise<{
 }> {
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(`ws://127.0.0.1:${port}/ws?room=${room.id}&token=${room.token}&name=${name}`);
+    openSockets.push(socket);
     const frames: ServerFrame[] = [];
     socket.on('message', (data) => frames.push(JSON.parse(String(data)) as ServerFrame));
     socket.on('open', () => resolve({ socket, frames }));
@@ -88,6 +93,18 @@ function connect(room: ReturnType<typeof createRoom>, name: string): Promise<{
 }
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 80));
+
+/** Poll until `predicate` holds. Use this, not `settle()`, wherever a frame is
+ *  EXPECTED: the first `doc_open` in a process pays Automerge's WASM start-up and
+ *  routinely misses a fixed 80ms window. `settle()` stays for "must NOT arrive"
+ *  assertions, where there is nothing to wait for. */
+async function waitFor(predicate: () => boolean, timeoutMs = 5000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate()) {
+    if (Date.now() > deadline) return; // let the caller's expect() report it
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
 
 function docSyncFrames(frames: ServerFrame[], path: string): Array<Extract<ServerFrame, { kind: 'doc_sync' }>> {
   return frames.filter((f): f is Extract<ServerFrame, { kind: 'doc_sync' }> => f.kind === 'doc_sync' && f.path === path);
@@ -132,7 +149,8 @@ describe('phase-11 doc_* frame routing', () => {
     await settle();
 
     a.socket.send(JSON.stringify({ kind: 'doc_open', path: 'a.ts' }));
-    await settle();
+    await waitFor(() => docSyncFrames(a.frames, 'a.ts').length >= 1);
+    await settle(); // give a misrouted frame to Grace time to show up
 
     expect(docSyncFrames(a.frames, 'a.ts')).toHaveLength(1);
     // Grace never opened the path, so she must not see it at all.
@@ -151,7 +169,9 @@ describe('phase-11 doc_* frame routing', () => {
 
     a.socket.send(JSON.stringify({ kind: 'doc_open', path: 'shared.txt' }));
     b.socket.send(JSON.stringify({ kind: 'doc_open', path: 'shared.txt' }));
-    await settle();
+    await waitFor(
+      () => docSyncFrames(a.frames, 'shared.txt').length >= 1 && docSyncFrames(b.frames, 'shared.txt').length >= 1,
+    );
 
     const initialA = docSyncFrames(a.frames, 'shared.txt')[0];
     const initialB = docSyncFrames(b.frames, 'shared.txt')[0];
@@ -200,7 +220,9 @@ describe('phase-11 doc_* frame routing', () => {
 
     a.socket.send(JSON.stringify({ kind: 'doc_open', path: 'shared.txt' }));
     b.socket.send(JSON.stringify({ kind: 'doc_open', path: 'shared.txt' }));
-    await settle();
+    await waitFor(
+      () => docSyncFrames(a.frames, 'shared.txt').length >= 1 && docSyncFrames(b.frames, 'shared.txt').length >= 1,
+    );
 
     const initialA = docSyncFrames(a.frames, 'shared.txt')[0]!;
     const peerA = new FakeDocPeer(initialA.payload);
@@ -235,7 +257,9 @@ describe('phase-11 doc_* frame routing', () => {
 
     a.socket.send(JSON.stringify({ kind: 'doc_open', path: 'shared.txt' }));
     b.socket.send(JSON.stringify({ kind: 'doc_open', path: 'shared.txt' }));
-    await settle();
+    await waitFor(
+      () => docSyncFrames(a.frames, 'shared.txt').length >= 1 && docSyncFrames(b.frames, 'shared.txt').length >= 1,
+    );
 
     a.socket.send(JSON.stringify({ kind: 'doc_presence', path: 'shared.txt', anchor: 3, head: 3 }));
     await settle();

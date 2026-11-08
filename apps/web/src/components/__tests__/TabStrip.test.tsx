@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { AGENTS_TAB_ID, TabStrip, isTabDirty } from '../TabStrip.js';
 import type { OpenTab } from '../TabStrip.js';
 
@@ -139,6 +139,11 @@ describe('isTabDirty', () => {
  * middle one, is the smallest case that tells them apart.
  */
 describe('closeTabState — which tab takes focus', () => {
+  // App.js is the whole shell (CodeMirror, the builder, every pane); a cold
+  // import under a parallel suite can exceed the 5s TEST timeout on its own.
+  // Load it once here, on a hook budget, so the tests measure only the rule.
+  beforeAll(() => import('../../App.js'), 30_000);
+
   it('activates the tab to the RIGHT when the closed one had a right neighbour', async () => {
     const { closeTabState } = await import('../../App.js');
 

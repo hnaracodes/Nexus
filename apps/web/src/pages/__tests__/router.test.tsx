@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 // resolveRoute is tested against the isolated `routing.js` module rather than
 // `router.js` directly: router.tsx statically imports Landing/Privacy/Terms/
 // Security/App, several of which are owned and built by sibling agents
@@ -62,6 +62,10 @@ describe('resolveRoute', () => {
  * page — just not this one.
  */
 describe('the router actually dispatches each route', () => {
+  // router.js statically pulls in every page; a cold import under a parallel
+  // suite can exceed the 5s TEST timeout. Warm it on a hook budget instead.
+  beforeAll(() => Promise.all([import('../../router.js'), import('@testing-library/react')]), 30_000);
+
   it('renders the download page at /download rather than falling through to the landing page', async () => {
     const { render, screen } = await import('@testing-library/react');
     const { Router } = await import('../../router.js');
