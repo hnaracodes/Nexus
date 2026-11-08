@@ -221,7 +221,7 @@ describe('App — phase 7 workspace and prompt dock', () => {
     act(() => FakeSocket.last?.onopen?.());
     identify();
     expect(screen.getByRole('tab', { name: 'Explorer' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Changes' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Source Control' })).toBeInTheDocument();
   });
 
   it('sends a set_model frame when the model is switched', () => {
@@ -281,7 +281,7 @@ describe('App — phase 17a VS Code shell', () => {
     // Explorer is the default view — its file tree is on screen.
     expect(screen.getByRole('tree', { name: /workspace files/i })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Changes' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Source Control' }));
     expect(screen.queryByRole('tree', { name: /workspace files/i })).not.toBeInTheDocument();
     // ChangesTab's approval history renders synchronously off the log (no
     // fetch involved) — asserting on it, rather than the git-status section,
@@ -295,10 +295,10 @@ describe('App — phase 17a VS Code shell', () => {
     act(() => FakeSocket.last?.onopen?.());
     identify();
 
-    // Start on Explorer; a fresh approval must switch the room here WITHOUT
-    // a click — the room's whole premise is that nobody can miss a pending
-    // decision (§1/§11).
-    expect(screen.getByRole('tab', { name: 'Explorer' })).toHaveAttribute('aria-selected', 'true');
+    // Start on Chat in the right-hand aux bar; a fresh approval must switch
+    // the room to Approvals WITHOUT a click — the room's whole premise is that
+    // nobody can miss a pending decision (§1/§11).
+    expect(screen.getByRole('tab', { name: 'Chat' })).toHaveAttribute('aria-selected', 'true');
 
     deliver(
       event({

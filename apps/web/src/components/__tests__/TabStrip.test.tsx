@@ -1,16 +1,16 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { TabStrip, isTabDirty } from '../TabStrip.js';
+import { AGENTS_TAB_ID, TabStrip, isTabDirty } from '../TabStrip.js';
+import type { OpenTab } from '../TabStrip.js';
+
+const file = (id: string, dirty = false): OpenTab => ({ id, kind: 'file', dirty });
 
 describe('TabStrip', () => {
   it('renders one tab per open file, showing the basename', () => {
     render(
       <TabStrip
-        tabs={[
-          { path: 'src/App.tsx', dirty: false },
-          { path: 'README.md', dirty: false },
-        ]}
-        activePath="src/App.tsx"
+        tabs={[file('src/App.tsx'), file('README.md')]}
+        activeId="src/App.tsx"
         onSelect={vi.fn()}
         onClose={vi.fn()}
       />,
@@ -20,31 +20,14 @@ describe('TabStrip', () => {
   });
 
   it('marks the active tab selected', () => {
-    render(
-      <TabStrip
-        tabs={[
-          { path: 'a.ts', dirty: false },
-          { path: 'b.ts', dirty: false },
-        ]}
-        activePath="b.ts"
-        onSelect={vi.fn()}
-        onClose={vi.fn()}
-      />,
-    );
+    render(<TabStrip tabs={[file('a.ts'), file('b.ts')]} activeId="b.ts" onSelect={vi.fn()} onClose={vi.fn()} />);
     expect(screen.getByRole('tab', { name: /a\.ts/ })).toHaveAttribute('aria-selected', 'false');
     expect(screen.getByRole('tab', { name: /b\.ts/ })).toHaveAttribute('aria-selected', 'true');
   });
 
   it('reports a click as a select', () => {
     const onSelect = vi.fn();
-    render(
-      <TabStrip
-        tabs={[{ path: 'a.ts', dirty: false }]}
-        activePath={null}
-        onSelect={onSelect}
-        onClose={vi.fn()}
-      />,
-    );
+    render(<TabStrip tabs={[file('a.ts')]} activeId={null} onSelect={onSelect} onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole('tab', { name: /a\.ts/ }));
     expect(onSelect).toHaveBeenCalledWith('a.ts');
   });
@@ -52,34 +35,82 @@ describe('TabStrip', () => {
   it('closes the clicked tab without also selecting it', () => {
     const onSelect = vi.fn();
     const onClose = vi.fn();
-    render(
-      <TabStrip
-        tabs={[{ path: 'a.ts', dirty: false }]}
-        activePath="a.ts"
-        onSelect={onSelect}
-        onClose={onClose}
-      />,
-    );
+    render(<TabStrip tabs={[file('a.ts')]} activeId="a.ts" onSelect={onSelect} onClose={onClose} />);
     fireEvent.click(screen.getByRole('button', { name: /close a\.ts/i }));
     expect(onClose).toHaveBeenCalledWith('a.ts');
     expect(onSelect).not.toHaveBeenCalled();
   });
 
-  it('shows an unsaved-changes marker on a dirty tab', () => {
+  it('closes a tab on middle-click (auxclick button 1) and ignores other aux buttons', () => {
+    const onClose = vi.fn();
+    const onSelect = vi.fn();
+    render(<TabStrip tabs={[file('a.ts')]} activeId={null} onSelect={onSelect} onClose={onClose} />);
+    const tab = screen.getByRole('tab', { name: /a\.ts/ });
+    fireEvent(tab, new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 2 }));
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent(tab, new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 1 }));
+    expect(onClose).toHaveBeenCalledWith('a.ts');
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('prevents the browser autoscroll on a middle mousedown', () => {
+    render(<TabStrip tabs={[file('a.ts')]} activeId={null} onSelect={vi.fn()} onClose={vi.fn()} />);
+    const down = new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 1 });
+    screen.getByRole('tab', { name: /a\.ts/ }).dispatchEvent(down);
+    expect(down.defaultPrevented).toBe(true);
+  });
+
+  it('shows an unsaved-changes dot on a dirty tab, and still offers the close button', () => {
+    render(<TabStrip tabs={[file('a.ts', true)]} activeId="a.ts" onSelect={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByLabelText(/a\.ts has unsaved changes/i)).toBeInTheDocument();
+    // The close button is in the DOM (revealed on hover in place of the dot).
+    expect(screen.getByRole('button', { name: /close a\.ts/i })).toBeInTheDocument();
+  });
+
+  it('does not show a dirty dot on a clean tab', () => {
+    render(<TabStrip tabs={[file('a.ts')]} activeId="a.ts" onSelect={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.queryByLabelText(/unsaved changes/i)).toBeNull();
+  });
+
+  it('renders the Agents tab as "Agents", selectable and closable like any tab', () => {
+    const onSelect = vi.fn();
+    const onClose = vi.fn();
     render(
       <TabStrip
-        tabs={[{ path: 'a.ts', dirty: true }]}
-        activePath="a.ts"
-        onSelect={vi.fn()}
-        onClose={vi.fn()}
+        tabs={[file('a.ts'), { id: AGENTS_TAB_ID, kind: 'agents', dirty: false }]}
+        activeId={AGENTS_TAB_ID}
+        onSelect={onSelect}
+        onClose={onClose}
       />,
     );
-    expect(screen.getByLabelText(/a\.ts has unsaved changes/i)).toBeInTheDocument();
+    const agents = screen.getByRole('tab', { name: /agents/i });
+    expect(agents).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(screen.getByRole('button', { name: /close agents/i }));
+    expect(onClose).toHaveBeenCalledWith(AGENTS_TAB_ID);
+  });
+
+  it('renders title actions to the right of the tabs', () => {
+    render(
+      <TabStrip
+        tabs={[file('a.md')]}
+        activeId="a.md"
+        onSelect={vi.fn()}
+        onClose={vi.fn()}
+        actions={<button type="button">Open Preview</button>}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Open Preview' })).toBeInTheDocument();
   });
 
   it('shows a placeholder when nothing is open', () => {
-    render(<TabStrip tabs={[]} activePath={null} onSelect={vi.fn()} onClose={vi.fn()} />);
+    render(<TabStrip tabs={[]} activeId={null} onSelect={vi.fn()} onClose={vi.fn()} />);
     expect(screen.getByText(/no files open/i)).toBeInTheDocument();
+  });
+});
+
+describe('AGENTS_TAB_ID', () => {
+  it('can never equal a workspace-relative path (it contains NUL)', () => {
+    expect(AGENTS_TAB_ID).toContain('\u0000');
   });
 });
 
@@ -141,10 +172,19 @@ describe('closeTabState — which tab takes focus', () => {
     expect(closeTabState({ paths: ['a'], active: 'a' }, 'a')).toEqual({ paths: [], active: null });
   });
 
-  it('ignores a path that is not open', async () => {
+  it('ignores an id that is not open', async () => {
     const { closeTabState } = await import('../../App.js');
     const state = { paths: ['a'], active: 'a' };
 
     expect(closeTabState(state, 'zzz')).toBe(state);
+  });
+
+  it('works on the Agents tab id too, keeping the file tabs', async () => {
+    const { closeTabState } = await import('../../App.js');
+
+    expect(closeTabState({ paths: ['a.ts', AGENTS_TAB_ID, 'b.ts'], active: AGENTS_TAB_ID }, AGENTS_TAB_ID)).toEqual({
+      paths: ['a.ts', 'b.ts'],
+      active: 'b.ts',
+    });
   });
 });

@@ -1,7 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { AgentId } from '@syncode/protocol/events';
-import type { FleetEntry } from '@syncode/protocol/wire';
 import { SideBar } from '../SideBar.js';
 import type { SideBarProps } from '../SideBar.js';
 import type { WorkspaceApi } from '../../workspace/workspaceApi.js';
@@ -14,6 +12,7 @@ function makeApi(tree: Record<string, TreeEntry[]> = {}): WorkspaceApi {
     getGitStatus: vi.fn().mockResolvedValue([]),
     getGitDiff: vi.fn().mockResolvedValue({ path: '', diff: '' }),
     getModels: vi.fn().mockResolvedValue([]),
+    getFileBlob: vi.fn().mockRejectedValue(new Error('no raw route')),
   };
 }
 
@@ -26,24 +25,13 @@ function baseProps(overrides: Partial<SideBarProps> = {}): SideBarProps {
     onSelectFile: vi.fn(),
     autoFollow: true,
     onToggleFollow: vi.fn(),
-    fleetAgents: [],
-    focusedAgentId: null,
-    onFocusAgent: vi.fn(),
-    onSpawnAgent: vi.fn(),
-    onStopAgent: vi.fn(),
-    hasFleet: false,
-    fleetApprovals: [],
-    singleApprovals: [],
-    now: 0,
-    onDecideFleet: vi.fn(),
-    onDecideSingle: vi.fn(),
     changesEvents: [],
     gitStatus: { status: 'ready', entries: [] },
     ...overrides,
   };
 }
 
-describe('SideBar', () => {
+describe('SideBar (left: files only)', () => {
   it('shows the file tree in the explorer view', async () => {
     const api = makeApi({ '': [{ name: 'README.md', path: 'README.md', type: 'file', size: 1 }] });
     render(<SideBar {...baseProps({ view: 'explorer', workspaceApi: api })} />);
@@ -57,45 +45,46 @@ describe('SideBar', () => {
     expect(onToggleFollow).toHaveBeenCalled();
   });
 
-  it('shows the fleet in the fleet view', () => {
-    const agents: FleetEntry[] = [
-      {
-        agentId: 'agent_1' as AgentId,
-        displayName: 'Reviewer',
-        provider: 'anthropic',
-        model: null,
-        status: 'idle',
-        pendingApprovals: 0,
-        queuedPrompts: 0,
-      },
-    ];
-    render(<SideBar {...baseProps({ view: 'fleet', fleetAgents: agents, hasFleet: true })} />);
-    expect(screen.getByText('Reviewer')).toBeInTheDocument();
+  it('shows the source control view', () => {
+    render(<SideBar {...baseProps({ view: 'changes', gitStatus: { status: 'ready', entries: [] } })} />);
+    expect(screen.getByText(/no uncommitted changes/i)).toBeInTheDocument();
   });
 
-  it('shows single-agent approval cards when there is no fleet', () => {
+  it('a changed file in Source Control reports its path to open it and reveal the diff', () => {
+    const onOpenChangedFile = vi.fn();
     render(
       <SideBar
         {...baseProps({
-          view: 'approvals',
-          hasFleet: false,
-          singleApprovals: [
-            { requestId: 'req_1', toolName: 'Bash', input: { command: 'ls' }, expiresAt: 60_000 },
-          ],
-          now: 0,
+          view: 'changes',
+          gitStatus: { status: 'ready', entries: [{ path: 'src/a.ts', status: 'M' }] },
+          onOpenChangedFile,
         })}
       />,
     );
-    expect(screen.getByText('Bash')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /src\/a\.ts/ }));
+    expect(onOpenChangedFile).toHaveBeenCalledWith('src/a.ts');
   });
 
-  it('shows "no pending approvals" when there is nothing to decide', () => {
-    render(<SideBar {...baseProps({ view: 'approvals', hasFleet: false, singleApprovals: [] })} />);
-    expect(screen.getByText(/no pending approvals/i)).toBeInTheDocument();
+  it('search filters file names and opens the clicked result', async () => {
+    const onSelectFile = vi.fn();
+    const api = makeApi({
+      '': [
+        { name: 'src', path: 'src', type: 'directory' },
+        { name: 'README.md', path: 'README.md', type: 'file', size: 1 },
+      ],
+      src: [{ name: 'app.ts', path: 'src/app.ts', type: 'file', size: 1 }],
+    });
+    render(<SideBar {...baseProps({ view: 'search', workspaceApi: api, onSelectFile })} />);
+    fireEvent.change(screen.getByLabelText(/search file names/i), { target: { value: 'app' } });
+    const result = await screen.findByRole('button', { name: /app\.ts/ });
+    expect(screen.queryByRole('button', { name: /README/ })).toBeNull();
+    fireEvent.click(result);
+    expect(onSelectFile).toHaveBeenCalledWith('src/app.ts');
   });
 
-  it('shows the changes tab in the changes view', () => {
-    render(<SideBar {...baseProps({ view: 'changes', gitStatus: { status: 'ready', entries: [] } })} />);
-    expect(screen.getByText(/no uncommitted changes/i)).toBeInTheDocument();
+  it('no longer hosts the fleet or approvals (they moved to the right bar)', () => {
+    render(<SideBar {...baseProps({ view: 'explorer' })} />);
+    expect(screen.queryByText(/no pending approvals/i)).toBeNull();
+    expect(screen.queryByLabelText(/approvals across the fleet/i)).toBeNull();
   });
 });

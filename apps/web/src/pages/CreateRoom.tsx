@@ -255,7 +255,7 @@ export function CreateRoom({ onCreated }: { onCreated: (link: string) => void })
                 className="flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-[10px] border border-border-strong bg-surface-2 px-3 text-sm font-medium text-fg transition-colors duration-150 ease-out hover:bg-muted hover:border-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
               >
                 {copied ? (
-                  <Check size={16} strokeWidth={2} className="text-accent" aria-hidden="true" />
+                  <Check size={16} strokeWidth={2} className="text-accent-fg" aria-hidden="true" />
                 ) : (
                   <Link2 size={16} strokeWidth={2} aria-hidden="true" />
                 )}
@@ -274,7 +274,7 @@ export function CreateRoom({ onCreated }: { onCreated: (link: string) => void })
 
           <a
             href={link}
-            className="flex min-h-11 items-center justify-center rounded-[10px] bg-accent px-4 text-center font-medium text-on-accent shadow-[inset_0_1px_0_rgba(255,255,255,0.22)] transition-[filter,transform] duration-150 ease-out hover:brightness-110 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+            className="flex min-h-11 items-center justify-center rounded-[10px] bg-accent px-4 text-center font-medium text-on-accent transition-[filter,transform] duration-150 ease-out hover:brightness-110 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
           >
             Enter the room
           </a>
@@ -289,8 +289,8 @@ export function CreateRoom({ onCreated }: { onCreated: (link: string) => void })
           provisioning a machine, and the page should feel like the tool it is
           rather than a marketing form wearing a dark theme. */}
       <p className="mb-3 font-mono text-xs text-fg-muted">
-        <span className="text-accent">$</span> nexus create-room
-        <span className="animate-nexus-caret text-accent"> ▍</span>
+        <span className="text-accent-fg">$</span> nexus create-room
+        <span className="animate-nexus-caret text-accent-fg"> ▍</span>
       </p>
       <h1 className="mb-2 text-2xl font-semibold tracking-tight text-fg">Open a SynCode room</h1>
       <p className="mb-6 text-fg-muted">
@@ -517,7 +517,7 @@ export function CreateRoom({ onCreated }: { onCreated: (link: string) => void })
           <button
             type="submit"
             disabled={busy}
-            className="flex min-h-11 items-center justify-center gap-2 rounded bg-accent px-4 py-2 font-medium text-bg transition-colors duration-150 ease-out hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+            className="flex min-h-11 items-center justify-center gap-2 rounded bg-accent px-4 py-2 font-medium text-on-accent transition-colors duration-150 ease-out hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
           >
             {busy && (
               <Loader2 size={16} strokeWidth={2} className="animate-spin" aria-hidden="true" />

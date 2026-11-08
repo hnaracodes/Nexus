@@ -14,6 +14,12 @@ export interface WorkspaceApi {
   getGitStatus(): Promise<GitStatusEntry[]>;
   getGitDiff(path: string): Promise<GitDiffResult>;
   getModels(): Promise<ModelInfo[]>;
+  /**
+   * The raw bytes of a file, for image preview. NOTE: the server route
+   * (`GET /workspace/raw?path=`) and a CSP `img-src blob:` do not exist yet —
+   * callers MUST degrade gracefully when this rejects (a 404 today).
+   */
+  getFileBlob(path: string): Promise<Blob>;
 }
 
 /**
@@ -86,6 +92,17 @@ export function createWorkspaceApi(config: WorkspaceApiConfig): WorkspaceApi {
         `/git/diff?path=${encodeURIComponent(path)}`,
       );
       return { path, diff: body.diff };
+    },
+    async getFileBlob(path: string): Promise<Blob> {
+      const fetchImpl = config.fetchImpl ?? globalThis.fetch;
+      const response = await fetchImpl(
+        `/api/rooms/${encodeURIComponent(config.roomId)}/workspace/raw?path=${encodeURIComponent(path)}`,
+        { headers: { 'X-SynCode-Token': config.token } },
+      );
+      if (!response.ok) {
+        throw new WorkspaceError(`Request failed with status ${response.status}`, response.status);
+      }
+      return response.blob();
     },
     async getModels(): Promise<ModelInfo[]> {
       const body = await request<{ models: ModelInfo[] }>(config, '/models');

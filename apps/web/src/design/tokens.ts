@@ -3,39 +3,71 @@
  * CSS consumes these through the custom properties in index.css; TypeScript
  * consumes them here. Two copies of the same values is deliberate — Tailwind
  * cannot read a .ts file at build time without a plugin, and a plugin is a
- * larger dependency than a twelve-line duplicate.
+ * larger dependency than a duplicate (guarded by pages/__tests__/tokens.test.ts).
  */
 export const COLORS = {
-  bg: '#131316',
-  surface: '#1A1A1E',
-  surface2: '#24242A',
-  muted: '#1E1E23',
-  border: '#2E2E36',
+  /* VS Code Dark+ / Dark Modern. Values only change here; names are stable. */
+  bg: '#1E1E1E',
+  surface: '#252526',
+  surface2: '#2A2D2E',
+  muted: '#2D2D2D',
+  border: '#3C3C3C',
   /* Interactive boundaries only — WCAG 1.4.11 wants 3:1 on anything a person
      can operate. `border` is a divider and is deliberately below that. */
-  borderStrong: '#6A6A75',
-  fg: '#E8E8EC',
-  fgMuted: '#9B9BA6',
-  /* Ember owns interactive/identity; `success` owns approved/running. Splitting
-     them is semantic, not decorative — see index.css for the reasoning. */
-  accent: '#F0883E',
-  accentDim: '#3A2113',
-  onAccent: '#14100B',
-  success: '#46C46A',
-  /* Landing spectrum. The room uses `accent` alone; marketing opens out into
-     all four. Never used alone for body text on --bg; the headline gradient is
-     large-text only (3:1 floor). */
-  accent2: '#E879F9',
-  accent3: '#A78BFA',
-  lime: '#A3E635',
-  /* The blob character. Deliberately outside the brand spectrum — he is a
-     character in the product, not a piece of its chrome. */
+  borderStrong: '#6E6E6E',
+  fg: '#CCCCCC',
+  fgMuted: '#9D9D9D',
+  /* `accent` is a FILL (buttons, badges, top bars). It is only 3.6:1 on `bg`,
+     so accent-coloured TEXT uses `accentFg`. `success` owns approved/running. */
+  accent: '#0078D4',
+  accentDim: '#04395E',
+  onAccent: '#FFFFFF',
+  success: '#89D185',
+  /* Marketing spectrum, all drawn from the Dark+ syntax palette. */
+  accent2: '#C586C0',
+  accent3: '#569CD6',
+  lime: '#B5CEA8',
+  /* The blob character. Deliberately outside the brand spectrum. */
   nexus: '#5AA9FF',
-  warn: '#E3B341',
-  /* Rose, not red: a true red sits 1.2:1 from ember and the two become
-     indistinguishable from each other. */
-  danger: '#FB7185',
-  info: '#58B8F0',
+  warn: '#CCA700',
+  danger: '#F48771',
+  info: '#3794FF',
+
+  /* --- shell tokens (phase 18b) --- */
+  accentFg: '#3794FF',
+  accentHover: '#1177BB',
+  activity: '#333333',
+  activityFg: '#858585',
+  activityFgActive: '#FFFFFF',
+  titlebar: '#3C3C3C',
+  tabStrip: '#252526',
+  tabInactive: '#2D2D2D',
+  tabActive: '#1E1E1E',
+  status: '#007ACC',
+  statusFg: '#FFFFFF',
+  statusAlert: '#9E6A03',
+  statusError: '#C72E0F',
+  input: '#3C3C3C',
+  selection: '#264F78',
+
+  /* --- COLORS-only (no CSS var): CodeMirror Dark+ --- */
+  synKeyword: '#569CD6',
+  synControl: '#C586C0',
+  synString: '#CE9178',
+  synComment: '#6A9955',
+  synNumber: '#B5CEA8',
+  synType: '#4EC9B0',
+  synFunction: '#DCDCAA',
+  synVariable: '#9CDCFE',
+  synConstant: '#4FC1FF',
+  synRegexp: '#D16969',
+  synOperator: '#D4D4D4',
+  synCursor: '#AEAFAD',
+  editorLineHighlight: '#FFFFFF0A',
+  editorGutterFg: '#858585',
+  editorGutterActiveFg: '#C6C6C6',
+  editorBracketMatchBg: '#0064001A',
+  editorBracketMatchBorder: '#888888',
 } as const;
 
 /**

@@ -1,9 +1,20 @@
-import { X } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { Network, X } from 'lucide-react';
+
+/**
+ * The reserved id of the Agents tab. Workspace paths are relative, NUL-free
+ * strings, so an id containing NUL can never equal one — a file tab and the
+ * Agents tab can never collide in the open-tabs list.
+ */
+export const AGENTS_TAB_ID = '\u0000syncode:agents';
 
 export interface OpenTab {
-  path: string;
+  /** For a file tab this IS the workspace-relative path; the Agents tab uses `AGENTS_TAB_ID`. */
+  id: string;
+  kind: 'file' | 'agents';
   /** Diverges from what the tab's own file cache last saw on disk. See
-   *  `isTabDirty` below for exactly what that means and its limits. */
+   *  `isTabDirty` below for exactly what that means and its limits. Never
+   *  true for the Agents tab. */
   dirty: boolean;
 }
 
@@ -15,76 +26,93 @@ function basename(path: string): string {
 }
 
 /**
- * Region C: the open-files tab strip above the editor. Purely presentational
- * — `App.tsx` owns which paths are open and which is active, the same
- * controlled-list shape `FleetPane`'s `focusedAgentId`/`onFocus` already
- * uses. Closing a tab never implicitly changes another tab's identity; the
- * caller decides what becomes active next.
+ * Region C: the open-editors tab strip, VS Code style. Purely presentational —
+ * `App.tsx` owns which tabs are open and which is active. The active tab takes
+ * the editor's own background with a 1px accent line on top; inactive tabs are
+ * dimmer. A dirty tab shows a dot that swaps for the close button on hover.
+ * Middle-click closes. `actions` renders to the right (editor title actions,
+ * such as "Open Preview").
  */
 export function TabStrip({
   tabs,
-  activePath,
+  activeId,
   onSelect,
   onClose,
+  actions,
 }: {
   tabs: OpenTab[];
-  activePath: string | null;
-  onSelect: (path: string) => void;
-  onClose: (path: string) => void;
+  activeId: string | null;
+  onSelect: (id: string) => void;
+  onClose: (id: string) => void;
+  actions?: ReactNode;
 }): JSX.Element {
   return (
-    <div
-      role="tablist"
-      aria-label="Open files"
-      className="flex min-h-9 items-stretch overflow-x-auto border-b border-border bg-surface"
-    >
-      {tabs.length === 0 && (
-        <span className="flex items-center px-3 text-xs text-fg-muted">No files open.</span>
-      )}
-      {tabs.map(({ path, dirty }) => {
-        const isActive = path === activePath;
-        const name = basename(path);
-        return (
-          <div
-            key={path}
-            role="tab"
-            aria-selected={isActive}
-            title={path}
-            tabIndex={0}
-            onClick={() => onSelect(path)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault();
-                onSelect(path);
-              }
-            }}
-            className={`group flex min-w-0 max-w-[200px] shrink-0 cursor-pointer items-center gap-1.5 border-r border-border px-2.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset ${
-              isActive
-                ? 'border-b-2 border-b-accent bg-bg text-fg'
-                : 'border-b-2 border-b-transparent text-fg-muted hover:bg-surface-2 hover:text-fg'
-            }`}
-          >
-            <span className="truncate font-mono">{name}</span>
-            {dirty && (
-              <span
-                aria-label={`${name} has unsaved changes`}
-                className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent"
-              />
-            )}
-            <button
-              type="button"
-              aria-label={`Close ${name}`}
-              onClick={(event) => {
-                event.stopPropagation();
-                onClose(path);
+    <div className="flex h-[35px] shrink-0 items-stretch bg-tab-strip">
+      <div role="tablist" aria-label="Open editors" className="flex min-w-0 flex-1 items-stretch overflow-x-auto">
+        {tabs.length === 0 && (
+          <span className="flex items-center px-3 text-xs text-fg-muted">No files open.</span>
+        )}
+        {tabs.map(({ id, kind, dirty }) => {
+          const isActive = id === activeId;
+          const name = kind === 'agents' ? 'Agents' : basename(id);
+          return (
+            <div
+              key={id}
+              role="tab"
+              aria-selected={isActive}
+              title={kind === 'agents' ? 'Agents' : id}
+              tabIndex={0}
+              onClick={() => onSelect(id)}
+              onMouseDown={(event) => {
+                // Middle button would otherwise start browser autoscroll.
+                if (event.button === 1) event.preventDefault();
               }}
-              className="ml-auto flex h-5 w-5 shrink-0 items-center justify-center rounded text-fg-muted opacity-0 hover:bg-surface-2 hover:text-fg focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent group-hover:opacity-100"
+              onAuxClick={(event) => {
+                if (event.button === 1) {
+                  event.preventDefault();
+                  onClose(id);
+                }
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  onSelect(id);
+                }
+              }}
+              className={`group flex min-w-0 max-w-[200px] shrink-0 cursor-pointer items-center gap-1.5 border-r border-t border-r-border pl-3 pr-1.5 text-[13px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-accent ${
+                isActive
+                  ? 'border-t-accent bg-tab-active text-fg'
+                  : 'border-t-transparent bg-tab-inactive text-fg-muted hover:text-fg'
+              }`}
             >
-              <X size={12} aria-hidden="true" />
-            </button>
-          </div>
-        );
-      })}
+              {kind === 'agents' && <Network size={14} className="shrink-0" aria-hidden="true" />}
+              <span className={`truncate ${kind === 'agents' ? '' : 'font-mono text-xs'}`}>{name}</span>
+              <span className="relative flex h-5 w-5 shrink-0 items-center justify-center">
+                {dirty && (
+                  <span
+                    aria-label={`${name} has unsaved changes`}
+                    className="h-2 w-2 rounded-full bg-fg group-hover:hidden"
+                  />
+                )}
+                <button
+                  type="button"
+                  aria-label={`Close ${name}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onClose(id);
+                  }}
+                  className={`h-5 w-5 items-center justify-center rounded text-fg-muted hover:bg-surface-2 hover:text-fg focus-visible:flex focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent group-hover:flex ${
+                    dirty ? 'hidden' : isActive ? 'flex' : 'flex opacity-0 group-hover:opacity-100'
+                  }`}
+                >
+                  <X size={14} aria-hidden="true" />
+                </button>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      {actions !== undefined && <div className="flex shrink-0 items-center gap-1 px-2">{actions}</div>}
     </div>
   );
 }

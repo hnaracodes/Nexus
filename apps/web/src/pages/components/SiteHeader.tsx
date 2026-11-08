@@ -61,7 +61,7 @@ export function SiteHeader(): JSX.Element {
     <>
       <a
         href="#main"
-        className="fixed left-2 top-2 z-50 -translate-y-16 rounded bg-accent px-4 py-2 text-sm font-medium text-bg transition-transform focus:translate-y-0"
+        className="fixed left-2 top-2 z-50 -translate-y-16 rounded bg-accent px-4 py-2 text-sm font-medium text-on-accent transition-transform focus:translate-y-0"
       >
         Skip to content
       </a>
@@ -88,7 +88,7 @@ export function SiteHeader(): JSX.Element {
             ))}
             <a
               href="/new"
-              className="min-h-[44px] rounded-md bg-accent px-4 py-2 text-sm font-medium leading-[28px] text-bg transition-colors duration-150 hover:bg-accent-dim hover:text-fg"
+              className="min-h-[44px] rounded-md bg-accent px-4 py-2 text-sm font-medium leading-[28px] text-on-accent transition-colors duration-150 hover:bg-accent-hover"
             >
               Open a room
             </a>
@@ -127,7 +127,7 @@ export function SiteHeader(): JSX.Element {
               <a
                 href="/new"
                 onClick={() => setMenuOpen(false)}
-                className="mt-2 rounded-md bg-accent px-4 py-3 text-center text-sm font-medium text-bg"
+                className="mt-2 rounded-md bg-accent px-4 py-3 text-center text-sm font-medium text-on-accent"
               >
                 Open a room
               </a>

@@ -24,6 +24,23 @@ describe('workspaceApi', () => {
     expect((init.headers as Record<string, string>)['X-SynCode-Token']).toBe('tok');
   });
 
+  it('getFileBlob sends the token header (never a query param) and returns the bytes', async () => {
+    fetchImpl.mockResolvedValue(new Response('png-bytes', { status: 200 }));
+    const api = createWorkspaceApi({ roomId: 'r1', token: 'tok', fetchImpl });
+    const blob = await api.getFileBlob('img/a b.png');
+    const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('/api/rooms/r1/workspace/raw?path=img%2Fa%20b.png');
+    expect(url).not.toContain('tok');
+    expect((init.headers as Record<string, string>)['X-SynCode-Token']).toBe('tok');
+    expect(await blob.text()).toBe('png-bytes');
+  });
+
+  it('getFileBlob rejects with a WorkspaceError on a non-ok response', async () => {
+    fetchImpl.mockResolvedValue(new Response('nope', { status: 404 }));
+    const api = createWorkspaceApi({ roomId: 'r1', token: 'tok', fetchImpl });
+    await expect(api.getFileBlob('a.png')).rejects.toBeInstanceOf(WorkspaceError);
+  });
+
   it('sends the X-SynCode-Token header on getFile', async () => {
     fetchImpl.mockResolvedValue(jsonResponse({ kind: 'text', content: 'hi' }));
     const api = createWorkspaceApi({ roomId: 'r1', token: 'tok', fetchImpl });

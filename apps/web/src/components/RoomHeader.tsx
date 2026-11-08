@@ -77,21 +77,21 @@ export function RoomHeader({
   }
 
   return (
-    <header className="sticky top-0 z-10 flex min-h-[56px] items-center justify-between gap-4 border-b border-border bg-surface px-4 py-2">
+    <header className="sticky top-0 z-10 flex h-8 shrink-0 items-center justify-between gap-4 border-b border-border bg-titlebar px-3">
       <div className="flex min-w-0 items-center gap-3">
-        <span className="shrink-0 text-lg font-semibold text-fg">SynCode</span>
-        <span className="truncate text-sm text-fg-muted">{roomLabel}</span>
+        <span className="shrink-0 text-[13px] font-semibold text-fg">SynCode</span>
+        <span className="truncate text-xs text-fg-muted">{roomLabel}</span>
         <button
           type="button"
           onClick={() => void handleCopyLink()}
           aria-label="Copy room link"
           title="Copy room link"
-          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded text-fg-muted hover:text-fg focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+          className="flex h-6 w-6 items-center justify-center rounded text-fg-muted hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
         >
           {copied ? (
-            <Check size={16} className="text-accent" aria-hidden="true" />
+            <Check size={14} className="text-accent-fg" aria-hidden="true" />
           ) : (
-            <Link2 size={16} aria-hidden="true" />
+            <Link2 size={14} aria-hidden="true" />
           )}
         </button>
         {github !== null && (
@@ -103,7 +103,7 @@ export function RoomHeader({
             // Referer header. Mirrors the server's Referrer-Policy.
             rel="noopener noreferrer"
             title={`Publishing opens a pull request on ${github.owner}/${github.repo} (${github.defaultBranch})`}
-            className="flex min-h-[44px] shrink-0 items-center gap-1.5 rounded border border-border px-2 text-xs text-fg-muted hover:text-fg focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+            className="flex h-6 shrink-0 items-center gap-1.5 rounded border border-border px-2 text-xs text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
           >
             <GitPullRequest size={14} aria-hidden="true" />
             <span className="truncate">{`${github.owner}/${github.repo}`}</span>
@@ -126,9 +126,9 @@ export function RoomHeader({
           onClick={onOpenSwitcher}
           aria-label="Open room switcher"
           title="Open room switcher (⌘K)"
-          className="flex min-h-[44px] items-center gap-1 rounded border border-border px-2 text-fg-muted hover:text-fg focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+          className="flex h-6 items-center gap-1 rounded border border-border px-2 text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
         >
-          <Command size={16} aria-hidden="true" />
+          <Command size={12} aria-hidden="true" />
           <kbd className="font-mono text-xs text-fg-muted">⌘K</kbd>
         </button>
         <button
@@ -136,7 +136,7 @@ export function RoomHeader({
           onClick={onOpenCheatsheet}
           aria-label="Open keyboard shortcut cheatsheet"
           title="Keyboard shortcuts (?)"
-          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded border border-border text-fg-muted hover:text-fg focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+          className="flex h-6 w-6 items-center justify-center rounded border border-border text-xs text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
         >
           ?
         </button>

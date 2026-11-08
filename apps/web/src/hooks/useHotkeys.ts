@@ -13,6 +13,12 @@ export interface Hotkey {
   allowInInput?: boolean;
   /** Rendered in the cheatsheet and nowhere else. */
   description: string;
+  /**
+   * Optional gate evaluated BEFORE `preventDefault()` and the handler. Return
+   * false to decline: the browser keeps the key (e.g. Cmd+Shift+V pasting as
+   * plain text in the prompt box) and any later matching hotkey is tried.
+   */
+  when?: (event: KeyboardEvent) => boolean;
 }
 
 /**
@@ -49,11 +55,25 @@ function modKeyPressed(event: KeyboardEvent): boolean {
   return isMac() ? event.metaKey : event.ctrlKey;
 }
 
+/** Symbols like `?` are typed WITH shift on most layouts, so a combo that
+ *  names only the symbol must not be rejected for the shift it implies. */
+function isShiftedSymbol(key: string): boolean {
+  return key.length === 1 && !/[a-z0-9]/i.test(key);
+}
+
+/**
+ * Exact-modifier match. The old check only required the combo's modifiers to
+ * be PRESENT, so `mod+b` also fired for `mod+alt+b` and `mod+d` shadowed
+ * `mod+shift+d`. Extra modifiers now reject.
+ */
 function matchesCombo(event: KeyboardEvent, parsed: ParsedCombo): boolean {
   if (parsed.mod !== modKeyPressed(event)) return false;
-  if (parsed.shift && !event.shiftKey) return false;
-  if (parsed.alt && !event.altKey) return false;
-  return event.key.toLowerCase() === parsed.key;
+  if (parsed.alt !== event.altKey) return false;
+  if (!isShiftedSymbol(parsed.key) && parsed.shift !== event.shiftKey) return false;
+  if (event.key.toLowerCase() === parsed.key) return true;
+  // macOS Option+letter yields a different `key` (Option+B is 'ß'); the
+  // physical key code is still reliable.
+  return parsed.alt && /^[a-z]$/.test(parsed.key) && event.code === `Key${parsed.key.toUpperCase()}`;
 }
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -101,6 +121,7 @@ export function useHotkeys(
         const parsed = parseCombo(hotkey.combo);
         if (!matchesCombo(keyboardEvent, parsed)) continue;
         if (typing && !hotkey.allowInInput) continue;
+        if (hotkey.when !== undefined && !hotkey.when(keyboardEvent)) continue;
         keyboardEvent.preventDefault();
         hotkey.handler(keyboardEvent);
         return;

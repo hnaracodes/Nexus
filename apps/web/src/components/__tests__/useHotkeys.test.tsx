@@ -72,6 +72,81 @@ describe('useHotkeys', () => {
     expect(matching.defaultPrevented).toBe(true);
   });
 
+  it('rejects EXTRA modifiers: mod+alt+b does not trigger mod+b', () => {
+    const plain = vi.fn();
+    const withAlt = vi.fn();
+    render(
+      <Harness
+        hotkeys={[
+          { combo: 'mod+b', handler: plain, description: 'left' },
+          { combo: 'mod+alt+b', handler: withAlt, description: 'aux' },
+        ]}
+      />,
+    );
+    fireEvent.keyDown(document, { key: 'b', ctrlKey: true, altKey: true });
+    expect(plain).not.toHaveBeenCalled();
+    expect(withAlt).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(document, { key: 'b', ctrlKey: true });
+    expect(plain).toHaveBeenCalledTimes(1);
+    expect(withAlt).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not let mod+d shadow mod+shift+d', () => {
+    const plain = vi.fn();
+    const shifted = vi.fn();
+    render(
+      <Harness
+        hotkeys={[
+          { combo: 'mod+d', handler: plain, description: 'a' },
+          { combo: 'mod+shift+d', handler: shifted, description: 'b' },
+        ]}
+      />,
+    );
+    fireEvent.keyDown(document, { key: 'D', ctrlKey: true, shiftKey: true });
+    expect(plain).not.toHaveBeenCalled();
+    expect(shifted).toHaveBeenCalledTimes(1);
+  });
+
+  it('matches Option+letter on macOS by physical key code', () => {
+    const handler = vi.fn();
+    render(<Harness hotkeys={[{ combo: 'mod+alt+b', handler, description: 'aux' }]} />);
+    fireEvent.keyDown(document, { key: 'ß', code: 'KeyB', ctrlKey: true, altKey: true });
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('still matches "?" typed with shift', () => {
+    const handler = vi.fn();
+    render(<Harness hotkeys={[{ combo: '?', handler, description: 'help' }]} />);
+    fireEvent.keyDown(document, { key: '?', shiftKey: true });
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('a false when() declines: no preventDefault and no handler call', () => {
+    const handler = vi.fn();
+    render(
+      <Harness
+        hotkeys={[{ combo: 'mod+shift+v', handler, allowInInput: true, when: () => false, description: 'p' }]}
+      />,
+    );
+    const event = new KeyboardEvent('keydown', { key: 'V', ctrlKey: true, shiftKey: true, cancelable: true });
+    document.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('a true when() lets the hotkey through', () => {
+    const handler = vi.fn();
+    render(
+      <Harness
+        hotkeys={[{ combo: 'mod+shift+v', handler, allowInInput: true, when: () => true, description: 'p' }]}
+      />,
+    );
+    const event = new KeyboardEvent('keydown', { key: 'V', ctrlKey: true, shiftKey: true, cancelable: true });
+    document.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
   it('scopes a hotkey to a single element so it never fires globally', () => {
     const handler = vi.fn();
 

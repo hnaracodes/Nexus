@@ -87,7 +87,7 @@ export function LiveDemo(): JSX.Element {
   return (
     <section id="demo" className="border-t border-border px-6 py-20 sm:py-28">
       <div className="mx-auto max-w-6xl">
-        <p className="mb-2 font-mono text-xs text-accent">Watch it happen</p>
+        <p className="mb-2 font-mono text-xs text-accent-fg">Watch it happen</p>
         <h2 className="mb-3 text-3xl font-semibold tracking-tight text-fg sm:text-4xl">
           One room, one agent, two people deciding together.
         </h2>
@@ -122,7 +122,7 @@ export function LiveDemo(): JSX.Element {
                   >
                     <span className="flex items-baseline gap-3">
                       <span
-                        className={`font-mono text-xs ${active ? 'text-accent' : 'text-fg-muted'}`}
+                        className={`font-mono text-xs ${active ? 'text-accent-fg' : 'text-fg-muted'}`}
                       >
                         {String(index + 1).padStart(2, '0')}
                       </span>
@@ -162,7 +162,7 @@ export function LiveDemo(): JSX.Element {
                   <Avatar initial="M" hue={190} />
                   <span className="ml-1 font-mono text-[11px] text-fg-muted">payments-api</span>
                 </div>
-                <span className="flex items-center gap-1 rounded-full bg-accent/12 px-2 py-0.5 text-[11px] text-accent">
+                <span className="flex items-center gap-1 rounded-full bg-accent/12 px-2 py-0.5 text-[11px] text-accent-fg">
                   <Crown size={11} aria-hidden="true" /> Priya is driving
                 </span>
               </div>
@@ -173,7 +173,7 @@ export function LiveDemo(): JSX.Element {
                   <p className="text-fg">
                     <span className="font-semibold">Marcus</span>{' '}
                     <span className="text-fg-muted">
-                      the retry on <code className="font-mono text-accent">fetchInvoice</code> is
+                      the retry on <code className="font-mono text-accent-fg">fetchInvoice</code> is
                       missing — can you add one?
                     </span>
                   </p>
@@ -183,7 +183,7 @@ export function LiveDemo(): JSX.Element {
                   <div className="demo-in rounded-lg border border-border/70 bg-bg px-3 py-2">
                     <p className="mb-1 font-mono text-[11px] text-fg-muted">agent</p>
                     <p className="text-fg">
-                      I’ll wrap it in the existing <code className="font-mono text-accent">retry</code>{' '}
+                      I’ll wrap it in the existing <code className="font-mono text-accent-fg">retry</code>{' '}
                       helper and keep the timeout at 5s.
                     </p>
                   </div>
