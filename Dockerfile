@@ -11,6 +11,11 @@ COPY package.json package-lock.json ./
 COPY packages/protocol/package.json ./packages/protocol/
 COPY apps/server/package.json ./apps/server/
 COPY apps/web/package.json ./apps/web/
+# The root `postinstall` runs this (phase 19b: node-pty's macOS spawn-helper
+# ships without +x). It is a no-op here — node-pty is the desktop's OPTIONAL
+# dependency and does not build on Debian-slim — but `npm ci` fails outright
+# if the script it names is missing, which broke this image once.
+COPY scripts/fix-node-pty-perms.mjs ./scripts/
 RUN npm ci
 
 FROM deps AS build
