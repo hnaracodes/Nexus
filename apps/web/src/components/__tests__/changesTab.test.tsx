@@ -91,3 +91,17 @@ describe('ChangesTab', () => {
     expect(screen.getByText('No uncommitted changes.')).toBeInTheDocument();
   });
 });
+
+describe('ChangesTab auto mode label (phase 19a)', () => {
+  // The displayName on an auto_mode decision is whoever switched auto mode on,
+  // NOT someone who reviewed this call. "approved by Ada" would be a lie.
+  it('labels an auto mode approval as such, not as a person approving it', () => {
+    const events: SynCodeEvent[] = [
+      permissionRequested(1, 'r1'),
+      { ...permissionDecided(2, 'r1', 'allow', 'Ada'), via: 'auto_mode' } as SynCodeEvent,
+    ];
+    render(<ChangesTab events={events} gitStatus={{ status: 'ready', entries: [] }} />);
+    expect(screen.getByText(/approved by auto mode \(on by ada\)/i)).toBeInTheDocument();
+    expect(screen.queryByText(/^approved by ada$/i)).toBeNull();
+  });
+});

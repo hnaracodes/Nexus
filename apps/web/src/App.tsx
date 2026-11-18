@@ -31,6 +31,8 @@ import { JoinToasts } from './components/JoinToasts.js';
 import { useHotkeys } from './hooks/useHotkeys.js';
 import type { Hotkey } from './hooks/useHotkeys.js';
 import { RoomHeader } from './components/RoomHeader.js';
+import { AutoModeBanner } from './components/AutoModeBanner.js';
+import { deriveAutoMode } from './derive/autoMode.js';
 import { deriveGithubBinding } from './githubBinding.js';
 import { deriveAgentStatus } from './agentStatus.js';
 import { ShortcutCheatsheet } from './components/ShortcutCheatsheet.js';
@@ -756,6 +758,7 @@ function RoomShell({
       : { id, kind: 'file', dirty: dirtyPaths[id] ?? false },
   );
   const activeCached = activeFilePath !== null ? workspace.files.get(activeFilePath) : undefined;
+  const autoMode = deriveAutoMode(view.events);
 
   return (
     <div className="flex h-screen flex-col bg-bg text-fg">
@@ -777,6 +780,14 @@ function RoomShell({
         onGrantControl={(toParticipantId) => connection?.send({ kind: 'grant_control', toParticipantId })}
         onOpenSwitcher={() => setSwitcherOpen(true)}
         onOpenCheatsheet={() => setCheatsheetOpen(true)}
+        autoMode={autoMode}
+        onSetAutoMode={(enabled) => connection?.send({ kind: 'set_auto_mode', enabled })}
+      />
+
+      {/* Phase 19a: everyone sees, and anyone can undo, auto mode. */}
+      <AutoModeBanner
+        autoMode={autoMode}
+        onTurnOff={() => connection?.send({ kind: 'set_auto_mode', enabled: false })}
       />
 
       {/* --- BEGIN phase-3d error banner slot: render <ErrorBanner/> here. --- */}

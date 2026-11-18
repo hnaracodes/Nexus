@@ -61,7 +61,13 @@ export function ChangesTab({ events, gitStatus, onSelectFile }: ChangesTabProps)
                   <span className="font-medium text-fg">{approval.toolName}</span>{' '}
                   <span className="text-fg-muted">
                     {approval.decision === 'allow' ? 'approved' : 'denied'}
-                    {approval.displayName !== null ? ` by ${approval.displayName}` : ' automatically'}
+                    {/* An auto_mode decision's name is whoever switched auto
+                        mode ON, not someone who reviewed this call. */}
+                    {approval.via === 'auto_mode'
+                      ? ` by auto mode (on by ${approval.displayName ?? 'someone'})`
+                      : approval.displayName !== null
+                        ? ` by ${approval.displayName}`
+                        : ' automatically'}
                   </span>
                   {approval.reason !== null && (
                     <span className="block text-fg-muted">&quot;{approval.reason}&quot;</span>

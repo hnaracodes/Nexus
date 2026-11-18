@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import type { GithubRepoRef } from '@syncode/protocol/events';
 import { RoomHeader, type RoomHeaderProps } from '../RoomHeader.js';
 
@@ -25,6 +25,8 @@ function renderHeader(overrides: Partial<RoomHeaderProps> = {}) {
     onGrantControl: () => {},
     onOpenSwitcher: () => {},
     onOpenCheatsheet: () => {},
+    autoMode: null,
+    onSetAutoMode: () => {},
     ...overrides,
   };
   return render(<RoomHeader {...props} />);
@@ -58,5 +60,32 @@ describe('RoomHeader GitHub binding', () => {
     renderHeader({ github: null });
     expect(screen.queryByRole('link', { name: /github/i })).toBeNull();
     expect(screen.queryByText(/\//)).toBeNull();
+  });
+});
+
+describe('RoomHeader auto mode switch (phase 19a)', () => {
+  it('is an accessible switch that reads off by default', () => {
+    renderHeader();
+    const toggle = screen.getByRole('switch', { name: /auto mode/i });
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('reads on, and names who switched it on, while auto mode is on', () => {
+    renderHeader({ autoMode: { participantId: 'p_ada', displayName: 'Ada' } });
+    const toggle = screen.getByRole('switch', { name: /auto mode/i });
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+    expect(toggle).toHaveAttribute('title', expect.stringMatching(/ada/i));
+  });
+
+  it('asks for the opposite of the current state when clicked', () => {
+    const onSetAutoMode = vi.fn();
+    const { unmount } = renderHeader({ onSetAutoMode });
+    fireEvent.click(screen.getByRole('switch', { name: /auto mode/i }));
+    expect(onSetAutoMode).toHaveBeenLastCalledWith(true);
+    unmount();
+
+    renderHeader({ onSetAutoMode, autoMode: { participantId: 'p_ada', displayName: 'Ada' } });
+    fireEvent.click(screen.getByRole('switch', { name: /auto mode/i }));
+    expect(onSetAutoMode).toHaveBeenLastCalledWith(false);
   });
 });

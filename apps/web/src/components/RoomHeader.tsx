@@ -2,7 +2,7 @@ import { useState } from 'react';
 // No `Github` icon: lucide removed brand marks upstream and this project is on
 // lucide-react 1.x. `GitPullRequest` is the better signifier anyway — the chip
 // says where a publish lands, not which vendor hosts it.
-import { Check, Command, GitPullRequest, Link2 } from 'lucide-react';
+import { Check, Command, GitPullRequest, Link2, Zap } from 'lucide-react';
 import type { GithubRepoRef } from '@syncode/protocol/events';
 import type { PresenceEntry } from '@syncode/protocol/wire';
 // Sibling of Task 1 (docs/plans/phase-5b-room-ui-redesign.md). Not present on
@@ -11,6 +11,7 @@ import type { PresenceEntry } from '@syncode/protocol/wire';
 // to resolve once that task lands; report this as the integration seam.
 import { AgentActivity } from './AgentActivity.js';
 import type { AgentStatus } from '../agentStatus.js';
+import type { AutoModeState } from '../derive/autoMode.js';
 import { Roster } from './Roster.js';
 
 export interface RoomHeaderProps {
@@ -39,6 +40,10 @@ export interface RoomHeaderProps {
   onOpenSwitcher: () => void;
   /** Opens the `?` shortcut cheatsheet. The modal itself is composed by App.tsx. */
   onOpenCheatsheet: () => void;
+  /** Who has auto mode on, or null (phase 19a). Derived from the log. */
+  autoMode: AutoModeState | null;
+  /** Ask the server to switch auto mode. Anyone may, in either direction. */
+  onSetAutoMode: (enabled: boolean) => void;
 }
 
 /**
@@ -61,6 +66,8 @@ export function RoomHeader({
   onGrantControl,
   onOpenSwitcher,
   onOpenCheatsheet,
+  autoMode,
+  onSetAutoMode,
 }: RoomHeaderProps): JSX.Element {
   const [copied, setCopied] = useState(false);
 
@@ -121,6 +128,28 @@ export function RoomHeader({
           onGrantControl={onGrantControl}
         />
         <AgentActivity status={agentStatus} now={now} />
+        {/* Phase 19a. A real switch (role + aria-checked), not a styled
+            checkbox, so its state is announced, not only coloured. */}
+        <button
+          type="button"
+          role="switch"
+          aria-checked={autoMode !== null}
+          aria-label="Auto mode"
+          title={
+            autoMode !== null
+              ? `Auto mode is on (turned on by ${autoMode.displayName}): agent edits and commands run without a vote. Click to turn off.`
+              : 'Auto mode is off: the room votes on agent edits and commands. Click to approve them automatically.'
+          }
+          onClick={() => onSetAutoMode(autoMode === null)}
+          className={`flex h-6 shrink-0 items-center gap-1 rounded border px-2 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent ${
+            autoMode !== null
+              ? 'border-accent bg-accent/15 text-fg'
+              : 'border-border text-fg-muted hover:text-fg'
+          }`}
+        >
+          <Zap size={12} aria-hidden="true" className={autoMode !== null ? 'text-accent-fg' : undefined} />
+          <span>{autoMode !== null ? 'Auto: on' : 'Auto: off'}</span>
+        </button>
         <button
           type="button"
           onClick={onOpenSwitcher}
