@@ -23,7 +23,7 @@ export type WatchFn = (
   path: string,
   options: { recursive: boolean },
   listener: (eventType: string, filename: string | null) => void,
-) => { close(): void };
+) => { close(): void; on?(event: 'error', listener: (error: Error) => void): unknown };
 
 export interface WatcherDeps {
   watch?: WatchFn;
@@ -80,9 +80,20 @@ export function startWorkspaceWatcher(
 
   let watcher: { close(): void } = { close(): void {} };
   try {
-    watcher = doWatch(room.cwd, { recursive: true }, (_eventType, filename) => {
+    const started = doWatch(room.cwd, { recursive: true }, (_eventType, filename) => {
       schedule(filename === null ? '' : filename);
     });
+    // The try/catch above only covers a SYNCHRONOUS throw. On Linux, Node's
+    // recursive watch walks the tree itself, and when a later rescan reaches a
+    // directory it cannot read (EACCES) it emits 'error' on the FSWatcher from
+    // inside a callback. An EventEmitter with no 'error' listener rethrows,
+    // and nothing above this catches it: the whole server process dies, every
+    // room with it. Deliberately ignored rather than closing the watcher —
+    // the readable rest of the tree keeps reporting, which beats no live
+    // updates at all. CI hit this watching /tmp beside root-owned
+    // systemd-private-* dirs (see watcher.test.ts).
+    started.on?.('error', () => undefined);
+    watcher = started;
   } catch {
     watcher = { close(): void {} };
   }

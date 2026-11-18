@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { __resetRooms, createRoom } from '../../src/server/rooms.js';
 import { startWorkspaceWatcher } from '../../src/server/watcher.js';
@@ -111,6 +112,36 @@ describe('startWorkspaceWatcher', () => {
     expect(() => handle.close()).not.toThrow();
     vi.advanceTimersByTime(1000);
     expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('survives an asynchronous watcher error, and keeps delivering changes', () => {
+    // On Linux, Node's recursive watch walks the tree itself. When a LATER
+    // rescan reaches a directory it cannot read, it emits 'error' on the
+    // FSWatcher from inside a callback — not a synchronous throw, so the
+    // try/catch around fs.watch never sees it. An EventEmitter with no 'error'
+    // listener rethrows, which kills the whole server process (every room).
+    // CI hit this watching /tmp beside root-owned systemd-private-* dirs; a
+    // desktop user opening a folder with two root-owned subdirectories would
+    // hit it the same way. A real EventEmitter reproduces Node's semantics.
+    const emitter = new EventEmitter();
+    let listener: (eventType: string, filename: string | null) => void = () => undefined;
+    const watch: WatchFn = (_path, _options, cb) => {
+      listener = cb;
+      return Object.assign(emitter, { close: (): void => undefined });
+    };
+    const onChange = vi.fn();
+    startWorkspaceWatcher(makeRoom(), onChange, { watch });
+
+    const eacces = Object.assign(new Error("EACCES: permission denied, watch '/x/locked'"), {
+      code: 'EACCES',
+    });
+    expect(() => emitter.emit('error', eacces)).not.toThrow();
+
+    // Partial watching beats none: the readable rest of the tree still reports.
+    listener('change', 'src/app.ts');
+    vi.advanceTimersByTime(300);
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange.mock.calls[0]?.[0]).toEqual(['src/app.ts']);
   });
 
   it('close() stops the underlying watcher and clears a pending debounce timer', () => {
