@@ -42,6 +42,48 @@ describe('auto-approval', () => {
   });
 });
 
+describe('auto mode (phase 19a)', () => {
+  it('a new room starts with auto mode off', () => {
+    expect(room.autoMode).toBeNull();
+  });
+
+  it('while on, approves a risky tool without asking the room, attributed to whoever turned it on', async () => {
+    room.autoMode = { participantId: 'p_ada', displayName: 'Ada' };
+
+    const decision = await gate().request('Bash', { command: 'npm test' });
+
+    expect(decision).toMatchObject({
+      decision: 'allow',
+      via: 'auto_mode',
+      participantId: 'p_ada',
+      displayName: 'Ada',
+    });
+    // The gate still ran and still logged — no card, but a decision on record.
+    expect(requested()).toHaveLength(0);
+    expect(decided()).toHaveLength(1);
+    expect(decided()[0]).toMatchObject({ toolName: 'Bash', via: 'auto_mode', displayName: 'Ada' });
+  });
+
+  it('reads the switch at request time: turning it off restores the vote', async () => {
+    room.autoMode = { participantId: 'p_ada', displayName: 'Ada' };
+    const g = gate();
+    await g.request('Write', { file_path: 'a.txt' });
+
+    room.autoMode = null;
+    void g.request('Write', { file_path: 'b.txt' });
+    await Promise.resolve();
+
+    expect(requested()).toHaveLength(1);
+    expect(g.pendingIds()).toHaveLength(1);
+  });
+
+  it('does not relabel read-only tools: they stay auto_approved', async () => {
+    room.autoMode = { participantId: 'p_ada', displayName: 'Ada' };
+    const decision = await gate().request('Read', { file_path: 'x' });
+    expect(decision.via).toBe('auto_approved');
+  });
+});
+
 describe('room-wide decisions', () => {
   it('suspends on a risky tool and broadcasts a request', async () => {
     const g = gate();

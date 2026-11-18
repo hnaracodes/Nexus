@@ -269,12 +269,35 @@ export interface PermissionDecided extends EventEnvelope, AgentScoped {
   requestId: string;
   toolName: string;
   decision: 'allow' | 'deny';
-  /** null when the decision came from the auto-approve list or a timeout. */
+  /**
+   * Who decided. null for the read-only auto-approve list, a timeout or an
+   * abort. For `via: 'auto_mode'` this is whoever switched auto mode ON — the
+   * person accountable for the call going through unreviewed, NOT someone
+   * who looked at this particular request.
+   */
   participantId: string | null;
   displayName: string | null;
-  /** 'first_response' | 'auto_approved' | 'timeout' */
+  /** 'first_response' | 'auto_approved' | 'auto_mode' | 'timeout' | 'aborted' */
   via: string;
   reason: string | null;
+}
+
+/**
+ * Auto mode switched on or off (phase 19a). While on, the gate answers every
+ * request it receives with `allow` itself (`permission_decided` with `via:
+ * 'auto_mode'`) instead of asking the room — the gate still runs and still
+ * logs, and the sandbox still refuses out-of-room paths and secrets before
+ * any of this. Room-wide, not per agent. `reason: 'server_restart'` is the
+ * synthetic switch-off recovery writes when a log ends with auto mode on: a
+ * setting nobody present chose must not silently survive into a new session.
+ */
+export interface AutoModeChanged extends EventEnvelope {
+  type: 'auto_mode_changed';
+  enabled: boolean;
+  /** null only for `reason: 'server_restart'`. */
+  participantId: string | null;
+  displayName: string | null;
+  reason: 'participant' | 'server_restart';
 }
 
 export interface Interrupted extends EventEnvelope, AgentScoped {
@@ -507,7 +530,8 @@ export type SynCodeEvent =
   | AgentStopped
   | CrewLaunched
   | DocSnapshot
-  | FileEdited;
+  | FileEdited
+  | AutoModeChanged;
 
 export type SynCodeEventType = SynCodeEvent['type'];
 
@@ -546,6 +570,7 @@ const LOGGED_TYPES = new Set<string>([
   'crew_launched',
   'doc_snapshot',
   'file_edited',
+  'auto_mode_changed',
 ]);
 
 /**

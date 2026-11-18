@@ -153,6 +153,25 @@ export function createPermissionGate(
         return Promise.resolve(decision);
       }
 
+      // Auto mode (phase 19a). Read on EVERY request, not captured at gate
+      // creation, so the room's switch applies to the very next tool call of
+      // every agent. The gate is not bypassed: it still decides, still
+      // publishes `permission_decided`, and attributes the call to whoever
+      // turned auto mode on. The sandbox has already run before this point at
+      // all three seams, so out-of-room paths and secrets never get here.
+      const autoMode = room.autoMode;
+      if (autoMode !== null) {
+        const decision: Decision = {
+          decision: 'allow',
+          participantId: autoMode.participantId,
+          displayName: autoMode.displayName,
+          via: 'auto_mode',
+          reason: null,
+        };
+        publish(requestId, toolName, decision);
+        return Promise.resolve(decision);
+      }
+
       return new Promise<Decision>((resolveOuter) => {
         // Set only once `visibility.admit` resolves — see `settle` below for
         // why a decision that was never surfaced logs nothing at all.

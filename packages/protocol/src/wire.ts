@@ -139,6 +139,12 @@ export type ClientFrame =
     }
   /** `agentId` names which agent to stop. Absent stops the primary agent. */
   | { kind: 'interrupt'; agentId?: AgentId }
+  /**
+   * Switch auto mode on or off for the whole room (phase 19a). Any participant
+   * may send it — the user's decision — so, like `permission_decision`, it is
+   * deliberately NOT gated on the driver token. See `AutoModeChanged`.
+   */
+  | { kind: 'set_auto_mode'; enabled: boolean }
   /** `null` = use the account default. See the parse case for why not undefined. */
   | { kind: 'set_model'; model: string | null; agentId?: AgentId }
   /**
@@ -254,6 +260,11 @@ export function parseClientFrame(raw: string): ClientFrame | null {
       if (!agent.ok) return null;
       return { kind: 'interrupt', ...(agent.agentId === undefined ? {} : { agentId: agent.agentId }) };
     }
+    case 'set_auto_mode':
+      // A real boolean and nothing else: a truthy string or 1 must not be
+      // read as "approve everything".
+      if (typeof frame['enabled'] !== 'boolean') return null;
+      return { kind: 'set_auto_mode', enabled: frame['enabled'] };
     case 'set_model': {
       // Accept a string or an EXPLICIT null, and nothing else. `undefined` does
       // not survive JSON.stringify, so a client meaning "use the default" must

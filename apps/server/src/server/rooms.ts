@@ -59,6 +59,14 @@ export interface Room {
   readonly participants: Map<string, Participant>;
   readonly sockets: Set<unknown>;
   driverId: string | null;
+  /**
+   * Auto mode (phase 19a): non-null while on, naming who switched it on. Read
+   * by every agent's permission gate AT REQUEST TIME, so flipping it takes
+   * effect for the next tool call without touching any runtime. Mirrors the
+   * log's last `auto_mode_changed` — set only by the frame handler, cleared
+   * on restart by recovery (with a logged reason), never by anything else.
+   */
+  autoMode: { participantId: string; displayName: string } | null;
   nextSeq(): number;
   peekSeq(): number;
   /** Restore the counter after replaying a log (plan phase-3a). */
@@ -100,6 +108,7 @@ function buildRoom(seed: RoomSeed): Room {
     participants: new Map(),
     sockets: new Set(),
     driverId: null,
+    autoMode: null,
     nextSeq: () => ++seq,
     peekSeq: () => seq,
     setSeq: (value: number) => {

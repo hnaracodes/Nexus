@@ -263,3 +263,49 @@ describe('run_command cannot be used to reach outside the room, or a sensitive p
     expect(calls).toEqual([]);
   });
 });
+
+// Phase 19a. Auto mode makes the gate answer `allow` to everything it is
+// asked — so the ONLY thing standing between "approve everything" and "read
+// anything" is that the sandbox runs BEFORE the gate. This uses the real gate
+// with auto mode on: if any seam ever consulted the gate first, the command
+// below would be approved and the secret would reach the output.
+describe('auto mode does not widen the sandbox', () => {
+  it('still refuses an out-of-room path with auto mode on, logging no decision at all', async () => {
+    const { createPermissionGate } = await import('../../src/server/permissions.js');
+    const secretPath = join(base, 'outside-secret-auto-mode.txt');
+    writeFileSync(secretPath, 'AUTO-MODE-MUST-NOT-SEE-THIS', 'utf8');
+    room.autoMode = { participantId: 'p_ada', displayName: 'Ada' };
+    const gate = createPermissionGate(room, emit);
+
+    const result = await dispatchToolCall({
+      tools: buildSynCodeTools(room),
+      gate,
+      emit,
+      call: { toolUseId: 'esc_auto_1', name: 'run_command', input: { command: `cat ${secretPath}` } },
+      ctx: ctx(),
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.output).not.toContain('AUTO-MODE-MUST-NOT-SEE-THIS');
+    expect(events.some((e) => e.type === 'permission_decided')).toBe(false);
+  });
+
+  it('with auto mode on, an in-room command runs without a vote and is logged as auto_mode', async () => {
+    writeFileSync(join(cwd, 'hello.txt'), 'in-room content', 'utf8');
+    room.autoMode = { participantId: 'p_ada', displayName: 'Ada' };
+    const { createPermissionGate } = await import('../../src/server/permissions.js');
+    const gate = createPermissionGate(room, emit);
+
+    const result = await dispatchToolCall({
+      tools: buildSynCodeTools(room),
+      gate,
+      emit,
+      call: { toolUseId: 'esc_auto_2', name: 'run_command', input: { command: 'cat hello.txt' } },
+      ctx: ctx(),
+    });
+
+    expect(result.isError).toBe(false);
+    expect(result.output).toContain('in-room content');
+    expect(events.find((e) => e.type === 'permission_decided')).toMatchObject({ via: 'auto_mode', displayName: 'Ada' });
+  });
+});

@@ -75,3 +75,31 @@ describe('parseClientFrame — set_model (phase 7)', () => {
     expect(parseClientFrame(JSON.stringify({ kind: 'set_model', model: 5 }))).toBeNull();
   });
 });
+
+// --- phase 19a: auto mode ---
+describe('auto mode (phase 19a)', () => {
+  // The two-edit trap above applies here too: in the union but not in
+  // LOGGED_TYPES means "on disk, gone after a restart" — and a restart is
+  // exactly when recovery must read whether auto mode was left on.
+  it('treats auto_mode_changed as a logged event', () => {
+    expect(isLoggedEvent({ seq: 1, ts: 'x', roomId: 'r', type: 'auto_mode_changed' })).toBe(true);
+  });
+
+  it('parses set_auto_mode with a boolean', () => {
+    expect(parseClientFrame(JSON.stringify({ kind: 'set_auto_mode', enabled: true }))).toEqual({
+      kind: 'set_auto_mode',
+      enabled: true,
+    });
+    expect(parseClientFrame(JSON.stringify({ kind: 'set_auto_mode', enabled: false }))).toEqual({
+      kind: 'set_auto_mode',
+      enabled: false,
+    });
+  });
+
+  // A truthy string must not switch off every vote in the room.
+  it('rejects a missing or non-boolean enabled', () => {
+    expect(parseClientFrame(JSON.stringify({ kind: 'set_auto_mode' }))).toBeNull();
+    expect(parseClientFrame(JSON.stringify({ kind: 'set_auto_mode', enabled: 'true' }))).toBeNull();
+    expect(parseClientFrame(JSON.stringify({ kind: 'set_auto_mode', enabled: 1 }))).toBeNull();
+  });
+});
