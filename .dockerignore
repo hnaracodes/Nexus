@@ -10,6 +10,13 @@ work
 *.md
 .claude/
 
+# Local secrets. The Dockerfile never COPYs these, so they are not in the
+# image — but `fly deploy` uploads the whole build context to a remote
+# builder, and without these lines that upload includes every API key and the
+# GitHub App private key. Keep them on this machine.
+.env
+.env.*
+
 # The packaged desktop app. MEASURED at 812 MB of an 814 MB build context —
 # the .dmg, the unpacked .app, and a whole Electron runtime — none of which the
 # server image contains a single byte of. Everything else in the context put
