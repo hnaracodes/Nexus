@@ -1132,6 +1132,37 @@ export function createServer(
           return;
         }
 
+        // --- BEGIN phase-19a auto mode ---
+        if (frame.kind === 'set_auto_mode') {
+          // Any participant, driver or not — the user's decision, and the same
+          // reasoning as permission_decision above: approving is not steering.
+          // Setting the value it already has commits nothing, so a double
+          // click or two people flipping it at once cannot spam the log.
+          const isOn = room.autoMode !== null;
+          if (frame.enabled === isOn) return;
+          room.autoMode = frame.enabled ? { participantId, displayName } : null;
+          runtime.commit({
+            type: 'auto_mode_changed',
+            enabled: frame.enabled,
+            participantId,
+            displayName,
+            reason: 'participant',
+          });
+          // Committed BEFORE settling, so the log reads "auto mode went on,
+          // then these were approved by it" — cause before effect (I3).
+          if (frame.enabled) {
+            runtime.settleAllPending({
+              decision: 'allow',
+              participantId,
+              displayName,
+              via: 'auto_mode',
+              reason: null,
+            });
+          }
+          return;
+        }
+        // --- END phase-19a auto mode ---
+
         // --- BEGIN phase-7 set_model branch ---
         // phase-7a owns this region. The `set_model` frame branch goes HERE, in
         // index.ts — NOT in ws.ts, which has no message handling at all. Reject

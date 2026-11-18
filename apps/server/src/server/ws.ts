@@ -182,6 +182,14 @@ export interface RoomRuntime {
    * random and unique in practice.
    */
   resolvePermission(requestId: string, decision: Decision, agentId?: AgentId): ResolveOutcome;
+  /**
+   * Settle every request still waiting on EVERY agent's gate with `decision`
+   * (phase 19a: switching auto mode on approves the cards already showing).
+   * Returns how many were settled. A request still queued behind the fleet's
+   * visibility cap settles too — and, by the gate's own rule, logs nothing,
+   * because the room never saw it.
+   */
+  settleAllPending(decision: Decision): number;
   addSocket(socket: WebSocket, participantId: string): void;
   removeSocket(socket: WebSocket): void;
   socketCount(): number;
@@ -559,6 +567,16 @@ export function attachRoom(
         if (handle.gate.resolve(requestId, decision)) return 'settled';
       }
       return 'not-found';
+    },
+    settleAllPending(decision: Decision): number {
+      let settled = 0;
+      for (const handle of agents.values()) {
+        // Copied first: resolving mutates the gate's pending map.
+        for (const requestId of [...handle.gate.pendingIds()]) {
+          if (handle.gate.resolve(requestId, decision)) settled += 1;
+        }
+      }
+      return settled;
     },
     addSocket(socket: WebSocket, participantId: string): void {
       sockets.set(socket, participantId);

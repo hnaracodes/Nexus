@@ -106,6 +106,17 @@ const V3_ONLY_EVENTS: SynCodeEvent[] = [
     ts: '2026-09-06T12:00:04.000Z',
     roomId: 'room_802c12cbc2704971',
   },
+  {
+    // Phase 19a. Room-wide, so no agentId; v1 had no auto mode at all.
+    type: 'auto_mode_changed',
+    enabled: true,
+    participantId: 'p_9f9d2a056281',
+    displayName: 'smoke',
+    reason: 'participant',
+    seq: 30,
+    ts: '2026-11-18T12:00:00.000Z',
+    roomId: 'room_802c12cbc2704971',
+  },
 ];
 
 function readFixture(): SynCodeEvent[] {

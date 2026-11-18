@@ -12,6 +12,8 @@ export interface ReconstructedRoom {
   driverId: string | null;
   /** Requests that were still open when the log ended. */
   pendingApprovalIds: string[];
+  /** Who has auto mode on, per the last `auto_mode_changed` (phase 19a). */
+  autoMode: { participantId: string; displayName: string } | null;
 }
 
 /**
@@ -27,9 +29,16 @@ export function reconstruct(events: SynCodeEvent[]): ReconstructedRoom | null {
   if (created === undefined) return null;
 
   const open = new Set<string>();
+  let autoMode: ReconstructedRoom['autoMode'] = null;
   for (const event of events) {
     if (event.type === 'permission_requested') open.add(event.requestId);
     if (event.type === 'permission_decided') open.delete(event.requestId);
+    if (event.type === 'auto_mode_changed') {
+      autoMode =
+        event.enabled && event.participantId !== null
+          ? { participantId: event.participantId, displayName: event.displayName ?? event.participantId }
+          : null;
+    }
   }
 
   const { participants, driverId } = projectPresence(events);
@@ -43,6 +52,7 @@ export function reconstruct(events: SynCodeEvent[]): ReconstructedRoom | null {
     participants,
     driverId,
     pendingApprovalIds: [...open],
+    autoMode,
   };
 }
 

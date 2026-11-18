@@ -148,6 +148,27 @@ export function recoverRooms(
         } as SynCodeEvent);
       }
 
+      // Phase 19a, same shape as the driver seat above. A restored room starts
+      // with auto mode OFF (`buildRoom`), and that is deliberate: "approve
+      // everything" is a choice made by people in a session, and a new session
+      // nobody has rejoined yet must not inherit it. But if the log ends with
+      // it ON, switching it off silently would leave the log claiming every
+      // later request was auto-approved while the live gate is asking the room
+      // — so the transition is written down, attributed to nobody (I3).
+      if (state.autoMode !== null) {
+        lastSeq += 1;
+        log.append({
+          seq: lastSeq,
+          ts: new Date().toISOString(),
+          roomId: meta.roomId,
+          type: 'auto_mode_changed',
+          enabled: false,
+          participantId: null,
+          displayName: null,
+          reason: 'server_restart',
+        } as SynCodeEvent);
+      }
+
       // The fleet's counterpart to the driver-token branch above, same shape:
       // never silently drop an agent the log says was running, and never
       // silently restore more than the room can actually hold — record the
