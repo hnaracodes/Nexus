@@ -169,6 +169,24 @@ export function recoverRooms(
         } as SynCodeEvent);
       }
 
+      // Phase 19b, same shape again. A terminal is a child process; it died
+      // with the server. Without this the log would claim it is still open
+      // and every log-only reader would show a dead shell as live (I3).
+      for (const termId of state.openTerminalIds) {
+        lastSeq += 1;
+        log.append({
+          seq: lastSeq,
+          ts: new Date().toISOString(),
+          roomId: meta.roomId,
+          type: 'terminal_closed',
+          termId,
+          participantId: null,
+          displayName: null,
+          exitCode: null,
+          reason: 'server_restart',
+        } as SynCodeEvent);
+      }
+
       // The fleet's counterpart to the driver-token branch above, same shape:
       // never silently drop an agent the log says was running, and never
       // silently restore more than the room can actually hold — record the

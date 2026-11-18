@@ -8,6 +8,9 @@ import type { Context } from 'hono';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { WebSocketServer } from 'ws';
+import type { WebSocket } from 'ws';
+import { createTerminalRoom } from './terminals.js';
+import type { PtyFactory, TerminalRoom } from './terminals.js';
 import type { GithubRepoRef } from '@syncode/protocol/events';
 import { PRIMARY_AGENT_ID, PROTOCOL_VERSION } from '@syncode/protocol/events';
 import { parseClientFrame } from '@syncode/protocol/wire';
@@ -169,7 +172,22 @@ function roomTokenHeader(c: Context): string | undefined {
 }
 
 export function createServer(
-  opts: { agentDeps?: AgentDeps } = {},
+  opts: {
+    agentDeps?: AgentDeps;
+    /**
+     * Phase 19b. Only the desktop shell passes this. A server without it can
+     * never open a terminal — the property that keeps a shell off the hosted
+     * machine is construction, not a flag (see terminals.ts).
+     */
+    terminals?: PtyFactory;
+    /**
+     * Whether a socket's TCP peer address is the HOST (the person at the
+     * desktop app), who alone may switch terminals on or off. Defaults to
+     * `isLoopbackAddress`. Injectable because one machine cannot otherwise
+     * produce a non-loopback "LAN guest" for a test.
+     */
+    hostPeer?: (remoteAddress: string | undefined) => boolean;
+  } = {},
 ): { app: Hono; server: Server } {
   const app = new Hono();
 
@@ -939,6 +957,51 @@ export function createServer(
     );
   }
 
+  // --- BEGIN phase-19b terminals ---
+  const ptyFactory = opts.terminals;
+  const terminalRooms = new Map<string, TerminalRoom>();
+  /**
+   * Sockets whose TCP peer is loopback: the person at the desktop app hosting
+   * this room. Only they may switch terminals on or off. Read from the raw
+   * socket at upgrade, never from anything a client sends — the same source
+   * `localHost.ts`'s second lock uses.
+   */
+  const hostSockets = new WeakSet<WebSocket>();
+
+  function sendTerminals(room: Room, terminals: TerminalRoom, only?: WebSocket): void {
+    const list = terminals.list();
+    const targets = only === undefined ? [...room.sockets] : [only];
+    for (const target of targets) {
+      const socket = target as WebSocket;
+      socket.send(
+        JSON.stringify({
+          kind: 'terminals',
+          enabled: terminals.enabled,
+          canManage: hostSockets.has(socket),
+          list,
+        }),
+      );
+    }
+  }
+
+  function terminalsFor(room: Room): TerminalRoom | undefined {
+    if (ptyFactory === undefined) return undefined;
+    const existing = terminalRooms.get(room.id);
+    if (existing !== undefined) return existing;
+    const runtime = getRuntime(room.id);
+    if (runtime === undefined) return undefined;
+    const created: TerminalRoom = createTerminalRoom({
+      cwd: room.cwd,
+      factory: ptyFactory,
+      commit: (event) => void runtime.commit(event),
+      send: (socket, frame) => (socket as WebSocket).send(JSON.stringify(frame)),
+      onListChanged: () => sendTerminals(room, created),
+    });
+    terminalRooms.set(room.id, created);
+    return created;
+  }
+  // --- END phase-19b terminals ---
+
   const server = createAdaptorServer({ fetch: app.fetch }) as Server;
   const wss = new WebSocketServer({ noServer: true });
 
@@ -975,6 +1038,7 @@ export function createServer(
         displayName,
       );
       const participantId = identity.participantId;
+      if ((opts.hostPeer ?? isLoopbackAddress)(request.socket.remoteAddress)) hostSockets.add(ws);
 
       const parsedSince = Number.parseInt(url.searchParams.get('since') ?? '0', 10);
       const from = Number.isFinite(parsedSince) && parsedSince > 0 ? parsedSince : 0;
@@ -996,6 +1060,7 @@ export function createServer(
           // this socket receives it — never broadcast, never logged.
           participantId,
           resumeToken: identity.resumeToken,
+          terminals: ptyFactory !== undefined,
         }),
       );
 
@@ -1029,6 +1094,10 @@ export function createServer(
        * every join is noise that grows with the number of people watching.
        */
       ws.send(JSON.stringify({ kind: 'fleet', agents: fleetSnapshot(runtime) }));
+      // Phase 19b: like the fleet, the terminal list is transient and must be
+      // handed to a joiner explicitly.
+      const joinTerminals = terminalsFor(room);
+      if (joinTerminals !== undefined) sendTerminals(room, joinTerminals, ws);
 
       ws.on('message', (data) => {
         const frame = parseClientFrame(String(data));
@@ -1162,6 +1231,52 @@ export function createServer(
           return;
         }
         // --- END phase-19a auto mode ---
+
+        // --- BEGIN phase-19b terminal frames ---
+        if (
+          frame.kind === 'term_open' ||
+          frame.kind === 'term_attach' ||
+          frame.kind === 'term_input' ||
+          frame.kind === 'term_resize' ||
+          frame.kind === 'term_close' ||
+          frame.kind === 'set_terminal_access'
+        ) {
+          const terminals = terminalsFor(room);
+          const fail = (message: string): void => ws.send(JSON.stringify({ kind: 'error', message }));
+          if (terminals === undefined) {
+            fail('Terminals are only available in rooms hosted from the SynCode desktop app.');
+            return;
+          }
+          const peer = { participantId, displayName };
+          switch (frame.kind) {
+            case 'term_open': {
+              const result = terminals.open(peer, frame.cols, frame.rows);
+              if (!result.ok) fail(result.reason);
+              else terminals.attach(ws, result.termId); // the opener watches what they opened
+              return;
+            }
+            case 'term_attach':
+              if (!terminals.attach(ws, frame.termId)) fail('That terminal is not open.');
+              return;
+            case 'term_input':
+              if (!terminals.input(peer, frame.termId, frame.data)) fail('That terminal is not open.');
+              return;
+            case 'term_resize':
+              terminals.resize(frame.termId, frame.cols, frame.rows);
+              return;
+            case 'term_close':
+              if (!terminals.close(peer, frame.termId)) fail('That terminal is not open.');
+              return;
+            case 'set_terminal_access':
+              if (!hostSockets.has(ws)) {
+                fail('Only the host can switch terminals on or off.');
+                return;
+              }
+              terminals.setEnabled(peer, frame.enabled);
+              return;
+          }
+        }
+        // --- END phase-19b terminal frames ---
 
         // --- BEGIN phase-7 set_model branch ---
         // phase-7a owns this region. The `set_model` frame branch goes HERE, in
@@ -1368,6 +1483,7 @@ export function createServer(
         // see `docDisconnect`'s own comment for the one-tab-per-file
         // simplification this accepts.
         runtime.docDisconnect(ws, participantId);
+        terminalRooms.get(room.id)?.detachSocket(ws);
         runtime.removeSocket(ws);
         // Two tabs can share one identity now that ids survive a reconnect.
         // Closing one of them is not the person leaving, and must not arm the

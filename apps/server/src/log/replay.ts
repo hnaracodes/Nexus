@@ -14,6 +14,8 @@ export interface ReconstructedRoom {
   pendingApprovalIds: string[];
   /** Who has auto mode on, per the last `auto_mode_changed` (phase 19a). */
   autoMode: { participantId: string; displayName: string } | null;
+  /** Terminals opened and never closed, in opening order (phase 19b). */
+  openTerminalIds: string[];
 }
 
 /**
@@ -30,9 +32,12 @@ export function reconstruct(events: SynCodeEvent[]): ReconstructedRoom | null {
 
   const open = new Set<string>();
   let autoMode: ReconstructedRoom['autoMode'] = null;
+  const terminals = new Set<string>();
   for (const event of events) {
     if (event.type === 'permission_requested') open.add(event.requestId);
     if (event.type === 'permission_decided') open.delete(event.requestId);
+    if (event.type === 'terminal_opened') terminals.add(event.termId);
+    if (event.type === 'terminal_closed') terminals.delete(event.termId);
     if (event.type === 'auto_mode_changed') {
       autoMode =
         event.enabled && event.participantId !== null
@@ -53,6 +58,7 @@ export function reconstruct(events: SynCodeEvent[]): ReconstructedRoom | null {
     driverId,
     pendingApprovalIds: [...open],
     autoMode,
+    openTerminalIds: [...terminals],
   };
 }
 
