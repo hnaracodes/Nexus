@@ -36,7 +36,17 @@ export function Edges({ nodes, edges, selectedNodeId, selectedEdge, onSelectEdge
   const ghostFrom = ghost === null || ghost === undefined ? undefined : byId.get(ghost.from);
 
   return (
-    <svg aria-hidden="true" className="pointer-events-none absolute left-0 top-0 h-full w-full overflow-visible">
+    // An explicit 1x1, never h-full/w-full: the pan/zoom layer this sits in has
+    // only absolutely positioned children, so it is 0x0, and an <svg> with a
+    // zero width or height is not rendered at all (SVG spec) — overflow:visible
+    // does not override that. A 1x1 box with overflow:visible paints every
+    // edge, at any coordinate, including negative ones after a pan.
+    <svg
+      aria-hidden="true"
+      width={1}
+      height={1}
+      className="pointer-events-none absolute left-0 top-0 overflow-visible"
+    >
       <defs>
         <marker id="canvas-edge-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
           <path d="M0,0 L8,4 L0,8 Z" fill="rgb(var(--border-strong))" />

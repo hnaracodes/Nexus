@@ -59,6 +59,24 @@ describe('Canvas', () => {
     expect(container.querySelector('[data-edge-from="b"][data-edge-to="a"]')).toBeNull();
   });
 
+  it('gives the edge layer its own non-zero size, so a browser actually paints it', () => {
+    // The world layer that pans/zooms holds only absolutely positioned
+    // children, so it lays out at 0x0. An <svg> sized h-full/w-full of it is
+    // 0x0 too, and the SVG spec says a zero width or height DISABLES rendering
+    // — overflow:visible cannot rescue it. Every wire was created (the
+    // Inspector's "Runs after" was checked) and none was ever visible in a
+    // real browser. jsdom has no layout, so this pins the precondition
+    // instead: explicit, positive width/height attributes, overflow visible.
+    const g = graph([node('a'), node('b')], [{ from: 'a', to: 'b' }]);
+    const { container } = render(<Canvas graph={g} selectedNodeId={null} onSelect={vi.fn()} />);
+
+    const svg = container.querySelector('line[data-edge-from]')?.closest('svg');
+    expect(svg).not.toBeNull();
+    expect(Number(svg?.getAttribute('width'))).toBeGreaterThan(0);
+    expect(Number(svg?.getAttribute('height'))).toBeGreaterThan(0);
+    expect(svg?.getAttribute('class') ?? '').toContain('overflow-visible');
+  });
+
   it('clicking a node selects it and calls onSelect with its id', () => {
     const g = graph([node('a', { displayName: 'Reviewer' }), node('b', { displayName: 'Fixer' })]);
     const onSelect = vi.fn();
