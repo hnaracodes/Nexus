@@ -29,7 +29,8 @@
     "test:desktop": "npm run test -w @syncode/desktop",
     "test:install": "node scripts/install.test.mjs",
     "clean": "node -e \"const{rmSync}=require('fs');for(const d of ['apps/server/dist','apps/web/dist','apps/desktop/dist','packages/protocol/dist'])rmSync(d,{recursive:true,force:true})\"",
-    "verify:clean": "npm run clean && npm run verify"
+    "verify:clean": "npm run clean && npm run verify",
+    "postinstall": "node scripts/fix-node-pty-perms.mjs"
   },
   "devDependencies": {
     "typescript": "^5.6.0"

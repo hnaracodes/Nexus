@@ -33,6 +33,7 @@ import type { Hotkey } from './hooks/useHotkeys.js';
 import { RoomHeader } from './components/RoomHeader.js';
 import { AutoModeBanner } from './components/AutoModeBanner.js';
 import { deriveAutoMode } from './derive/autoMode.js';
+import { TerminalPanel } from './terminal/TerminalPanel.js';
 import { deriveGithubBinding } from './githubBinding.js';
 import { deriveAgentStatus } from './agentStatus.js';
 import { ShortcutCheatsheet } from './components/ShortcutCheatsheet.js';
@@ -901,11 +902,18 @@ function RoomShell({
                 setPanelTab(tab);
                 setPanelOpen(true);
               }}
+              tabs={view.terminals.available ? ['output', 'diff', 'terminal'] : ['output', 'diff']}
             >
-              {panelTab === 'output' ? (
-                <OutputPanel events={view.events} focusedAgentId={focusedAgentId} />
-              ) : (
+              {panelTab === 'terminal' && view.terminals.available && connection !== null ? (
+                <TerminalPanel
+                  terminals={view.terminals}
+                  hub={connection.terminals}
+                  send={(frame) => connection.send(frame)}
+                />
+              ) : panelTab === 'diff' ? (
                 <DiffPanel api={workspaceApi} path={diffPath} />
+              ) : (
+                <OutputPanel events={view.events} focusedAgentId={focusedAgentId} />
               )}
             </Panel>
           </PaneErrorBoundary>

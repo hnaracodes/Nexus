@@ -42,6 +42,12 @@ files:
 # unsigned, and right-click -> Open cannot rescue it.
 afterPack: build/adhoc-sign.cjs
 
+# Phase 19b. node-pty is a native module plus an executable (`spawn-helper`)
+# it launches by path; neither can run from inside app.asar. node-pty itself
+# rewrites its helper path to `app.asar.unpacked`, so that is where it must be.
+asarUnpack:
+  - '**/node_modules/node-pty/**'
+
 mac:
   category: public.app-category.developer-tools
   # Both architectures, spelled out here rather than left to a CLI flag, so

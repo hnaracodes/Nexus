@@ -17,7 +17,7 @@
     "typecheck": "tsc -p tsconfig.json",
     "prestart": "npm run build",
     "start": "electron .",
-    "pretest": "npm run protocol:build --prefix ../..",
+    "pretest": "npm run protocol:build --prefix ../.. && npm run build -w @syncode/server --prefix ../..",
     "test": "vitest run",
     "test:watch": "vitest",
     "package": "npm run build && electron-builder"
@@ -32,5 +32,8 @@
     "electron-builder": "^26.15.3",
     "typescript": "^5.6.0",
     "vitest": "^4.1.10"
+  },
+  "optionalDependencies": {
+    "node-pty": "^1.1.0"
   }
 }

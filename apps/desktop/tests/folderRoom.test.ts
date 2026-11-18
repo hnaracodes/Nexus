@@ -44,6 +44,14 @@ describe('lanShareConfirmMessage', () => {
     expect(message.toLowerCase()).toContain('http');
   });
 
+  // Phase 19b. The sandbox does not cover a terminal; the host must be told
+  // in plain words, at the moment they decide to share, not in a README.
+  it('says that everyone who joins can run commands on this computer in a terminal', () => {
+    const message = lanShareConfirmMessage(['192.168.1.14'], 54321).toLowerCase();
+    expect(message).toContain('terminal');
+    expect(message).toContain('run commands on this computer');
+  });
+
   it('says plainly there is nothing to share at when no address was found', () => {
     const message = lanShareConfirmMessage([], 54321);
     expect(message.toLowerCase()).toContain('no network address');

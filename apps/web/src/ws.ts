@@ -3,6 +3,8 @@ import { EMPTY_VIEW, reduce } from './store.js';
 import type { RoomView } from './store.js';
 import { createDocSession } from './workspace/docSession.js';
 import type { DocSession } from './workspace/docSession.js';
+import { createTerminalHub } from './terminal/terminalHub.js';
+import type { TerminalHub } from './terminal/terminalHub.js';
 
 export type Status = 'connecting' | 'open' | 'reconnecting' | 'closed';
 
@@ -38,6 +40,8 @@ export interface ConnectOptions {
 
 export interface Connection {
   send(frame: ClientFrame): void;
+  /** Phase 19b: routes terminal output to whichever terminal view is showing it. */
+  readonly terminals: TerminalHub;
   close(): void;
 }
 
@@ -133,6 +137,8 @@ export function connect(options: ConnectOptions): Connection {
   let deliberatelyClosed = false;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let identity: StoredIdentity | null = readIdentity(options.roomId, options.displayName);
+  // Once per connect(), like the doc session: a reconnect keeps the views subscribed.
+  const terminalHub = createTerminalHub();
   /**
    * Created ONCE per `connect()` call (this whole function's lifetime), not
    * once per underlying socket — a reconnect must not throw away in-progress
@@ -196,6 +202,8 @@ export function connect(options: ConnectOptions): Connection {
       // itself is handled just above and ALSO falls through to `reduce` below
       // (`handleFrame` returns false for it), so `view.selfId` still gets set
       // the normal way.
+      // Terminal output, likewise byte-rate (phase 19b), goes to the hub.
+      if (terminalHub.handleFrame(frame)) return;
       if (docSession !== null && docSession.handleFrame(frame)) return;
       view = reduce(view, frame);
       options.onView(view);
@@ -229,6 +237,7 @@ export function connect(options: ConnectOptions): Connection {
   open();
 
   return {
+    terminals: terminalHub,
     send(frame: ClientFrame): void {
       socket?.send(JSON.stringify(frame));
     },

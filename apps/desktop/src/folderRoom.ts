@@ -84,8 +84,9 @@ export function lanShareConfirmMessage(addresses: string[], port: number): strin
   const urls = addresses.map((address) => `http://${address}:${port}`).join('\n');
   return (
     `Anyone who can reach one of these addresses on your network will be able ` +
-    `to open this room, see every file, and ask the agent to run commands — the ` +
-    `same access as you have, with no per-person permission:\n\n${urls}\n\n` +
+    `to open this room, see every file, ask the agent to run commands, and open ` +
+    `a terminal to run commands on this computer themselves, as you — the same ` +
+    `access as you have, with no per-person permission:\n\n${urls}\n\n` +
     `This is plain HTTP: the room token is the only credential, and it would ` +
     `travel unencrypted on this network. Only continue on a network you trust.`
   );

@@ -201,3 +201,29 @@ describe('workspace_changed', () => {
     expect(view.events).toEqual([]);
   });
 });
+
+describe('terminals in the view (phase 19b)', () => {
+  it('learns from replay_complete whether this server can run terminals at all', () => {
+    const base = { kind: 'replay_complete' as const, lastSeq: 0, protocolVersion: 3, participantId: 'p_a', resumeToken: 't' };
+    expect(EMPTY_VIEW.terminals.available).toBe(false);
+    expect(reduce(EMPTY_VIEW, { ...base, terminals: true }).terminals.available).toBe(true);
+    // An older server never says: that means no.
+    expect(reduce(EMPTY_VIEW, base).terminals.available).toBe(false);
+  });
+
+  it('takes the list, the switch and this socket’s right to flip it from the terminals frame', () => {
+    const view = reduce(EMPTY_VIEW, {
+      kind: 'terminals',
+      enabled: false,
+      canManage: true,
+      list: [{ termId: 'term_1', title: 'Terminal 1', openedBy: 'Ada', lastTypedBy: null }],
+    });
+    expect(view.terminals).toMatchObject({ enabled: false, canManage: true });
+    expect(view.terminals.list).toHaveLength(1);
+  });
+
+  it('does not fold terminal output into the view (it is routed to the terminal hub)', () => {
+    const view = reduce(EMPTY_VIEW, { kind: 'term_output', termId: 'term_1', data: 'x' });
+    expect(view).toBe(EMPTY_VIEW);
+  });
+});

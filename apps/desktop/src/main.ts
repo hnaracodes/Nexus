@@ -16,6 +16,7 @@ import {
   roomReadyMessage,
 } from './folderRoom.js';
 import { describeHostConflict } from './hostGuard.js';
+import { loadPtyFactory } from './pty.js';
 
 // One process, one server, one room — this file never calls createServer()
 // more than once. Invariant I1 is about a room owning exactly one live
@@ -224,7 +225,11 @@ async function startBackend(): Promise<{ origin: string; port: number }> {
   // Always bound to 127.0.0.1 here, never 0.0.0.0 — "Default to
   // loopback-only" (CLAUDE.md). Going wide is exclusively `shareOnLan`'s job,
   // below, as an explicit later action with its own confirmation.
-  const { server } = createServer();
+  // Phase 19b: the desktop is the ONLY caller that hands the server a PTY
+  // factory, so terminals exist in rooms this app hosts and nowhere else.
+  // Undefined when node-pty is unavailable here: no terminals, no crash.
+  const terminals = await loadPtyFactory();
+  const { server } = createServer(terminals === undefined ? {} : { terminals });
   httpServer = server;
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);

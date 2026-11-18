@@ -1,5 +1,5 @@
 import type { SynCodeEvent } from '@syncode/protocol/events';
-import type { FleetEntry, PresenceEntry, ServerFrame } from '@syncode/protocol/wire';
+import type { FleetEntry, PresenceEntry, ServerFrame, TerminalEntry } from '@syncode/protocol/wire';
 
 export interface Message {
   id: string;
@@ -67,6 +67,19 @@ export interface RoomView {
    * now, which is precisely what `connected` is for a human.
    */
   fleet: FleetEntry[];
+  /**
+   * Phase 19b. `available` comes from `replay_complete` (does this server run
+   * terminals at all — only a desktop-hosted room does); the rest from the
+   * transient `terminals` frame, which, like the fleet, is pushed whole on
+   * every change. Output never lands here — see `terminal/terminalHub.ts`.
+   */
+  terminals: {
+    available: boolean;
+    enabled: boolean;
+    /** Whether this socket is the host's, and so may flip `enabled`. */
+    canManage: boolean;
+    list: TerminalEntry[];
+  };
 }
 
 export const EMPTY_VIEW: RoomView = {
@@ -82,6 +95,7 @@ export const EMPTY_VIEW: RoomView = {
   errorCount: 0,
   externalChanges: { paths: [], nonce: 0 },
   fleet: [],
+  terminals: { available: false, enabled: true, canManage: false, list: [] },
 };
 
 export function reduce(view: RoomView, frame: ServerFrame): RoomView {
@@ -99,6 +113,7 @@ export function reduce(view: RoomView, frame: ServerFrame): RoomView {
         replaying: false,
         lastSeq: Math.max(view.lastSeq, frame.lastSeq),
         selfId: frame.participantId,
+        terminals: { ...view.terminals, available: frame.terminals === true },
       };
     case 'presence':
       return { ...view, participants: frame.participants, driverId: frame.driverId };
@@ -125,6 +140,17 @@ export function reduce(view: RoomView, frame: ServerFrame): RoomView {
       };
     case 'fleet':
       return { ...view, fleet: frame.agents };
+    case 'terminals':
+      return {
+        ...view,
+        terminals: { available: true, enabled: frame.enabled, canManage: frame.canManage, list: frame.list },
+      };
+    case 'term_output':
+    case 'term_snapshot':
+    case 'term_exit':
+      // Routed, not swallowed: the terminal hub takes these before the
+      // reducer ever runs (`ws.ts`), for the same reason as doc_sync below.
+      return view;
     case 'doc_sync':
     case 'doc_presence':
       /**

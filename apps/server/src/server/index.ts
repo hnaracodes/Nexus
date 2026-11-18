@@ -11,6 +11,8 @@ import { WebSocketServer } from 'ws';
 import type { WebSocket } from 'ws';
 import { createTerminalRoom } from './terminals.js';
 import type { PtyFactory, TerminalRoom } from './terminals.js';
+// Re-exported for the desktop shell, the one caller that supplies a factory.
+export type { PtyFactory, PtyProcess } from './terminals.js';
 import type { GithubRepoRef } from '@syncode/protocol/events';
 import { PRIMARY_AGENT_ID, PROTOCOL_VERSION } from '@syncode/protocol/events';
 import { parseClientFrame } from '@syncode/protocol/wire';

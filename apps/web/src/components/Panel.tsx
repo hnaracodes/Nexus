@@ -3,15 +3,16 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import { PANEL, clamp } from '../layout/dimensions.js';
 import { ResizeHandle } from './ResizeHandle.js';
 
-/** The bottom panel's tabs. */
-export type PanelTab = 'output' | 'diff';
+/** The bottom panel's tabs. `terminal` exists only in desktop-hosted rooms. */
+export type PanelTab = 'output' | 'diff' | 'terminal';
 
 const TAB_LABELS: Record<PanelTab, string> = {
   output: 'Output',
   diff: 'Diff',
+  terminal: 'Terminal',
 };
 
-const TAB_ORDER: PanelTab[] = ['output', 'diff'];
+const DEFAULT_TABS: PanelTab[] = ['output', 'diff'];
 
 /**
  * Region D: the VS Code bottom panel — tabbed (OUTPUT, DIFF), collapsible and
@@ -19,8 +20,10 @@ const TAB_ORDER: PanelTab[] = ['output', 'diff'];
  * right-hand aux bar, and it is NOT where approvals live: `⌘J` collapses it, and
  * a governance surface must never be one keystroke from hidden.
  *
- * This is explicitly NOT a terminal — CLAUDE.md §6 forbids a PTY as the agent
- * transport. OUTPUT is the structured tool-call log the room already has.
+ * OUTPUT is the structured tool-call log, not a terminal — CLAUDE.md §6
+ * forbids a PTY as the AGENT's transport. TERMINAL (phase 19b) is the other
+ * thing §6 allows: a separate stream for HUMAN shell use, in desktop-hosted
+ * rooms only, that the agent never drives.
  *
  * `height`/`onHeightChange` are controlled so a resize survives whatever else
  * re-renders the shell. Collapsed, the header stays (`PANEL.collapsed`), so the
@@ -33,6 +36,7 @@ export function Panel({
   onHeightChange,
   activeTab,
   onTabChange,
+  tabs = DEFAULT_TABS,
   children,
 }: {
   open: boolean;
@@ -41,6 +45,8 @@ export function Panel({
   onHeightChange: (next: number) => void;
   activeTab: PanelTab;
   onTabChange: (tab: PanelTab) => void;
+  /** Which tabs to show, in order. Defaults to OUTPUT and DIFF. */
+  tabs?: PanelTab[];
   /** The active tab's content. */
   children: ReactNode;
 }): JSX.Element {
@@ -65,7 +71,7 @@ export function Panel({
       )}
       <div className="flex h-[35px] shrink-0 items-center gap-1 px-4">
         <div role="tablist" aria-label="Panel views" className="flex h-full items-stretch gap-4">
-          {TAB_ORDER.map((tab) => {
+          {tabs.map((tab) => {
             const isActive = tab === activeTab;
             return (
               <button
