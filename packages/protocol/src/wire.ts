@@ -76,6 +76,12 @@ export type ServerFrame =
       protocolVersion: number;
       participantId: string;
       resumeToken: string;
+      /**
+       * Phase 19b. Whether this server can run terminals at all — true only
+       * in a desktop-hosted room. Optional so an older server's frame still
+       * parses; absent means no.
+       */
+      terminals?: boolean;
     }
   | { kind: 'presence'; participants: PresenceEntry[]; driverId: string | null }
   /**
@@ -115,7 +121,34 @@ export type ServerFrame =
    * `PresenceEntry`. So this frame carries liveness, and the log carries truth.
    */
   | { kind: 'fleet'; agents: FleetEntry[] }
+  /**
+   * Phase 19b terminal frames. Transient and NEVER logged — like `doc_sync`,
+   * and for the stronger reason that terminal output can contain secrets.
+   * `term_output`/`term_snapshot`/`term_exit` go only to sockets attached to
+   * that terminal; `terminals` (the list) goes to everyone.
+   */
+  | { kind: 'term_output'; termId: string; data: string }
+  /** The recent scrollback, sent once to a socket when it attaches. */
+  | { kind: 'term_snapshot'; termId: string; data: string }
+  | { kind: 'term_exit'; termId: string; exitCode: number | null }
+  | {
+      kind: 'terminals';
+      /** The host's switch. Off means no terminal can be opened or typed into. */
+      enabled: boolean;
+      /** Whether THIS socket is the host's, and so may flip `enabled`. Per socket. */
+      canManage: boolean;
+      list: TerminalEntry[];
+    }
   | { kind: 'error'; message: string };
+
+export interface TerminalEntry {
+  termId: string;
+  /** "Terminal 1", "Terminal 2", … in opening order. */
+  title: string;
+  openedBy: string;
+  /** Display name of whoever typed most recently, if anyone has. */
+  lastTypedBy: string | null;
+}
 
 /** Frames a client may send. Anything else is dropped with an `error` frame. */
 export type ClientFrame =
@@ -145,6 +178,15 @@ export type ClientFrame =
    * deliberately NOT gated on the driver token. See `AutoModeChanged`.
    */
   | { kind: 'set_auto_mode'; enabled: boolean }
+  /** Phase 19b. Open a new terminal, sized for the opener's view. */
+  | { kind: 'term_open'; cols: number; rows: number }
+  /** Subscribe this socket to a terminal's output (and get its scrollback). */
+  | { kind: 'term_attach'; termId: string }
+  | { kind: 'term_input'; termId: string; data: string }
+  | { kind: 'term_resize'; termId: string; cols: number; rows: number }
+  | { kind: 'term_close'; termId: string }
+  /** Host only — enforced at the server, by the socket's own peer address. */
+  | { kind: 'set_terminal_access'; enabled: boolean }
   /** `null` = use the account default. See the parse case for why not undefined. */
   | { kind: 'set_model'; model: string | null; agentId?: AgentId }
   /**
@@ -195,6 +237,21 @@ export type ClientFrame =
  * someone's client. Both limits sit well above any real CRDT sync message.
  */
 export const MAX_DOC_PAYLOAD_CHARS = 1024 * 1024;
+
+/**
+ * Largest single `term_input` (phase 19b). A paste bigger than this is refused
+ * whole, never truncated: a truncated paste is a different command.
+ */
+export const MAX_TERM_INPUT_CHARS = 64 * 1024;
+
+/** A terminal grid dimension: a whole number a real screen could have. */
+function readDimension(value: unknown): number | null {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 1000 ? value : null;
+}
+
+function readTermId(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 && value.length <= 64 ? value : null;
+}
 export const MAX_PATH_CHARS = 1024;
 
 /**
@@ -260,6 +317,34 @@ export function parseClientFrame(raw: string): ClientFrame | null {
       if (!agent.ok) return null;
       return { kind: 'interrupt', ...(agent.agentId === undefined ? {} : { agentId: agent.agentId }) };
     }
+    case 'term_open': {
+      const cols = readDimension(frame['cols']);
+      const rows = readDimension(frame['rows']);
+      if (cols === null || rows === null) return null;
+      return { kind: 'term_open', cols, rows };
+    }
+    case 'term_attach':
+    case 'term_close': {
+      const termId = readTermId(frame['termId']);
+      if (termId === null) return null;
+      return { kind: frame['kind'], termId };
+    }
+    case 'term_input': {
+      const termId = readTermId(frame['termId']);
+      const data = frame['data'];
+      if (termId === null || typeof data !== 'string' || data.length > MAX_TERM_INPUT_CHARS) return null;
+      return { kind: 'term_input', termId, data };
+    }
+    case 'term_resize': {
+      const termId = readTermId(frame['termId']);
+      const cols = readDimension(frame['cols']);
+      const rows = readDimension(frame['rows']);
+      if (termId === null || cols === null || rows === null) return null;
+      return { kind: 'term_resize', termId, cols, rows };
+    }
+    case 'set_terminal_access':
+      if (typeof frame['enabled'] !== 'boolean') return null;
+      return { kind: 'set_terminal_access', enabled: frame['enabled'] };
     case 'set_auto_mode':
       // A real boolean and nothing else: a truthy string or 1 must not be
       // read as "approve everything".

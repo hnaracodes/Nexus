@@ -117,6 +117,45 @@ const V3_ONLY_EVENTS: SynCodeEvent[] = [
     ts: '2026-11-18T12:00:00.000Z',
     roomId: 'room_802c12cbc2704971',
   },
+  // Phase 19b: the terminal's attribution trail. Never keystrokes or output.
+  {
+    type: 'terminal_opened',
+    termId: 'term_1',
+    participantId: 'p_9f9d2a056281',
+    displayName: 'smoke',
+    seq: 31,
+    ts: '2026-11-18T12:00:01.000Z',
+    roomId: 'room_802c12cbc2704971',
+  },
+  {
+    type: 'terminal_typed',
+    termId: 'term_1',
+    participantId: 'p_9f9d2a056281',
+    displayName: 'smoke',
+    seq: 32,
+    ts: '2026-11-18T12:00:02.000Z',
+    roomId: 'room_802c12cbc2704971',
+  },
+  {
+    type: 'terminal_closed',
+    termId: 'term_1',
+    participantId: null,
+    displayName: null,
+    exitCode: 0,
+    reason: 'exited',
+    seq: 33,
+    ts: '2026-11-18T12:00:03.000Z',
+    roomId: 'room_802c12cbc2704971',
+  },
+  {
+    type: 'terminal_access_changed',
+    enabled: false,
+    participantId: 'p_9f9d2a056281',
+    displayName: 'smoke',
+    seq: 34,
+    ts: '2026-11-18T12:00:04.000Z',
+    roomId: 'room_802c12cbc2704971',
+  },
 ];
 
 function readFixture(): SynCodeEvent[] {

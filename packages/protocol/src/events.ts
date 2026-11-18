@@ -300,6 +300,51 @@ export interface AutoModeChanged extends EventEnvelope {
   reason: 'participant' | 'server_restart';
 }
 
+/**
+ * Phase 19b — the shared terminal. Desktop-hosted rooms only (the server is
+ * only able to spawn one when the desktop shell hands it a PTY factory).
+ *
+ * What is logged is WHO did WHAT to which terminal — never the keystrokes and
+ * never the output. Input can be a password typed at a prompt (I4's spirit:
+ * assume the log will be shared); output is a firehose, like `doc_sync`.
+ */
+export interface TerminalOpened extends EventEnvelope {
+  type: 'terminal_opened';
+  termId: string;
+  participantId: string;
+  displayName: string;
+}
+
+export interface TerminalClosed extends EventEnvelope {
+  type: 'terminal_closed';
+  termId: string;
+  /** null when nobody closed it: the shell exited, access was switched off, or a restart. */
+  participantId: string | null;
+  displayName: string | null;
+  exitCode: number | null;
+  reason: 'closed' | 'exited' | 'access_disabled' | 'server_restart';
+}
+
+/**
+ * Someone typed in a terminal. Written the first time each person types in a
+ * given terminal, then again only after they have been quiet for a while — an
+ * attribution trail ("Bob typed in terminal 2"), not a keystroke log.
+ */
+export interface TerminalTyped extends EventEnvelope {
+  type: 'terminal_typed';
+  termId: string;
+  participantId: string;
+  displayName: string;
+}
+
+/** The host switched terminals on or off for the room. Off closes every terminal. */
+export interface TerminalAccessChanged extends EventEnvelope {
+  type: 'terminal_access_changed';
+  enabled: boolean;
+  participantId: string;
+  displayName: string;
+}
+
 export interface Interrupted extends EventEnvelope, AgentScoped {
   type: 'interrupted';
   participantId: string;
@@ -531,7 +576,11 @@ export type SynCodeEvent =
   | CrewLaunched
   | DocSnapshot
   | FileEdited
-  | AutoModeChanged;
+  | AutoModeChanged
+  | TerminalOpened
+  | TerminalClosed
+  | TerminalTyped
+  | TerminalAccessChanged;
 
 export type SynCodeEventType = SynCodeEvent['type'];
 
@@ -571,6 +620,10 @@ const LOGGED_TYPES = new Set<string>([
   'doc_snapshot',
   'file_edited',
   'auto_mode_changed',
+  'terminal_opened',
+  'terminal_closed',
+  'terminal_typed',
+  'terminal_access_changed',
 ]);
 
 /**
