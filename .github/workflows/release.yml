@@ -132,12 +132,30 @@ jobs:
           # electron-builder auto-targets the host OS when given no platform
           # flag, but the flags are passed explicitly anyway so a reader does
           # not have to know that default to see what each job builds.
+          #
+          # `ptyCheck` loads the node-pty that ships INSIDE the packaged app and
+          # starts a shell with it (see the "Prove the packaged terminal" step).
           - os: macos-latest
             flag: --mac
+            # Through the app's own Electron and app.asar, exactly as the app
+            # loads it. node-pty rewrites its spawn-helper path from app.asar
+            # to app.asar.unpacked, so loading the unpacked copy directly looks
+            # for app.asar.unpacked.unpacked and fails. arm64 = the runner's arch.
+            ptyCheck: ELECTRON_RUN_AS_NODE=1 apps/desktop/release/mac-arm64/SynCode.app/Contents/MacOS/SynCode scripts/check-packaged-pty.mjs apps/desktop/release/mac-arm64/SynCode.app/Contents/Resources/app.asar/node_modules/node-pty
           - os: windows-latest
             flag: --win
-          - os: ubuntu-latest
+            ptyCheck: node scripts/check-packaged-pty.mjs apps/desktop/release/win-unpacked/resources/app.asar.unpacked/node_modules/node-pty
+          # PINNED, not ubuntu-latest. node-pty has no Linux prebuild, so it is
+          # compiled here and links against THIS image's glibc. v0.5.0 built on
+          # an ubuntu-latest that had moved to glibc 2.42, whose cfsetospeed /
+          # cfsetispeed carry a new symbol version — so its terminal needed
+          # GLIBC_2.42 and would not load on Ubuntu 24.04 (2.39) or Debian 12
+          # (2.36). Built on 24.04 it needs 2.34. `--max-glibc 2.35` (Ubuntu
+          # 22.04) turns any future drift into a failed build instead of a
+          # silently missing Terminal tab.
+          - os: ubuntu-24.04
             flag: --linux
+            ptyCheck: node scripts/check-packaged-pty.mjs apps/desktop/release/linux-unpacked/resources/app.asar.unpacked/node_modules/node-pty --max-glibc 2.35
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -171,6 +189,15 @@ jobs:
         shell: bash
         working-directory: apps/desktop
         run: npx electron-builder ${{ matrix.flag }} --publish never
+
+      # Loads the node-pty that ships INSIDE the packaged app and starts a real
+      # shell with it (scripts/check-packaged-pty.mjs). A green package proves
+      # only that files were produced: v0.5.0 was green on every leg and its
+      # Linux terminal could not load on most Linux machines. This is also the
+      # only place the Windows terminal is ever actually run.
+      - name: Prove the packaged terminal starts a shell
+        shell: bash
+        run: ${{ matrix.ptyCheck }}
 
       # electron-builder's own publish path also generates update-metadata
       # (*.yml/*.blockmap) — sha512, meant for a future electron-updater feed
