@@ -13,6 +13,7 @@ import { buildAgentEnv } from './subprocessEnv.js';
 import { agentExecutablePath, electronRunAsNodeEnv } from './agentExecutable.js';
 import type { Batch, PendingPrompt, Roster } from './turnGate.js';
 import { toUserMessage } from './errors.js';
+import { repoInstructionsSection } from './repoInstructions.js';
 
 export type EmitFn = (event: UnsequencedEvent) => void;
 
@@ -274,15 +275,23 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
     prompt: prompts,
     options: {
       cwd: room.cwd,
-      // A bare string, deliberately, and NOT { type: 'preset', preset:
-      // 'claude_code', append }. Verified in sdk.mjs:21316-21325: an omitted
-      // systemPrompt — which is what this room had until now — makes the SDK
-      // send `customSystemPrompt = ""`, i.e. the Claude Code preset is already
-      // replaced by nothing. Switching to the preset-plus-append form would
-      // restore that entire preset, a large behaviour change well outside this
-      // feature and one that would invalidate the verified acceptance run.
-      // A bare string writes to the same slot, which is currently empty.
-      systemPrompt: ROOM_SYSTEM_PROMPT,
+      // The Claude Code preset plus our room rules, so the model gets Claude
+      // Code's own tool guidance and not only the tools. (The old bare-string /
+      // omitted form REPLACED the preset entirely: sdk.mjs query() maps an
+      // omitted prompt to customSystemPrompt = "" and a string to the custom
+      // slot; only `type: 'preset'` keeps the default and uses `append`. Shape:
+      // runtimeTypes.d.ts:538-542.) The repo's CLAUDE.md is appended by us,
+      // jailed and capped (repoInstructions.ts). The key is never in here (I4).
+      systemPrompt: {
+        type: 'preset' as const,
+        preset: 'claude_code' as const,
+        append: ROOM_SYSTEM_PROMPT + repoInstructionsSection(room.cwd),
+      },
+      // Explicitly NO filesystem settings. A repo's .claude/settings.json can
+      // define hooks (shell commands) that would run outside the approval gate.
+      // The SDK default when omitted is also none (runtimeTypes.d.ts:499-507),
+      // but the safety property is pinned here and by a test.
+      settingSources: [],
       // The publish tool. Registered here so it reaches the agent through the
       // SAME canUseTool gate as Bash or Write — pushing to someone's repository
       // is precisely what the room's four-eyes approval exists for, and routing
@@ -529,6 +538,30 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
   };
 }
 
+/** A tool_result's `content` is a string or an array of content blocks. */
+export function toolResultText(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (content === undefined || content === null) return '';
+  if (!Array.isArray(content)) return jsonFallback(content);
+  return content
+    .map((raw) => {
+      const blk = raw as Record<string, unknown> | null;
+      if (typeof blk !== 'object' || blk === null) return jsonFallback(raw);
+      if (blk['type'] === 'text' && typeof blk['text'] === 'string') return blk['text'];
+      if (blk['type'] === 'image') return '[image]';
+      return jsonFallback(blk);
+    })
+    .join('\n');
+}
+
+function jsonFallback(v: unknown): string {
+  try {
+    return (JSON.stringify(v) ?? String(v)).slice(0, 200);
+  } catch {
+    return String(v);
+  }
+}
+
 /**
  * Translate one SDK message into zero or more logged events. Streaming text
  * deltas produce NO event — they are broadcast as transient frames elsewhere.
@@ -582,7 +615,7 @@ export function translate(message: unknown): UnsequencedEvent[] {
         toolUseId: String(b['tool_use_id']),
         toolName: '',
         isError: b['is_error'] === true,
-        output: String(b['content'] ?? '').slice(0, 4000),
+        output: toolResultText(b['content']).slice(0, 4000),
         ...parent,
       });
     }

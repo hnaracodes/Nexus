@@ -85,8 +85,8 @@ describe('the gate is wired into the SDK at both available seams', () => {
     // Rooms clone untrusted repositories. With settingSources on, a hostile
     // repo's .claude/settings.json could contribute allow-rules, and its
     // .claude/agents/*.md could define agents carrying their own permissionMode.
-    // Leaving it unset is what keeps a clone inert.
-    expect(capturedOptions()['settingSources']).toBeUndefined();
+    // An explicit empty list (not merely unset) keeps a clone inert.
+    expect(capturedOptions()['settingSources']).toEqual([]);
   });
 });
 
