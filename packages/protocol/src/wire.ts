@@ -139,6 +139,18 @@ export type ServerFrame =
       canManage: boolean;
       list: TerminalEntry[];
     }
+  /**
+   * Phase 20. The links that reach this room from OTHER machines: `web` while
+   * the desktop host is sharing it through the relay, `lan` while it is shared
+   * on the local network (full `/?room=&token=` URLs, ready to copy).
+   *
+   * Sent ONLY to the host's own sockets (loopback peer, read from the raw
+   * socket — the same source as `terminals.canManage`), on connect and whenever
+   * sharing changes. A guest already holds a link that works for them; the
+   * host's window is loaded from 127.0.0.1 and cannot build one. Transient and
+   * never logged: the links carry the room token.
+   */
+  | { kind: 'share_links'; web: string | null; lan: string[] }
   | { kind: 'error'; message: string };
 
 export interface TerminalEntry {
