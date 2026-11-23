@@ -1,4 +1,5 @@
 import type { AgentId, AgentProvider, SynCodeEvent } from './events.js';
+import type { LiveFrame } from './livepreview.js';
 import { isAgentProvider } from './events.js';
 
 export interface PresenceEntry {
@@ -151,6 +152,12 @@ export type ServerFrame =
    * never logged: the links carry the room token.
    */
   | { kind: 'share_links'; web: string | null; lan: string[] }
+  /**
+   * Phase 21: an agent's Edit/MultiEdit/Write as it is being typed — a
+   * proposal, never applied before the gate. Transient, never logged. See
+   * `livepreview.ts` for the three frames and the shared reducer.
+   */
+  | LiveFrame
   | { kind: 'error'; message: string };
 
 export interface TerminalEntry {

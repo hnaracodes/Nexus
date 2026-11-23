@@ -241,3 +241,17 @@ describe('share_links (phase 20)', () => {
     expect(stopped.shareLinks).toEqual({ web: null, lan: [] });
   });
 });
+
+describe('live edit previews (phase 21)', () => {
+  it('folds edit_preview frames into livePreviews and drops abandoned ones', () => {
+    const preview = {
+      toolUseId: 'toolu_9', agentId: 'primary', toolName: 'Edit' as const, path: '/r/a.ts', mode: 'replace' as const,
+      hunks: [], replaceAll: false, streaming: true, truncated: false,
+    };
+    let view = reduce(EMPTY_VIEW, { kind: 'edit_preview', preview });
+    view = reduce(view, { kind: 'edit_preview_text', toolUseId: 'toolu_9', hunk: 0, field: 'new', text: 'hello' });
+    expect(view.livePreviews['toolu_9']?.hunks[0]?.new).toBe('hello');
+    view = reduce(view, { kind: 'edit_preview_end', toolUseId: 'toolu_9', reason: 'abandoned' });
+    expect(view.livePreviews).toEqual({});
+  });
+});

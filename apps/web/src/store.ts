@@ -1,5 +1,7 @@
 import type { SynCodeEvent } from '@syncode/protocol/events';
 import type { FleetEntry, PresenceEntry, ServerFrame, TerminalEntry } from '@syncode/protocol/wire';
+import { applyLiveFrame } from '@syncode/protocol/livepreview';
+import type { EditPreview } from '@syncode/protocol/livepreview';
 
 export interface Message {
   id: string;
@@ -86,6 +88,12 @@ export interface RoomView {
    * sockets, so for a guest this stays empty. Never logged (carries the token).
    */
   shareLinks: { web: string | null; lan: string[] };
+  /**
+   * Phase 21. Agent edits being typed right now, folded from the transient
+   * `edit_preview*` frames with the SAME reducer the server uses. Never logged;
+   * a completed edit's text is also in its logged `tool_start`.
+   */
+  livePreviews: Record<string, EditPreview>;
 }
 
 export const EMPTY_VIEW: RoomView = {
@@ -103,6 +111,7 @@ export const EMPTY_VIEW: RoomView = {
   fleet: [],
   terminals: { available: false, enabled: true, canManage: false, list: [] },
   shareLinks: { web: null, lan: [] },
+  livePreviews: {},
 };
 
 export function reduce(view: RoomView, frame: ServerFrame): RoomView {
@@ -152,6 +161,12 @@ export function reduce(view: RoomView, frame: ServerFrame): RoomView {
         ...view,
         terminals: { available: true, enabled: frame.enabled, canManage: frame.canManage, list: frame.list },
       };
+    case 'edit_preview':
+    case 'edit_preview_text':
+    case 'edit_preview_end': {
+      const livePreviews = applyLiveFrame(view.livePreviews, frame);
+      return livePreviews === view.livePreviews ? view : { ...view, livePreviews };
+    }
     case 'share_links':
       return { ...view, shareLinks: { web: frame.web, lan: frame.lan } };
     case 'term_output':

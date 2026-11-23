@@ -262,6 +262,12 @@ export interface PermissionRequested extends EventEnvelope, AgentScoped {
   input: unknown;
   /** Epoch milliseconds after which the request auto-denies. */
   expiresAt: number;
+  /**
+   * Phase 21: the tool call this request gates, so the room can tie an
+   * approval card to the edit it is watching being typed. OPTIONAL: logs
+   * written before it have none, and a gate with no tool-call id omits it.
+   */
+  toolUseId?: string;
 }
 
 export interface PermissionDecided extends EventEnvelope, AgentScoped {

@@ -20,6 +20,10 @@
       "types": "./dist/docsync.d.ts",
       "default": "./dist/docsync.js"
     },
+    "./livepreview": {
+      "types": "./dist/livepreview.d.ts",
+      "default": "./dist/livepreview.js"
+    },
     "./pages": {
       "types": "./dist/pages.d.ts",
       "default": "./dist/pages.js"
