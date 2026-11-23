@@ -669,6 +669,20 @@ function RoomShell({
     setDirtyPaths((current) => (current[path] === dirty ? current : { ...current, [path]: dirty }));
   }, [now, tabState.active, docSession, workspace.files]);
 
+  // Phase 21: once an agent's edit lands on the open file, the live document
+  // already shows it (the watcher merged it in). The fetched copy is then only
+  // the baseline `isTabDirty` compares against, and leaving it stale made the
+  // tab look unsaved and asked people to "refresh" text they were already
+  // looking at. With a live document, refresh that baseline quietly; without
+  // one (no collaborative session), keep the explicit refresh button.
+  const activeStale =
+    tabState.active !== null && tabState.active !== AGENTS_TAB_ID && workspace.files.get(tabState.active)?.status === 'stale';
+  useEffect(() => {
+    const path = tabState.active;
+    if (!activeStale || path === null || docSession === null) return;
+    workspace.refetchFile(path);
+  }, [activeStale, tabState.active, docSession, workspace.refetchFile]);
+
   function loadGitStatus(): void {
     setGitStatus({ status: 'loading' });
     workspaceApi

@@ -126,5 +126,27 @@ describe('approval cards and the edit being watched', () => {
     await screen.findByText(/Proposed new file/);
     expect(document.querySelector('.cm-agent-ghost-new')).not.toBeNull();
   });
+
+  it('after an agent edit lands on the open file, its baseline refreshes itself: no refresh button, no unsaved dot', async () => {
+    boot();
+    deliver({
+      kind: 'edit_preview',
+      preview: {
+        toolUseId: 'toolu_r', agentId: 'primary', toolName: 'Edit', path: `${CWD}/src/app.ts`, mode: 'replace',
+        hunks: [{ old: 'const a = 1;\n', new: 'const a = 2;\n', oldDone: true, newDone: false }], replaceAll: false, streaming: true, truncated: false,
+      },
+    });
+    await screen.findByRole('tab', { name: /app\.ts/, selected: true });
+    const fetchMock = globalThis.fetch as unknown as { mock: { calls: unknown[][] } };
+    const fileFetches = () => fetchMock.mock.calls.filter((c) => String(c[0]).includes('/workspace/file')).length;
+    await vi.waitFor(() => expect(fileFetches()).toBeGreaterThan(0));
+    const before = fileFetches();
+    deliver(event({ type: 'tool_start', toolUseId: 'toolu_r', toolName: 'Edit', input: EDIT }));
+    deliver(event({ type: 'tool_result', toolUseId: 'toolu_r', toolName: '', isError: false, output: 'ok' }));
+    // What the server's watcher sends when the edit hits the disk (room-relative).
+    deliver({ kind: 'workspace_changed', paths: ['src/app.ts'], truncated: false });
+    await vi.waitFor(() => expect(fileFetches()).toBeGreaterThan(before));
+    expect(screen.queryByRole('button', { name: /Content changed/ })).toBeNull();
+  });
 });
 
