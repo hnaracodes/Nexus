@@ -340,6 +340,10 @@ describe('registration ownership and host absence', () => {
     const squatter2 = await rawHost(relayServer.port);
     squatter2.ws.send(JSON.stringify({ t: 'register', v: 1, roomId, tokenHash }));
     expect(await squatter2.next()).toEqual({ t: 'refused', reason: 'taken' });
+    // A guessed secret is no better than none.
+    const guesser = await rawHost(relayServer.port);
+    guesser.ws.send(JSON.stringify({ t: 'register', v: 1, roomId, tokenHash, hostSecret: 'guessed-secret' }));
+    expect(await guesser.next()).toEqual({ t: 'refused', reason: 'taken' });
     const back = await rawHost(relayServer.port);
     back.ws.send(JSON.stringify({ t: 'register', v: 1, roomId, tokenHash, hostSecret: registered['hostSecret'] }));
     expect((await back.next())['t']).toBe('registered');
