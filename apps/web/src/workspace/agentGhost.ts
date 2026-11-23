@@ -136,12 +136,19 @@ function layoutGhost(doc: Text, docText: string, ghost: EditorGhost): GhostLayou
     const found = locateHunk(docText, hunk.old, hunk.oldDone);
     if (found !== null) {
       layout.oldMarks.push({ from: found.from, to: found.to });
+      // Below the last line the old range touches (a range ending in "\n"
+      // ends at the next line's start, but occupies the previous line).
+      // Anchored BEFORE the next line (side -1), not after this one: a block
+      // widget after a line's end shares that line's gutter cell, so the line
+      // number slid down beside the ghost and the line itself had none (seen
+      // in a real browser). Only when the old text runs to the end of the
+      // file is there no next line to sit before.
+      const lastLine = doc.lineAt(Math.max(found.from, found.to - 1));
+      const below = lastLine.number < doc.lines ? doc.line(lastLine.number + 1) : null;
       layout.blocks.push({
         hunk: index,
-        // After the last line the old range touches (a range ending in "\n"
-        // ends at the next line's start, but occupies the previous line).
-        pos: doc.lineAt(Math.max(found.from, found.to - 1)).to,
-        side: 1,
+        pos: below === null ? lastLine.to : below.from,
+        side: below === null ? 1 : -1,
         ambiguous: found.ambiguous && hunk.oldDone && !ghost.replaceAll,
       });
       return;
