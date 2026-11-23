@@ -47,6 +47,54 @@ function deadSession() {
 }
 
 describe('idle watchdog', () => {
+  it('a long turn that keeps producing output is not called dead; real silence still is', async () => {
+    vi.useFakeTimers();
+    const h = harness(
+      () => ({
+        [Symbol.asyncIterator]: async function* () {
+          // Busy for 2.4s in total — well past the 1s timeout — but never quiet for 1s.
+          for (let i = 0; i < 4; i++) {
+            await new Promise((resolve) => setTimeout(resolve, 600));
+            yield { type: 'assistant', message: { id: `m${i}`, content: [{ type: 'text', text: 'working' }] }, parent_tool_use_id: null };
+          }
+          await new Promise<never>(() => {
+            /* then silence */
+          });
+        },
+        interrupt: async () => undefined,
+      }),
+      1_000,
+    );
+    h.handle.submit(prompt('a long task'));
+    await vi.advanceTimersByTimeAsync(2_400);
+    expect(h.events.some((e) => e.type === 'agent_error')).toBe(false);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(h.events.some((e) => e.type === 'agent_error')).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it('a turn waiting on the room to approve something is not called dead', async () => {
+    vi.useFakeTimers();
+    let options: Record<string, unknown> = {};
+    const room = createRoom({ apiKey: KEY, cwd: process.cwd(), repoUrl: null });
+    const events: UnsequencedEvent[] = [];
+    const handle = startAgent(room, (event) => events.push(event), {
+      runQuery: ((args: { options: Record<string, unknown> }) => {
+        options = args.options;
+        return deadSession();
+      }) as never,
+      idleTimeoutMs: 1_000,
+    });
+    handle.submit(prompt('run the tests'));
+    type Hook = (input: unknown, id: string, o: { signal: AbortSignal }) => Promise<unknown>;
+    const hook = (options['hooks'] as { PreToolUse: { hooks: Hook[] }[] }).PreToolUse[0]!.hooks[0]!;
+    void hook({ tool_name: 'Bash', tool_input: { command: 'npm test' } }, 'toolu_wait', { signal: new AbortController().signal });
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(events.some((e) => e.type === 'permission_requested')).toBe(true);
+    expect(events.some((e) => e.type === 'agent_error')).toBe(false);
+    vi.useRealTimers();
+  });
+
   it('emits agent_error if no result arrives before the timeout', async () => {
     vi.useFakeTimers();
     const h = harness(() => deadSession(), 1_000);

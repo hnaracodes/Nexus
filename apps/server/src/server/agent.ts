@@ -246,11 +246,24 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
     watchdog = null;
   }
 
-  /** One watchdog covers however many prompts are outstanding, not one per prompt. */
+  /**
+   * One watchdog covers however many prompts are outstanding, not one per prompt.
+   *
+   * It measures SILENCE, not turn length: every message the session yields
+   * re-arms it (see the loop below), so a long, busy turn is never called dead.
+   * And a turn blocked on the room's approval is waiting on people, not dead:
+   * while any request is pending, the timer re-arms instead of firing. Both
+   * were false alarms before — any turn over 150s, or any slow approval, showed
+   * "No response from the agent" (found watching a real browser, phase 21).
+   */
   function armWatchdog(): void {
     if (watchdog !== null) return;
     watchdog = setTimeout(() => {
       watchdog = null;
+      if (gate.pendingIds().length > 0) {
+        armWatchdog();
+        return;
+      }
       emit({
         type: 'agent_error',
         message:
@@ -474,6 +487,11 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
   void (async () => {
     try {
       for await (const message of session) {
+        // Any output is a sign of life: restart the silence clock mid-turn.
+        if (watchdog !== null) {
+          clearWatchdog();
+          armWatchdog();
+        }
         live?.onSdkMessage(message);
         const events = translate(message);
         for (const event of events) {
