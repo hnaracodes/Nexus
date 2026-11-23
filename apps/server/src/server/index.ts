@@ -1,4 +1,4 @@
-import type { Server } from 'node:http';
+import type { IncomingMessage, Server } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { createAdaptorServer } from '@hono/node-server';
@@ -10,9 +10,24 @@ import { bodyLimit } from 'hono/body-limit';
 import { WebSocketServer } from 'ws';
 import type { WebSocket } from 'ws';
 import { createTerminalRoom } from './terminals.js';
+import { createRelayServer } from '../relay/relayServer.js';
+import type { RelayLimits, RelayServer } from '../relay/relayServer.js';
+import { RELAY_HOST_PATH, roomIdOfApiPath } from '../relay/protocol.js';
 import type { PtyFactory, TerminalRoom } from './terminals.js';
 // Re-exported for the desktop shell, the one caller that supplies a factory.
 export type { PtyFactory, PtyProcess } from './terminals.js';
+// Phase 20: the desktop's end of a web share, and the private socket its
+// relayed guests arrive on. Exported here so the desktop imports one package.
+export { startRelayShare, relayLink } from '../relay/hostClient.js';
+export type { RelayShare, RelayShareStatus } from '../relay/hostClient.js';
+export { listenForRelay } from '../relay/localListener.js';
+export type { RelayListener } from '../relay/localListener.js';
+
+/** Links that reach a desktop-hosted room from other machines (phase 20). */
+export interface ShareLinks {
+  web: string | null;
+  lan: string[];
+}
 import type { GithubRepoRef } from '@syncode/protocol/events';
 import { PRIMARY_AGENT_ID, PROTOCOL_VERSION } from '@syncode/protocol/events';
 import { parseClientFrame } from '@syncode/protocol/wire';
@@ -189,8 +204,31 @@ export function createServer(
      * produce a non-loopback "LAN guest" for a test.
      */
     hostPeer?: (remoteAddress: string | undefined) => boolean;
+    /**
+     * Phase 20. Run the web-share relay on this server: desktop hosts register
+     * a room here and guests reach it through this server's ordinary room
+     * link. The hosted entry point turns it on; the desktop never does.
+     */
+    relay?:
+      | boolean
+      | {
+          limits?: Partial<RelayLimits>;
+          /**
+           * Injectable for the same reason as `hostPeer`: one test process
+           * holds ONE room registry, so a desktop-shaped server and a relay in
+           * the same process would otherwise see every room as "local" here.
+           * Production always uses the real registry.
+           */
+          isLocalRoom?: (roomId: string) => boolean;
+        };
   } = {},
-): { app: Hono; server: Server } {
+): {
+  app: Hono;
+  server: Server;
+  /** Phase 20 (desktop): tell the host's own sockets which links reach this room. */
+  setShareLinks: (roomId: string, links: ShareLinks) => void;
+  relay: RelayServer | undefined;
+} {
   const app = new Hono();
 
   /**
@@ -214,6 +252,35 @@ export function createServer(
     await next();
     c.header('Referrer-Policy', 'no-referrer');
   });
+
+  // --- BEGIN phase-20 relay (HTTP) ---
+  /**
+   * Room-scoped API requests for a room a desktop host is sharing through this
+   * relay. Registered before every room route. A LOCAL room with the id always
+   * wins; otherwise a registration matching (roomId, sha256(token)) gets the
+   * request; otherwise this falls through to the normal handlers unchanged.
+   * `POST /api/rooms` (no id) never matches. See relay/relayServer.ts.
+   */
+  const relay: RelayServer | undefined =
+    opts.relay === undefined || opts.relay === false
+      ? undefined
+      : createRelayServer({
+          isLocalRoom:
+            (typeof opts.relay === 'object' ? opts.relay.isLocalRoom : undefined) ??
+            ((id) => getRoom(id) !== undefined),
+          allowRegister: (ip) => consumeRateLimit(`relay-register:${ip}`, 20, 60_000),
+          ...(typeof opts.relay === 'object' && opts.relay.limits !== undefined ? { limits: opts.relay.limits } : {}),
+        });
+  if (relay !== undefined) {
+    app.use('/api/rooms/*', async (c, next) => {
+      const roomId = roomIdOfApiPath(new URL(c.req.url).pathname);
+      if (roomId === null) return next();
+      const relayed = await relay.forwardHttp(roomId, roomTokenHeader(c), c.req.raw);
+      if (relayed === null) return next();
+      return relayed;
+    });
+  }
+  // --- END phase-20 relay (HTTP) ---
 
   app.get('/healthz', (c) =>
     c.json({ ok: true, githubConnectEnabled: hasGithubAppConfig() }),
@@ -970,6 +1037,27 @@ export function createServer(
    */
   const hostSockets = new WeakSet<WebSocket>();
 
+  // --- BEGIN phase-20 share links ---
+  /** Per room, the links the desktop says reach it from other machines. */
+  const shareLinks = new Map<string, ShareLinks>();
+  function sendShareLinks(room: Room, only?: WebSocket): void {
+    const links = shareLinks.get(room.id) ?? { web: null, lan: [] };
+    const targets = only === undefined ? [...room.sockets] : [only];
+    for (const target of targets) {
+      const socket = target as WebSocket;
+      // Host sockets only: the links carry the token, and a guest already
+      // holds a link that works for them.
+      if (!hostSockets.has(socket)) continue;
+      socket.send(JSON.stringify({ kind: 'share_links', web: links.web, lan: links.lan }));
+    }
+  }
+  function setShareLinks(roomId: string, links: ShareLinks): void {
+    shareLinks.set(roomId, { web: links.web, lan: [...links.lan] });
+    const room = getRoom(roomId);
+    if (room !== undefined) sendShareLinks(room);
+  }
+  // --- END phase-20 share links ---
+
   function sendTerminals(room: Room, terminals: TerminalRoom, only?: WebSocket): void {
     const list = terminals.list();
     const targets = only === undefined ? [...room.sockets] : [only];
@@ -1009,6 +1097,25 @@ export function createServer(
 
   server.on('upgrade', (request, socket, head) => {
     const url = new URL(request.url ?? '/', 'http://localhost');
+    // --- BEGIN phase-20 relay (WebSocket) ---
+    if (relay !== undefined && url.pathname === RELAY_HOST_PATH) {
+      relay.handleHostUpgrade(request, socket, head, upgradeClientIp(request));
+      return;
+    }
+    if (
+      relay !== undefined &&
+      url.pathname === '/ws' &&
+      relay.handleGuestUpgrade(
+        request,
+        socket,
+        head,
+        url.searchParams.get('room') ?? '',
+        url.searchParams.get('token') ?? '',
+      )
+    ) {
+      return;
+    }
+    // --- END phase-20 relay (WebSocket) ---
     if (url.pathname !== '/ws') {
       socket.destroy();
       return;
@@ -1100,6 +1207,9 @@ export function createServer(
       // handed to a joiner explicitly.
       const joinTerminals = terminalsFor(room);
       if (joinTerminals !== undefined) sendTerminals(room, joinTerminals, ws);
+      // Phase 20: the host's window needs the shareable links (it is loaded
+      // from 127.0.0.1); `sendShareLinks` skips non-host sockets.
+      if (shareLinks.has(room.id)) sendShareLinks(room, ws);
 
       ws.on('message', (data) => {
         const frame = parseClientFrame(String(data));
@@ -1527,12 +1637,24 @@ export function createServer(
     );
   }
 
-  return { app, server };
+  return { app, server, setShareLinks, relay };
+}
+
+/** Same trust as `clientIp`, for an upgrade request (no Hono context there). */
+function upgradeClientIp(request: IncomingMessage): string {
+  const fly = request.headers['fly-client-ip'];
+  if (typeof fly === 'string' && fly !== '') return fly;
+  const forwarded = request.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded !== '') return forwarded.split(',')[0]?.trim() ?? '';
+  return request.socket.remoteAddress ?? 'unknown';
 }
 
 const entry = process.argv[1] ?? '';
 if (entry.endsWith('index.ts') || entry.endsWith('index.js')) {
-  const { server } = createServer();
+  // Phase 20: the hosted server is the relay desktop hosts share through. A
+  // desktop-shaped run (SYNCODE_LOCAL_HOST) never relays; SYNCODE_RELAY=0 turns
+  // it off explicitly.
+  const { server } = createServer({ relay: !isLocalHostMode() && readEnv('RELAY') !== '0' });
   const port = Number(process.env['PORT'] ?? 8080);
   server.listen(port, '0.0.0.0', () => {
     console.log(`syncode listening on :${port}`);

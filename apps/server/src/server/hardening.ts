@@ -40,7 +40,11 @@ export function securityHeaders(): MiddlewareHandler {
     // is the header that stops that specific credential from leaking to
     // whatever a participant clicks next.
     c.header('Referrer-Policy', 'no-referrer');
-    c.header('Content-Security-Policy', buildCsp(c));
+    // A response that already carries a CSP keeps it. Only the phase-20
+    // relay sets one (`default-src 'none'; sandbox` on content a desktop host
+    // supplied), and replacing it with the app's own policy would hand that
+    // untrusted content this origin's script-src.
+    if (!c.res.headers.has('Content-Security-Policy')) c.header('Content-Security-Policy', buildCsp(c));
 
     if (isHttps(c)) {
       // 180 days, with subdomains covered (this host has none that carry a
