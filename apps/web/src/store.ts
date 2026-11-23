@@ -80,6 +80,12 @@ export interface RoomView {
     canManage: boolean;
     list: TerminalEntry[];
   };
+  /**
+   * Phase 20. Links that reach this room from other machines, from the
+   * transient `share_links` frame. The server sends it only to the host's own
+   * sockets, so for a guest this stays empty. Never logged (carries the token).
+   */
+  shareLinks: { web: string | null; lan: string[] };
 }
 
 export const EMPTY_VIEW: RoomView = {
@@ -96,6 +102,7 @@ export const EMPTY_VIEW: RoomView = {
   externalChanges: { paths: [], nonce: 0 },
   fleet: [],
   terminals: { available: false, enabled: true, canManage: false, list: [] },
+  shareLinks: { web: null, lan: [] },
 };
 
 export function reduce(view: RoomView, frame: ServerFrame): RoomView {
@@ -145,6 +152,8 @@ export function reduce(view: RoomView, frame: ServerFrame): RoomView {
         ...view,
         terminals: { available: true, enabled: frame.enabled, canManage: frame.canManage, list: frame.list },
       };
+    case 'share_links':
+      return { ...view, shareLinks: { web: frame.web, lan: frame.lan } };
     case 'term_output':
     case 'term_snapshot':
     case 'term_exit':

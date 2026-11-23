@@ -227,3 +227,17 @@ describe('terminals in the view (phase 19b)', () => {
     expect(view).toBe(EMPTY_VIEW);
   });
 });
+
+describe('share_links (phase 20)', () => {
+  it('starts empty and takes the latest links whole', () => {
+    expect(EMPTY_VIEW.shareLinks).toEqual({ web: null, lan: [] });
+    const shared = reduce(EMPTY_VIEW, {
+      kind: 'share_links',
+      web: 'https://relay.example/?room=r&token=t',
+      lan: ['http://192.168.1.5:5000/?room=r&token=t'],
+    });
+    expect(shared.shareLinks.web).toBe('https://relay.example/?room=r&token=t');
+    const stopped = reduce(shared, { kind: 'share_links', web: null, lan: [] });
+    expect(stopped.shareLinks).toEqual({ web: null, lan: [] });
+  });
+});
