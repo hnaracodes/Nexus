@@ -255,3 +255,16 @@ describe('live edit previews (phase 21)', () => {
     expect(view.livePreviews).toEqual({});
   });
 });
+
+describe('assistant_delta after the message is logged (phase 21)', () => {
+  it('ignores streamed text for a message that is already in the log', () => {
+    let view = reduce(EMPTY_VIEW, {
+      kind: 'event',
+      event: { seq: 1, ts: '2026-11-23T00:00:00.000Z', roomId: 'r', type: 'assistant_message', messageId: 'msg_done', text: 'All of it.' },
+    } as never);
+    view = reduce(view, { kind: 'assistant_delta', messageId: 'msg_done', text: 'it.' });
+    expect(view.pendingDeltas).toEqual({});
+    view = reduce(view, { kind: 'assistant_delta', messageId: 'msg_next', text: 'New ' });
+    expect(view.pendingDeltas).toEqual({ msg_next: 'New ' });
+  });
+});

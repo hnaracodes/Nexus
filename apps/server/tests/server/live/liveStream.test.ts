@@ -94,6 +94,19 @@ describe('createLiveStream', () => {
     expect(deltas.map((d) => (d.kind === 'assistant_delta' ? d.text : '')).join('')).toBe('Hello there, world.');
   });
 
+  it('sends no late tail once the complete message has arrived (the CLI sends it before block stop)', () => {
+    const { frames } = run([
+      messageStart('msg_7'),
+      textStart(0),
+      text(0, 'Modify the return statement accordingly.'),
+      // Real CLI order: the complete assistant message, THEN content_block_stop.
+      { type: 'assistant', parent_tool_use_id: null, message: { id: 'msg_7', content: [{ type: 'text', text: 'Modify the return statement accordingly.' }] } },
+      stop(0),
+    ]);
+    const deltas = frames.filter((f) => f.kind === 'assistant_delta').map((d) => (d.kind === 'assistant_delta' ? d.text : ''));
+    expect(deltas.join('')).toBe('Modify the return statement ');
+  });
+
   it('previews nothing for tools that do not edit files', () => {
     const { frames } = run([messageStart(), toolStart(0, 'toolu_r', 'Read'), json(0, '{"file_path":"/r/a.ts"}'), stop(0)]);
     expect(frames).toEqual([]);

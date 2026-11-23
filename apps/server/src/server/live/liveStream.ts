@@ -75,6 +75,14 @@ export function createLiveStream(opts: { agentId: AgentId; sink: LiveSink; maxPr
   const maxBytes = opts.maxPreviewBytes ?? DEFAULT_MAX_PREVIEW_BYTES;
   /** Keyed by parent tool-use id ('' = top level): a subagent streams separately. */
   const streams = new Map<string, Stream>();
+  /**
+   * Message ids whose COMPLETE `assistant` message has already arrived. The
+   * real CLI sends that before the stream's `content_block_stop`, so the word a
+   * text redactor still holds must not be released after it: the logged message
+   * has already replaced the stream, and a late tail would sit in chat as an
+   * orphan bubble (seen in the first real-model run).
+   */
+  const completeMessages = new Set<string>();
   /** The server's own fold of what it sent, so a joiner's snapshot is exact. */
   let previews: Record<string, EditPreview> = {};
 
@@ -154,7 +162,9 @@ export function createLiveStream(opts: { agentId: AgentId; sink: LiveSink; maxPr
     if (block === undefined) return;
     if (block.kind === 'text') {
       const rest = block.redactor.flush();
-      if (rest !== '' && stream.messageId !== null) opts.sink({ kind: 'assistant_delta', messageId: stream.messageId, text: rest });
+      if (rest !== '' && stream.messageId !== null && !completeMessages.has(stream.messageId)) {
+        opts.sink({ kind: 'assistant_delta', messageId: stream.messageId, text: rest });
+      }
       return;
     }
     if (block.kind !== 'tool') return;
@@ -168,6 +178,14 @@ export function createLiveStream(opts: { agentId: AgentId; sink: LiveSink; maxPr
 
   return {
     onSdkMessage(message) {
+      if (isRecord(message) && message['type'] === 'assistant' && isRecord(message['message'])) {
+        const id = message['message']['id'];
+        if (typeof id === 'string') {
+          completeMessages.add(id);
+          if (completeMessages.size > 200) completeMessages.delete(completeMessages.values().next().value as string);
+        }
+        return;
+      }
       if (!isRecord(message) || message['type'] !== 'stream_event' || !isRecord(message['event'])) return;
       const parent = typeof message['parent_tool_use_id'] === 'string' ? message['parent_tool_use_id'] : '';
       const event = message['event'];

@@ -117,6 +117,13 @@ export const EMPTY_VIEW: RoomView = {
 export function reduce(view: RoomView, frame: ServerFrame): RoomView {
   switch (frame.kind) {
     case 'assistant_delta': {
+      // Streamed text for a message the log already holds would sit in chat as
+      // an orphan bubble forever (nothing clears it again): ignore it. Scans from
+      // the newest event, where the matching message nearly always is.
+      for (let i = view.events.length - 1; i >= 0; i--) {
+        const logged = view.events[i] as SynCodeEvent;
+        if (logged.type === 'assistant_message' && logged.messageId === frame.messageId) return view;
+      }
       const previous = view.pendingDeltas[frame.messageId] ?? '';
       return {
         ...view,
