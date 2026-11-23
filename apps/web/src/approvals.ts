@@ -5,6 +5,8 @@ export interface PendingApproval {
   toolName: string;
   input: unknown;
   expiresAt: number;
+  /** Phase 21: the tool call it gates, when the server recorded one. */
+  toolUseId?: string;
 }
 
 export interface SettledApproval {
@@ -31,6 +33,7 @@ export function deriveApprovals(events: SynCodeEvent[]): {
         toolName: event.toolName,
         input: event.input,
         expiresAt: event.expiresAt,
+        ...(event.toolUseId === undefined ? {} : { toolUseId: event.toolUseId }),
       });
     }
     if (event.type === 'permission_decided') {

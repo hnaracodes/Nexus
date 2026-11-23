@@ -439,6 +439,7 @@ function RoomShell({
           toolName: e.toolName,
           input: e.input,
           expiresAt: e.expiresAt,
+          ...(e.toolUseId === undefined ? {} : { toolUseId: e.toolUseId }),
         };
       });
   }, [view.events, view.fleet]);
@@ -1079,6 +1080,16 @@ function RoomShell({
                       ...(reason === undefined ? {} : { reason }),
                     })
                   }
+                  showInEditorFor={(toolUseId) => {
+                    const ghost = toolUseId === undefined ? undefined : ghosts.find((g) => g.toolUseId === toolUseId);
+                    if (ghost === undefined) return undefined;
+                    // Phase 21: open the file the card is about, in front.
+                    return () =>
+                      setTabState((current) => ({
+                        paths: current.paths.includes(ghost.path) ? current.paths : [...current.paths, ghost.path],
+                        active: ghost.path,
+                      }));
+                  }}
                   onDecideSingle={(requestId, decision, reason) =>
                     connection?.send(
                       reason === undefined

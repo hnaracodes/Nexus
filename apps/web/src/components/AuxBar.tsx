@@ -29,10 +29,12 @@ function SingleApprovalCard({
   approval,
   now,
   onDecide,
+  onShowInEditor,
 }: {
   approval: PendingApproval;
   now: number;
   onDecide: (requestId: string, decision: 'allow' | 'deny', reason?: string) => void;
+  onShowInEditor?: () => void;
 }): JSX.Element {
   const cardRef = useRef<HTMLDivElement | null>(null);
   useHotkeys(
@@ -44,7 +46,12 @@ function SingleApprovalCard({
   );
   return (
     <div ref={cardRef}>
-      <ApprovalPrompt approval={approval} now={now} onDecide={onDecide} />
+      <ApprovalPrompt
+        approval={approval}
+        now={now}
+        onDecide={onDecide}
+        {...(onShowInEditor === undefined ? {} : { onShowInEditor })}
+      />
     </div>
   );
 }
@@ -73,6 +80,11 @@ export interface AuxBarProps {
   now: number;
   onDecideFleet: (requestId: string, agentId: AgentId, decision: 'allow' | 'deny', reason?: string) => void;
   onDecideSingle: (requestId: string, decision: 'allow' | 'deny', reason?: string) => void;
+  /**
+   * Phase 21: for a request gating an edit the room can see, the action that
+   * opens it in the editor; undefined when there is nothing to show.
+   */
+  showInEditorFor?: (toolUseId: string | undefined) => (() => void) | undefined;
 }
 
 /**
@@ -167,7 +179,12 @@ export function AuxBar(props: AuxBarProps): JSX.Element {
               aria-label="Approvals across the fleet"
             >
               {props.hasFleet ? (
-                <ApprovalQueue requests={props.fleetApprovals} now={props.now} onDecide={props.onDecideFleet} />
+                <ApprovalQueue
+                  requests={props.fleetApprovals}
+                  now={props.now}
+                  onDecide={props.onDecideFleet}
+                  {...(props.showInEditorFor === undefined ? {} : { showInEditorFor: props.showInEditorFor })}
+                />
               ) : props.singleApprovals.length === 0 ? (
                 <p className="p-2 text-xs text-fg-muted">No pending approvals.</p>
               ) : (
@@ -177,6 +194,10 @@ export function AuxBar(props: AuxBarProps): JSX.Element {
                     approval={approval}
                     now={props.now}
                     onDecide={props.onDecideSingle}
+                    {...(() => {
+                      const show = props.showInEditorFor?.(approval.toolUseId);
+                      return show === undefined ? {} : { onShowInEditor: show };
+                    })()}
                   />
                 ))
               )}

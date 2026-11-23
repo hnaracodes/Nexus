@@ -20,10 +20,13 @@ export function ApprovalPrompt({
   approval,
   now,
   onDecide,
+  onShowInEditor,
 }: {
   approval: PendingApproval;
   now: number;
   onDecide: (requestId: string, decision: 'allow' | 'deny', reason?: string) => void;
+  /** Phase 21: present only when this request gates an edit the room can see in an editor. */
+  onShowInEditor?: () => void;
 }): JSX.Element {
   const [reason, setReason] = useState('');
   const [showRaw, setShowRaw] = useState(false);
@@ -94,6 +97,15 @@ export function ApprovalPrompt({
         >
           Deny
         </button>
+        {onShowInEditor !== undefined && (
+          <button
+            type="button"
+            onClick={onShowInEditor}
+            className="min-h-11 rounded-md border border-border-strong px-3 py-2 text-sm text-fg transition-colors duration-150 hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+          >
+            Show in editor
+          </button>
+        )}
         <label className="min-w-[10rem] flex-1">
           <span className="sr-only">Reason (optional)</span>
           <input

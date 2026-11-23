@@ -22,6 +22,8 @@ export interface FleetApprovalRequest {
   toolName: string;
   input: unknown;
   expiresAt: number | null;
+  /** Phase 21: the tool call it gates, when recorded. */
+  toolUseId?: string;
 }
 
 /**
@@ -88,9 +90,12 @@ export function ApprovalQueue({
   requests,
   now,
   onDecide,
+  showInEditorFor,
 }: {
   requests: FleetApprovalRequest[];
   now: number;
+  /** Phase 21: a "Show in editor" action for a request, or undefined when there is nothing to show. */
+  showInEditorFor?: (toolUseId: string | undefined) => (() => void) | undefined;
   onDecide: (
     requestId: string,
     agentId: AgentId,
@@ -131,6 +136,10 @@ export function ApprovalQueue({
                 onDecide={(requestId, decision, reason) =>
                   onDecide(requestId, group.agentId, decision, reason)
                 }
+                {...(() => {
+                  const show = showInEditorFor?.(request.toolUseId);
+                  return show === undefined ? {} : { onShowInEditor: show };
+                })()}
               />
             </div>
           ))}
