@@ -27,6 +27,8 @@ function renderHeader(overrides: Partial<RoomHeaderProps> = {}) {
     onOpenCheatsheet: () => {},
     autoMode: null,
     onSetAutoMode: () => {},
+    auxOpen: true,
+    onToggleAux: () => {},
     ...overrides,
   };
   return render(<RoomHeader {...props} />);
@@ -87,5 +89,29 @@ describe('RoomHeader auto mode switch (phase 19a)', () => {
     renderHeader({ onSetAutoMode, autoMode: { participantId: 'p_ada', displayName: 'Ada' } });
     fireEvent.click(screen.getByRole('switch', { name: /auto mode/i }));
     expect(onSetAutoMode).toHaveBeenLastCalledWith(false);
+  });
+});
+
+describe('RoomHeader agent bar toggle', () => {
+  it('reopens a closed agent bar by mouse', () => {
+    const onToggleAux = vi.fn();
+    renderHeader({ auxOpen: false, onToggleAux });
+    const button = screen.getByRole('button', { name: /agent bar/i });
+    expect(button).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(button);
+    expect(onToggleAux).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces pending approvals on the toggle only while the bar is closed', () => {
+    const { unmount } = renderHeader({ auxOpen: false, pendingApprovals: 2 });
+    expect(screen.getByLabelText('2 pending in Approvals')).toBeInTheDocument();
+    unmount();
+    renderHeader({ auxOpen: true, pendingApprovals: 2 });
+    expect(screen.queryByLabelText('2 pending in Approvals')).toBeNull();
+  });
+
+  it('reflects an open bar', () => {
+    renderHeader({ auxOpen: true });
+    expect(screen.getByRole('button', { name: /agent bar/i })).toHaveAttribute('aria-pressed', 'true');
   });
 });

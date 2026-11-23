@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FolderTree, GitCompare, MessageSquare, Network, Search, ShieldAlert, Users } from 'lucide-react';
+import { FolderTree, GitCompare, Network, Search } from 'lucide-react';
 import { deriveApprovals } from './approvals.js';
 import type { PendingApproval } from './approvals.js';
 import { ConnectionStatus } from './components/ConnectionStatus.js';
@@ -747,11 +747,6 @@ function RoomShell({
     { id: 'search', label: 'Search', Icon: Search },
     { id: 'changes', label: 'Source Control', Icon: GitCompare },
   ];
-  const auxItems: ActivityBarItem<AuxView>[] = [
-    { id: 'chat', label: 'Chat', Icon: MessageSquare },
-    { id: 'approvals', label: 'Approvals', Icon: ShieldAlert, badge: approvalCount },
-    ...(hasFleet ? [{ id: 'fleet' as const, label: 'Fleet', Icon: Users, badge: view.fleet.length }] : []),
-  ];
 
   const tabStripTabs: OpenTab[] = tabState.paths.map((id) =>
     id === AGENTS_TAB_ID
@@ -783,6 +778,9 @@ function RoomShell({
         onOpenCheatsheet={() => setCheatsheetOpen(true)}
         autoMode={autoMode}
         onSetAutoMode={(enabled) => connection?.send({ kind: 'set_auto_mode', enabled })}
+        auxOpen={auxOpen}
+        onToggleAux={() => setAuxOpen((open) => !open)}
+        pendingApprovals={approvalCount}
       />
 
       {/* Phase 19a: everyone sees, and anyone can undo, auto mode. */}
@@ -813,6 +811,15 @@ function RoomShell({
                 setSideBarOpen(true);
               }
             }}
+            actions={[
+              {
+                id: 'agents',
+                label: 'Agents',
+                Icon: Network,
+                active: tabState.active === AGENTS_TAB_ID,
+                onClick: openAgentsTab,
+              },
+            ]}
           />
         </PaneErrorBoundary>
 
@@ -933,12 +940,13 @@ function RoomShell({
               />
             </div>
             <div
-              className="fixed bottom-[22px] right-12 top-8 z-20 shrink-0 border-l border-border lg:static lg:z-auto"
-              style={{ width: auxWidth, maxWidth: 'calc(100vw - 96px)' }}
+              className="fixed bottom-[22px] right-0 top-8 z-20 shrink-0 border-l border-border lg:static lg:z-auto"
+              style={{ width: auxWidth, maxWidth: 'calc(100vw - 48px)' }}
             >
               <PaneErrorBoundary key={effectiveAuxView} label="The agent bar">
                 <AuxBar
                   view={effectiveAuxView}
+                  onViewChange={openAux}
                   chat={
                     <AgentChatView
                       roomId={params.roomId}
@@ -1003,32 +1011,6 @@ function RoomShell({
             </div>
           </>
         )}
-
-        {/* The right activity bar never collapses, so its approvals badge is
-            on screen even with every other region closed. */}
-        <PaneErrorBoundary label="The agent activity bar">
-          <ActivityBar
-            side="right"
-            items={auxItems}
-            activeView={auxOpen ? effectiveAuxView : null}
-            onSelect={(next) => {
-              if (auxOpen && effectiveAuxView === next) {
-                setAuxOpen(false);
-              } else {
-                openAux(next);
-              }
-            }}
-            actions={[
-              {
-                id: 'agents',
-                label: 'Agents',
-                Icon: Network,
-                active: tabState.active === AGENTS_TAB_ID,
-                onClick: openAgentsTab,
-              },
-            ]}
-          />
-        </PaneErrorBoundary>
       </div>
 
       <PaneErrorBoundary label="The status bar">

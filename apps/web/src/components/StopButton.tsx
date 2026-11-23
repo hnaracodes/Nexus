@@ -1,22 +1,23 @@
+import { Square } from 'lucide-react';
+
 /**
- * `min-h-11` is the 44px touch-target floor the design system states and every
- * other control honours. This button was ~36px — reported as a medium finding
- * in the phase-5 accessibility audit, then dropped because that session's
- * repair pass filtered to critical/high only and said nothing about what it
- * discarded. It is the room's safety valve; it should not be the hardest
- * control in the app to hit.
+ * The room's safety valve, as a compact icon button inside the prompt box
+ * toolbar. Always enabled: anyone in the room may stop the agent. `busy`
+ * (an agent turn is running) is shown with the filled danger treatment; idle
+ * is an outline, so the control is findable but not alarming.
  */
 export function StopButton({ onStop, busy }: { onStop: () => void; busy: boolean }): JSX.Element {
   return (
     <button
       type="button"
       onClick={onStop}
-      title="Anyone in the room can stop the agent"
-      className={`min-h-11 rounded px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg ${
+      aria-label="Stop"
+      title="Stop the agent (anyone in the room can)"
+      className={`flex h-6 w-6 items-center justify-center rounded focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent ${
         busy ? 'bg-danger text-fg' : 'border border-danger text-danger'
       }`}
     >
-      Stop
+      <Square size={12} aria-hidden="true" />
     </button>
   );
 }

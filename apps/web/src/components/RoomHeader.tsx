@@ -2,7 +2,7 @@ import { useState } from 'react';
 // No `Github` icon: lucide removed brand marks upstream and this project is on
 // lucide-react 1.x. `GitPullRequest` is the better signifier anyway — the chip
 // says where a publish lands, not which vendor hosts it.
-import { Check, Command, GitPullRequest, Link2, Zap } from 'lucide-react';
+import { Check, Command, GitPullRequest, Link2, PanelRight, Zap } from 'lucide-react';
 import type { GithubRepoRef } from '@syncode/protocol/events';
 import type { PresenceEntry } from '@syncode/protocol/wire';
 // Sibling of Task 1 (docs/plans/phase-5b-room-ui-redesign.md). Not present on
@@ -44,6 +44,15 @@ export interface RoomHeaderProps {
   autoMode: AutoModeState | null;
   /** Ask the server to switch auto mode. Anyone may, in either direction. */
   onSetAutoMode: (enabled: boolean) => void;
+  /** Whether the right-hand agent bar is open (drives `aria-pressed`). */
+  auxOpen: boolean;
+  /** Toggle the agent bar: the by-mouse twin of mod+alt+b. */
+  onToggleAux: () => void;
+  /**
+   * Pending approvals. Shown on the toggle only while the bar is CLOSED, so a
+   * collapsed agent bar can never hide that the room is waiting on a decision.
+   */
+  pendingApprovals?: number;
 }
 
 /**
@@ -68,6 +77,9 @@ export function RoomHeader({
   onOpenCheatsheet,
   autoMode,
   onSetAutoMode,
+  auxOpen,
+  onToggleAux,
+  pendingApprovals = 0,
 }: RoomHeaderProps): JSX.Element {
   const [copied, setCopied] = useState(false);
 
@@ -168,6 +180,26 @@ export function RoomHeader({
           className="flex h-6 w-6 items-center justify-center rounded border border-border text-xs text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
         >
           ?
+        </button>
+        <button
+          type="button"
+          onClick={onToggleAux}
+          aria-pressed={auxOpen}
+          aria-label="Toggle agent bar"
+          title="Toggle agent bar (⌥⌘B)"
+          className={`relative flex h-6 w-6 items-center justify-center rounded hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent ${
+            auxOpen ? 'text-fg' : 'text-fg-muted'
+          }`}
+        >
+          <PanelRight size={14} aria-hidden="true" />
+          {!auxOpen && pendingApprovals > 0 && (
+            <span
+              aria-label={`${pendingApprovals} pending in Approvals`}
+              className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-accent px-0.5 text-[9px] font-semibold leading-none text-on-accent"
+            >
+              {pendingApprovals > 99 ? '99+' : pendingApprovals}
+            </span>
+          )}
         </button>
       </div>
     </header>

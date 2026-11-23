@@ -51,6 +51,8 @@ function SingleApprovalCard({
 
 export interface AuxBarProps {
   view: AuxView;
+  /** Header-tab click. The shell decides what a view change means. */
+  onViewChange: (view: AuxView) => void;
 
   /** The Chat view's content (`AgentChatView`), composed by the shell. */
   chat: ReactNode;
@@ -88,17 +90,53 @@ export interface AuxBarProps {
  */
 export function AuxBar(props: AuxBarProps): JSX.Element {
   const { view } = props;
+  // Optional chaining: a malformed list must throw inside the view's error
+  // boundary, not here in the header, which would blank the whole bar.
+  const approvalCount = (props.hasFleet ? props.fleetApprovals : props.singleApprovals)?.length ?? 0;
+  const tabs: { id: AuxView; badge: number }[] = [
+    { id: 'chat', badge: 0 },
+    { id: 'approvals', badge: approvalCount },
+    ...(props.hasFleet ? [{ id: 'fleet' as const, badge: props.fleetAgents.length }] : []),
+  ];
 
   return (
     <div
       className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-surface"
       aria-label={`${AUX_TITLES[view]} panel`}
     >
-      {view !== 'fleet' && (
-        <div className="flex h-[35px] shrink-0 items-center px-4">
-          <h2 className="text-[11px] font-normal uppercase tracking-wide text-fg-muted">{AUX_TITLES[view]}</h2>
+      <div className="flex h-[35px] shrink-0 items-stretch px-4">
+        <div role="tablist" aria-label="Agent bar views" className="flex h-full min-w-0 items-stretch gap-4">
+          {tabs.map(({ id, badge }) => {
+            const isActive = id === view;
+            return (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                aria-label={AUX_TITLES[id]}
+                title={badge > 0 ? `${AUX_TITLES[id]} (${badge} pending)` : AUX_TITLES[id]}
+                onClick={() => props.onViewChange(id)}
+                className={`flex shrink-0 items-center gap-1.5 border-b px-0 text-[11px] uppercase tracking-wide focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent ${
+                  isActive ? 'border-b-accent text-fg' : 'border-b-transparent text-fg-muted hover:text-fg'
+                }`}
+              >
+                {AUX_TITLES[id]}
+                {badge > 0 && (
+                  <span
+                    aria-label={`${badge} pending in ${AUX_TITLES[id]}`}
+                    className={`flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-none ${
+                      id === 'approvals' ? 'bg-accent text-on-accent' : 'bg-muted text-fg'
+                    }`}
+                  >
+                    {badge > 99 ? '99+' : badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
-      )}
+      </div>
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <PaneErrorBoundary

@@ -93,15 +93,26 @@ afterEach(() => {
 });
 
 describe('shell — layout', () => {
-  it('puts files on the left and the agent buttons on the right', () => {
+  it('has no right activity bar: files and Agents on the left, Chat/Approvals as agent-bar header tabs', () => {
     boot();
     const left = document.querySelector('[data-side="left"]') as HTMLElement;
-    const right = document.querySelector('[data-side="right"]') as HTMLElement;
+    expect(document.querySelector('[data-side="right"]')).toBeNull();
     expect(within(left).getByRole('tab', { name: 'Explorer' })).toBeInTheDocument();
     expect(within(left).queryByRole('tab', { name: 'Approvals' })).toBeNull();
-    expect(within(right).getByRole('tab', { name: 'Chat' })).toBeInTheDocument();
-    expect(within(right).getByRole('tab', { name: 'Approvals' })).toBeInTheDocument();
-    expect(within(right).getByRole('button', { name: 'Agents' })).toBeInTheDocument();
+    expect(within(left).getByRole('button', { name: 'Agents' })).toBeInTheDocument();
+    const aux = screen.getByRole('tablist', { name: 'Agent bar views' });
+    expect(within(aux).getByRole('tab', { name: 'Chat' })).toBeInTheDocument();
+    expect(within(aux).getByRole('tab', { name: 'Approvals' })).toBeInTheDocument();
+  });
+
+  it('the title-bar toggle closes and reopens the agent bar by mouse', () => {
+    boot();
+    const toggle = screen.getByRole('button', { name: 'Toggle agent bar' });
+    expect(screen.getByLabelText('Chat panel')).toBeInTheDocument();
+    fireEvent.click(toggle);
+    expect(screen.queryByLabelText('Chat panel')).toBeNull();
+    fireEvent.click(toggle);
+    expect(screen.getByLabelText('Chat panel')).toBeInTheDocument();
   });
 
   it('keeps the prompt dock in Chat and enabled for a NON-driver (I2′), sending on Cmd/Ctrl+Enter', () => {
@@ -114,7 +125,7 @@ describe('shell — layout', () => {
       ],
       driverId: 'p_grace',
     });
-    const box = document.querySelector('form input') as HTMLInputElement;
+    const box = document.querySelector('form textarea') as HTMLTextAreaElement;
     expect(box).not.toBeDisabled();
     fireEvent.change(box, { target: { value: 'hello' } });
     fireEvent.keyDown(box, { key: 'Enter', ctrlKey: true });
@@ -321,7 +332,7 @@ describe('shell — Markdown preview', () => {
     const toggle = await screen.findByRole('button', { name: /open preview to the side/i });
 
     // Inside the prompt textarea: paste-as-plain-text must keep working.
-    const prompt = document.querySelector('form input') as HTMLInputElement;
+    const prompt = document.querySelector('form textarea') as HTMLTextAreaElement;
     const inPrompt = new KeyboardEvent('keydown', { key: 'V', ctrlKey: true, shiftKey: true, cancelable: true, bubbles: true });
     prompt.dispatchEvent(inPrompt);
     expect(inPrompt.defaultPrevented).toBe(false);

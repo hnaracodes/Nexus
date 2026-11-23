@@ -91,4 +91,35 @@ describe('PromptDock', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
     expect(onStop).toHaveBeenCalled();
   });
+
+  it('Enter sends, Shift+Enter does not, IME composition Enter does not', () => {
+    const onSubmitPrompt = vi.fn();
+    renderDock({ promptValue: 'hi', onSubmitPrompt });
+    const input = screen.getByPlaceholderText('Ask the agent…');
+    fireEvent.keyDown(input, { key: 'Enter', shiftKey: true });
+    expect(onSubmitPrompt).not.toHaveBeenCalled();
+    fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
+    expect(onSubmitPrompt).not.toHaveBeenCalled();
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onSubmitPrompt).toHaveBeenCalledWith('hi');
+  });
+
+  it('the prompt is a multi-line textarea', () => {
+    renderDock();
+    expect(screen.getByPlaceholderText('Ask the agent…').tagName).toBe('TEXTAREA');
+  });
+
+  it('disabled state follows promptDisabled only: disables input and Send, not Stop', () => {
+    renderDock({ promptDisabled: true, driverId: 'me', selfId: 'me' });
+    expect(screen.getByPlaceholderText('Ask the agent…')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Stop' })).not.toBeDisabled();
+  });
+
+  it('toolbar controls are labelled icon buttons', () => {
+    renderDock();
+    for (const name of ['Send', 'Stop']) {
+      expect(screen.getByRole('button', { name })).toHaveAttribute('title');
+    }
+  });
 });

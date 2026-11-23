@@ -31,11 +31,11 @@ export function ContextWindowBar({ events }: { events: SynCodeEvent[] }): JSX.El
   if (latest === undefined) {
     return (
       <div
-        className="flex min-h-11 items-center gap-1.5 rounded border border-border px-2 text-xs text-fg-muted"
+        className="flex h-6 min-w-0 shrink items-center gap-1 rounded px-1.5 text-xs text-fg-muted"
         title="No turn has completed yet, so context usage is not known"
       >
-        <Gauge size={14} aria-hidden="true" />
-        <span>Usage unavailable</span>
+        <Gauge size={12} aria-hidden="true" className="shrink-0" />
+        <span className="truncate">Usage unavailable</span>
       </div>
     );
   }
@@ -48,17 +48,17 @@ export function ContextWindowBar({ events }: { events: SynCodeEvent[] }): JSX.El
 
   return (
     <div
-      className="flex min-h-11 items-center gap-2 rounded border border-border px-2 text-xs text-fg-muted"
+      className="flex h-6 min-w-0 shrink items-center gap-1 rounded px-1.5 text-xs text-fg-muted"
       title={`${usedTokens.toLocaleString()} / ${latest.contextWindow.toLocaleString()} tokens (${percent}%)`}
     >
-      <Gauge size={14} aria-hidden="true" />
+      <Gauge size={12} aria-hidden="true" className="shrink-0" />
       <div
         role="progressbar"
         aria-label="Context window usage"
         aria-valuenow={percent}
         aria-valuemin={0}
         aria-valuemax={100}
-        className="h-1.5 w-16 overflow-hidden rounded-full bg-muted"
+        className="h-1.5 w-10 shrink-0 overflow-hidden rounded-full bg-muted"
       >
         <div
           className={`h-full rounded-full transition-[width] duration-150 ease-out ${barColor(ratio)}`}

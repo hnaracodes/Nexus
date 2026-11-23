@@ -106,20 +106,20 @@ export function ModelSelector({
 
   return (
     <div
-      className="flex min-h-11 items-center gap-1.5 rounded border border-border px-2 text-xs text-fg-muted"
+      className="flex h-6 min-w-0 shrink items-center gap-1 rounded px-1.5 text-xs text-fg-muted hover:bg-surface-2"
       title={
         disabled
           ? 'Only the driver can switch the room model while someone is driving'
           : 'Switch the model for this room'
       }
     >
-      <Cpu size={14} aria-hidden="true" />
+      <Cpu size={12} aria-hidden="true" className="shrink-0" />
       <select
         aria-label="Room model"
         disabled={disabled}
         value={currentModel ?? DEFAULT_OPTION_VALUE}
         onChange={(event) => handleChange(event.target.value)}
-        className="min-h-11 rounded border-none bg-transparent text-xs text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:text-fg-muted disabled:opacity-60"
+        className="h-6 min-w-0 max-w-[9rem] truncate rounded border-none bg-transparent text-xs text-fg focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent disabled:text-fg-muted disabled:opacity-60"
       >
         <option value={DEFAULT_OPTION_VALUE}>Default</option>
         {unlistedCurrentModel !== null && (

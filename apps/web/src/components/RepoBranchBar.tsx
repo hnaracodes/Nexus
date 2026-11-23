@@ -22,11 +22,11 @@ export function RepoBranchBar({
   if (github === null) {
     return (
       <div
-        className="flex min-h-11 items-center gap-1.5 rounded border border-border px-2 text-xs text-fg-muted"
+        className="flex h-6 min-w-0 shrink items-center gap-1 rounded px-1.5 text-xs text-fg-muted"
         title="This room was not connected to a GitHub repository"
       >
-        <GitPullRequest size={14} aria-hidden="true" />
-        <span>No repository</span>
+        <GitPullRequest size={12} aria-hidden="true" />
+        <span className="truncate">No repository</span>
       </div>
     );
   }
@@ -35,16 +35,16 @@ export function RepoBranchBar({
 
   return (
     <div
-      className="flex min-h-11 items-center gap-2 rounded border border-border px-2 text-xs text-fg-muted"
+      className="flex h-6 min-w-0 shrink items-center gap-1 rounded px-1.5 text-xs text-fg-muted"
       title={`Publishing opens a pull request on ${github.owner}/${github.repo} from ${branch}`}
     >
-      <span className="flex items-center gap-1.5">
-        <GitPullRequest size={14} aria-hidden="true" />
-        <span className="text-fg">{`${github.owner}/${github.repo}`}</span>
+      <span className="flex min-w-0 items-center gap-1">
+        <GitPullRequest size={12} aria-hidden="true" />
+        <span className="truncate text-fg">{`${github.owner}/${github.repo}`}</span>
       </span>
-      <span className="flex items-center gap-1 font-mono">
-        <GitBranch size={14} aria-hidden="true" />
-        <span>{branch}</span>
+      <span className="hidden min-w-0 items-center gap-1 font-mono sm:flex">
+        <GitBranch size={12} aria-hidden="true" />
+        <span className="truncate">{branch}</span>
       </span>
     </div>
   );

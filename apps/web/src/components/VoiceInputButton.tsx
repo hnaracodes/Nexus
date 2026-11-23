@@ -72,9 +72,9 @@ export function VoiceInputButton({
         disabled
         aria-label="Voice input is not supported in this browser"
         title="Voice input is not supported in this browser"
-        className="flex min-h-11 min-w-11 items-center justify-center rounded border border-border text-fg-muted opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+        className="flex h-6 w-6 items-center justify-center rounded text-fg-muted opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
       >
-        <MicOff size={16} aria-hidden="true" />
+        <MicOff size={14} aria-hidden="true" />
       </button>
     );
   }
@@ -111,11 +111,11 @@ export function VoiceInputButton({
       aria-pressed={listening}
       aria-label={listening ? 'Stop voice input' : 'Start voice input'}
       title={listening ? 'Stop voice input' : 'Start voice input'}
-      className={`flex min-h-11 min-w-11 items-center justify-center rounded border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg ${
-        listening ? 'border-accent text-accent-fg' : 'border-border text-fg-muted hover:text-fg'
+      className={`flex h-6 w-6 items-center justify-center rounded focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent ${
+        listening ? 'bg-accent/15 text-accent-fg' : 'text-fg-muted hover:bg-surface-2 hover:text-fg'
       }`}
     >
-      <Mic size={16} aria-hidden="true" />
+      <Mic size={14} aria-hidden="true" />
     </button>
   );
 }
