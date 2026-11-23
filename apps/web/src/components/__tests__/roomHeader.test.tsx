@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GithubRepoRef } from '@syncode/protocol/events';
 import { RoomHeader, type RoomHeaderProps } from '../RoomHeader.js';
 
@@ -13,7 +13,7 @@ const BINDING: GithubRepoRef = {
 function renderHeader(overrides: Partial<RoomHeaderProps> = {}) {
   const props: RoomHeaderProps = {
     roomLabel: 'room_466',
-    roomLink: 'http://localhost:8099/?room=r&token=t',
+    shareLink: { url: 'https://a.example/?room=r&token=t', scope: 'public' },
     participants: [],
     driverId: null,
     selfId: null,
@@ -113,5 +113,70 @@ describe('RoomHeader agent bar toggle', () => {
   it('reflects an open bar', () => {
     renderHeader({ auxOpen: true });
     expect(screen.getByRole('button', { name: /agent bar/i })).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
+describe('RoomHeader share link (phase 20)', () => {
+  const writeText = vi.fn(async (_text: string) => {});
+  beforeEach(() => {
+    writeText.mockClear();
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function copy(): Promise<void> {
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^copy/i }));
+    });
+  }
+
+  it('copies exactly the link it was given', async () => {
+    renderHeader({ shareLink: { url: 'https://r.example/?room=r&token=t', scope: 'web' } });
+    await copy();
+    expect(writeText).toHaveBeenCalledWith('https://r.example/?room=r&token=t');
+    expect(writeText.mock.calls[0]![0]).not.toContain('name=');
+  });
+
+  it('says what each link reaches', () => {
+    const { unmount } = renderHeader({ shareLink: { url: 'u', scope: 'web' } });
+    expect(screen.getByRole('button', { name: /anyone with it can join from anywhere/ })).toBeInTheDocument();
+    unmount();
+    const lan = renderHeader({ shareLink: { url: 'u', scope: 'lan' } });
+    expect(screen.getByRole('button', { name: /from your local network/ })).toBeInTheDocument();
+    lan.unmount();
+    renderHeader({ shareLink: { url: 'u', scope: 'local' } });
+    expect(screen.getByTitle(/only on this computer.*Share on the Web/)).toBeInTheDocument();
+  });
+
+  it('shows the Shared on the web indicator only for a web link', () => {
+    for (const scope of ['lan', 'local', 'public'] as const) {
+      const r = renderHeader({ shareLink: { url: 'u', scope } });
+      expect(screen.queryByText('Shared on the web')).toBeNull();
+      r.unmount();
+    }
+    renderHeader({ shareLink: { url: 'u', scope: 'web' } });
+    expect(screen.getByText('Shared on the web')).toBeInTheDocument();
+    expect(screen.getByTitle(/anyone with the link can join.*Room menu/)).toBeInTheDocument();
+  });
+
+  it('shows the only-on-this-computer notice after copying in local scope, and then it goes away', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    renderHeader({ shareLink: { url: 'http://127.0.0.1:1/?room=r&token=t', scope: 'local' } });
+    expect(screen.queryByText(/only works on this computer/)).toBeNull();
+    await copy();
+    expect(screen.getByText(/only works on this computer.*Share on the Web/)).toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(9000);
+    });
+    expect(screen.queryByText(/only works on this computer/)).toBeNull();
+  });
+
+  it.each(['web', 'lan', 'public'] as const)('shows no local notice after copying in %s scope', async (scope) => {
+    renderHeader({ shareLink: { url: 'u', scope } });
+    await copy();
+    expect(writeText).toHaveBeenCalled();
+    expect(screen.queryByText(/only works on this computer/)).toBeNull();
   });
 });

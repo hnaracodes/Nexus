@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 // No `Github` icon: lucide removed brand marks upstream and this project is on
 // lucide-react 1.x. `GitPullRequest` is the better signifier anyway — the chip
 // says where a publish lands, not which vendor hosts it.
-import { Check, Command, GitPullRequest, Link2, PanelRight, Zap } from 'lucide-react';
+import { Check, Command, GitPullRequest, Globe, Link2, PanelRight, Zap } from 'lucide-react';
 import type { GithubRepoRef } from '@syncode/protocol/events';
 import type { PresenceEntry } from '@syncode/protocol/wire';
 // Sibling of Task 1 (docs/plans/phase-5b-room-ui-redesign.md). Not present on
@@ -13,12 +13,17 @@ import { AgentActivity } from './AgentActivity.js';
 import type { AgentStatus } from '../agentStatus.js';
 import type { AutoModeState } from '../derive/autoMode.js';
 import { Roster } from './Roster.js';
+import type { ShareScope, ShareableRoomLink } from '../shareLink.js';
 
 export interface RoomHeaderProps {
   /** Repo name from `room_created`, else the short room id. Never the token. */
   roomLabel: string;
-  /** Full shareable room URL, for the copy-link button. Never logged, I4. */
-  roomLink: string;
+  /**
+   * The link the copy button hands out and what it reaches (see
+   * `shareableRoomLink`). Never carries a display name. Never logged, I4.
+   * `scope === 'web'` also drives the "Shared on the web" indicator.
+   */
+  shareLink: ShareableRoomLink;
   participants: PresenceEntry[];
   driverId: string | null;
   selfId: string | null;
@@ -55,6 +60,29 @@ export interface RoomHeaderProps {
   pendingApprovals?: number;
 }
 
+/** How long the "only works on this computer" notice stays up after a copy. */
+const LOCAL_NOTICE_MS = 8000;
+
+const LOCAL_NOTICE =
+  'Copied. This link only works on this computer. Use Room → Share on the Web to invite someone elsewhere.';
+
+/** Tooltip and accessible name of the copy button, per what the link reaches. */
+const COPY_TEXT: Record<ShareScope, { title: string; label: string }> = {
+  web: {
+    title: 'Copy the web link (anyone with it can join from anywhere)',
+    label: 'Copy the web link (anyone with it can join from anywhere)',
+  },
+  lan: {
+    title: 'Copy the local network link (anyone with it can join from your local network)',
+    label: 'Copy the local network link (anyone with it can join from your local network)',
+  },
+  local: {
+    title: 'This room is only on this computer. Use Room → Share on the Web to invite someone elsewhere.',
+    label: 'Copy room link (this room is only on this computer)',
+  },
+  public: { title: 'Copy room link', label: 'Copy room link' },
+};
+
 /**
  * The top header region: wordmark, room label with a copy-link control, the
  * participant avatar row, live agent activity, and triggers for the room
@@ -63,7 +91,7 @@ export interface RoomHeaderProps {
  */
 export function RoomHeader({
   roomLabel,
-  roomLink,
+  shareLink,
   participants,
   driverId,
   selfId,
@@ -82,12 +110,38 @@ export function RoomHeader({
   pendingApprovals = 0,
 }: RoomHeaderProps): JSX.Element {
   const [copied, setCopied] = useState(false);
+  const [localNoticeShown, setLocalNoticeShown] = useState(false);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // No state updates after unmount: a header that unmounts (room switch) must
+  // not be written to by a timer started before it went away.
+  useEffect(
+    () => () => {
+      if (copiedTimer.current !== null) clearTimeout(copiedTimer.current);
+      if (noticeTimer.current !== null) clearTimeout(noticeTimer.current);
+    },
+    [],
+  );
+
+  const copyText = COPY_TEXT[shareLink.scope];
+  // Derived, not stored: if the scope changes (the host starts sharing) a
+  // notice about the old scope must not outlive it.
+  const showLocalNotice = localNoticeShown && shareLink.scope === 'local';
 
   async function handleCopyLink(): Promise<void> {
     try {
-      await navigator.clipboard.writeText(roomLink);
+      await navigator.clipboard.writeText(shareLink.url);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      if (copiedTimer.current !== null) clearTimeout(copiedTimer.current);
+      copiedTimer.current = setTimeout(() => setCopied(false), 2000);
+      if (shareLink.scope === 'local') {
+        // The link is real but only opens on this computer. Say so right after
+        // the copy, where the person is looking, instead of letting them send
+        // it to someone it cannot reach. Inline: no modal, no alert().
+        setLocalNoticeShown(true);
+        if (noticeTimer.current !== null) clearTimeout(noticeTimer.current);
+        noticeTimer.current = setTimeout(() => setLocalNoticeShown(false), LOCAL_NOTICE_MS);
+      }
     } catch {
       // Clipboard access can be denied (permissions, insecure context). Silent
       // failure is acceptable here — the link is still visible/selectable in
@@ -103,8 +157,8 @@ export function RoomHeader({
         <button
           type="button"
           onClick={() => void handleCopyLink()}
-          aria-label="Copy room link"
-          title="Copy room link"
+          aria-label={copyText.label}
+          title={copyText.title}
           className="flex h-6 w-6 items-center justify-center rounded text-fg-muted hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
         >
           {copied ? (
@@ -113,6 +167,20 @@ export function RoomHeader({
             <Link2 size={14} aria-hidden="true" />
           )}
         </button>
+        {showLocalNotice && (
+          <span role="status" title={LOCAL_NOTICE} className="truncate text-xs text-warn">
+            {LOCAL_NOTICE}
+          </span>
+        )}
+        {shareLink.scope === 'web' && (
+          <span
+            title="This room is shared on the web: anyone with the link can join. Stop sharing from the Room menu."
+            className="flex h-6 shrink-0 items-center gap-1.5 rounded border border-accent bg-accent/15 px-2 text-xs text-fg"
+          >
+            <Globe size={12} aria-hidden="true" className="text-accent-fg" />
+            <span>Shared on the web</span>
+          </span>
+        )}
         {github !== null && (
           <a
             href={`https://github.com/${github.owner}/${github.repo}`}

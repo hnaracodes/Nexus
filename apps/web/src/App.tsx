@@ -35,6 +35,8 @@ import { AutoModeBanner } from './components/AutoModeBanner.js';
 import { deriveAutoMode } from './derive/autoMode.js';
 import { TerminalPanel } from './terminal/TerminalPanel.js';
 import { deriveGithubBinding } from './githubBinding.js';
+import { shareableRoomLink } from './shareLink.js';
+import type { ShareableRoomLink } from './shareLink.js';
 import { deriveAgentStatus } from './agentStatus.js';
 import { ShortcutCheatsheet } from './components/ShortcutCheatsheet.js';
 import { RoomSwitcher } from './components/RoomSwitcher.js';
@@ -269,7 +271,16 @@ export default function App(): JSX.Element {
   // --- BEGIN phase-5b layout ---
   const iAmDriving = view.driverId !== null && view.driverId === view.selfId;
   const roomLabel = deriveRoomLabel(view.events, params.roomId);
-  const roomLink = `${globalThis.location.origin}/?room=${params.roomId}&token=${params.token}&name=${encodeURIComponent(params.displayName)}`;
+  // What "Copy room link" hands out. Never carries `name` (it would make the
+  // recipient join as us) and never trusts a loopback origin (it would point
+  // the recipient at their own machine). See shareLink.ts.
+  const shareLink = shareableRoomLink({
+    shareLinks: view.shareLinks,
+    origin: globalThis.location.origin,
+    hostname: globalThis.location.hostname,
+    roomId: params.roomId,
+    token: params.token,
+  });
   const agentStatus = deriveAgentStatus(view.events, view.pendingDeltas);
   const { pending: pendingApprovals } = deriveApprovals(view.events);
 
@@ -287,7 +298,7 @@ export default function App(): JSX.Element {
       setReKeyOpen={setReKeyOpen}
       iAmDriving={iAmDriving}
       roomLabel={roomLabel}
-      roomLink={roomLink}
+      shareLink={shareLink}
       agentStatus={agentStatus}
       pendingApprovals={pendingApprovals}
       docSession={docSession}
@@ -316,7 +327,7 @@ function RoomShell({
   setReKeyOpen,
   iAmDriving,
   roomLabel,
-  roomLink,
+  shareLink,
   agentStatus,
   pendingApprovals,
   docSession,
@@ -333,7 +344,7 @@ function RoomShell({
   setReKeyOpen: (open: boolean) => void;
   iAmDriving: boolean;
   roomLabel: string;
-  roomLink: string;
+  shareLink: ShareableRoomLink;
   agentStatus: ReturnType<typeof deriveAgentStatus>;
   pendingApprovals: PendingApproval[];
   /** The room's collaborative document session, or null before
@@ -773,7 +784,7 @@ function RoomShell({
           agent activity, Cmd+K and ? all live here still. */}
       <RoomHeader
         roomLabel={roomLabel}
-        roomLink={roomLink}
+        shareLink={shareLink}
         participants={view.participants}
         driverId={view.driverId}
         selfId={view.selfId}
