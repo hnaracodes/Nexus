@@ -19,6 +19,8 @@ export interface PromptDockProps {
   onStop: () => void;
   stopBusy: boolean;
   onSetModel: (model: string | null) => void;
+  /** Live git branch of a local folder room, for the repo chip. */
+  branch?: string | null;
 }
 
 /**
@@ -32,6 +34,7 @@ export interface PromptDockProps {
  * `ModelSelector`, which gates itself internally.
  */
 export function PromptDock({
+  branch,
   roomId,
   token,
   events,
@@ -61,7 +64,7 @@ export function PromptDock({
             selfId={selfId}
             onSetModel={onSetModel}
           />
-          <RepoBranchBar events={events} roomId={roomId} />
+          <RepoBranchBar events={events} roomId={roomId} branch={branch ?? null} />
           <ContextWindowBar events={events} />
         </>
       }

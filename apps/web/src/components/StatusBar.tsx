@@ -2,7 +2,7 @@ import { GitBranch, ShieldAlert, User, Users } from 'lucide-react';
 import type { SynCodeEvent } from '@syncode/protocol/events';
 import type { PresenceEntry } from '@syncode/protocol/wire';
 import type { Status } from '../ws.js';
-import { deriveGithubBinding } from '../githubBinding.js';
+import { DETECTED_REPO_TITLE, deriveDetectedRepo, deriveGithubBinding } from '../githubBinding.js';
 import { ConnectionStatus } from './ConnectionStatus.js';
 
 const ITEM =
@@ -33,6 +33,7 @@ export function StatusBar({
   approvalCount,
   onOpenAgents,
   onOpenApprovals,
+  branch = null,
 }: {
   events: SynCodeEvent[];
   roomId: string;
@@ -47,8 +48,11 @@ export function StatusBar({
   approvalCount: number;
   onOpenAgents: () => void;
   onOpenApprovals: () => void;
+  /** Live branch of a local folder's checkout; only used for a detected repo. */
+  branch?: string | null;
 }): JSX.Element {
   const github = deriveGithubBinding(events);
+  const detected = github === null ? deriveDetectedRepo(events) : null;
   const driverName =
     driverId === null
       ? 'No driver'
@@ -65,6 +69,15 @@ export function StatusBar({
         <span className={`${ITEM} min-w-0`} title={`${github.owner}/${github.repo}`}>
           <GitBranch size={12} aria-hidden="true" />
           <span className="truncate font-mono">{`nexus/${roomId}`}</span>
+        </span>
+      ) : detected !== null ? (
+        <span className={`${ITEM} min-w-0`} title={DETECTED_REPO_TITLE}>
+          <GitBranch size={12} aria-hidden="true" />
+          <span className="truncate font-mono">
+            {branch !== null
+              ? `${detected.owner}/${detected.repo} · ${branch}`
+              : `${detected.owner}/${detected.repo}`}
+          </span>
         </span>
       ) : (
         <span className={ITEM}>

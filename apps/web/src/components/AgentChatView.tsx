@@ -38,6 +38,8 @@ export interface AgentChatViewProps {
   /** Pending approvals in the room. While > 0 a strip pins to the top. */
   approvalCount: number;
   onReviewApprovals: () => void;
+  /** Live git branch of a local folder room, for the repo chip; null when unknown. */
+  gitBranch?: string | null;
 }
 
 /**
@@ -113,6 +115,7 @@ export function AgentChatView(props: AgentChatViewProps): JSX.Element {
         }}
       />
       <PromptDock
+        branch={props.gitBranch ?? null}
         roomId={props.roomId}
         token={props.token}
         events={props.events}

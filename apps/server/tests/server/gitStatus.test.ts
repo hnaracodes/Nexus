@@ -1,3 +1,6 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { GitRunner } from '../../src/server/publish.js';
 import { __resetRooms, createRoom } from '../../src/server/rooms.js';
@@ -73,7 +76,7 @@ describe('getGitStatus', () => {
   it('calls status with -z and returns the parsed entries', async () => {
     const fake = fakeGit({ statusOutput: ' M a.txt\0' });
     const result = await getGitStatus(makeRoom(), { git: fake.git });
-    expect(result).toEqual({ entries: [{ path: 'a.txt', status: ' M' }] });
+    expect(result).toEqual({ entries: [{ path: 'a.txt', status: ' M' }], branch: null });
 
     const statusCall = fake.calls.find((args) => args.includes('status'));
     expect(statusCall).toBeDefined();
@@ -85,7 +88,7 @@ describe('getGitStatus', () => {
   it('returns no entries, without error, when the working directory is not a git repo', async () => {
     const fake = fakeGit({ isRepo: false });
     const result = await getGitStatus(makeRoom(), { git: fake.git });
-    expect(result).toEqual({ entries: [] });
+    expect(result).toEqual({ entries: [], branch: null });
     expect(fake.calls.some((args) => args.includes('status'))).toBe(false);
   });
 
@@ -95,6 +98,37 @@ describe('getGitStatus', () => {
       failStatus: { stderr: 'fatal: some low-level failure' },
     });
     await expect(getGitStatus(makeRoom(), { git: fake.git })).rejects.toThrow(/status/i);
+  });
+});
+
+describe('getGitStatus branch', () => {
+  function repoDir(head: string): string {
+    const dir = mkdtempSync(join(tmpdir(), 'syncode-branch-'));
+    mkdirSync(join(dir, '.git'));
+    writeFileSync(join(dir, '.git', 'HEAD'), head);
+    return dir;
+  }
+
+  it('reports the branch read from .git/HEAD, and null for a detached HEAD', async () => {
+    const dir = repoDir('ref: refs/heads/feature/live\n');
+    try {
+      const fake = fakeGit({ statusOutput: '' });
+      expect((await getGitStatus(makeRoom(dir), { git: fake.git })).branch).toBe('feature/live');
+      writeFileSync(join(dir, '.git', 'HEAD'), '0123456789abcdef0123456789abcdef01234567\n');
+      expect((await getGitStatus(makeRoom(dir), { git: fake.git })).branch).toBeNull();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('still reports the branch when git itself is unavailable', async () => {
+    const dir = repoDir('ref: refs/heads/main\n');
+    try {
+      const result = await getGitStatus(makeRoom(dir), { git: fakeGit({ isRepo: false }).git });
+      expect(result).toEqual({ entries: [], branch: 'main' });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

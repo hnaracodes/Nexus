@@ -7,7 +7,7 @@
  */
 
 import type { AddressInfo } from 'node:net';
-import { existsSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -16,6 +16,7 @@ import { createServer } from '../../src/server/index.js';
 import { __resetLocalHostState } from '../../src/server/localHost.js';
 import { __resetRateLimits } from '../../src/server/rate-limit.js';
 import { __resetRooms } from '../../src/server/rooms.js';
+import { getRuntime } from '../../src/server/ws.js';
 
 const KEY = 'sk-ant-api03-TESTONLY-not-a-real-key';
 
@@ -116,6 +117,58 @@ describe('POST /api/rooms with localPath', () => {
     expect(roomBody.cwd).toBe(projectDir);
     // Nothing was cloned or created — the room IS the folder, not a copy.
     expect(existsSync(join(roomBody.cwd, 'README.md'))).toBe(true);
+  });
+
+  async function createLocalRoom(): Promise<{ roomId: string; token: string }> {
+    const response = await withLocalHostMode(() =>
+      fetch(`http://127.0.0.1:${port}/api/rooms`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ apiKey: KEY, localPath: projectDir }),
+      }),
+    );
+    expect(response.status).toBe(200);
+    return (await response.json()) as { roomId: string; token: string };
+  }
+
+  it('a folder cloned from GitHub gets the CLEAN repoUrl (no credential) and NO publish binding, and git/status reports the branch', async () => {
+    mkdirSync(join(projectDir, '.git'));
+    writeFileSync(
+      join(projectDir, '.git', 'config'),
+      '[remote "origin"]\n\turl = https://x-access-token:ghs_SECRETTOKEN123@github.com/octo/cat.git\n',
+    );
+    writeFileSync(join(projectDir, '.git', 'HEAD'), 'ref: refs/heads/feature/x\n');
+    const { roomId, token } = await createLocalRoom();
+
+    const roomBody = (await (
+      await fetch(`http://127.0.0.1:${port}/api/rooms/${roomId}`, { headers: { 'X-Nexus-Token': token } })
+    ).json()) as { repoUrl: string | null; github: unknown };
+    expect(roomBody.repoUrl).toBe('https://github.com/octo/cat');
+    expect(roomBody.github).toBeNull();
+    expect(JSON.stringify(roomBody)).not.toContain('SECRETTOKEN');
+
+    // The seam the UI reads: the log's room_created carries the same.
+    const created = getRuntime(roomId)
+      ?.sink.read()
+      .find((event) => event.type === 'room_created');
+    expect(created).toMatchObject({ repoUrl: 'https://github.com/octo/cat', github: null });
+    expect(JSON.stringify(created)).not.toContain('SECRETTOKEN');
+
+    const status = (await (
+      await fetch(`http://127.0.0.1:${port}/api/rooms/${roomId}/git/status`, {
+        headers: { 'X-Nexus-Token': token },
+      })
+    ).json()) as { entries: unknown[]; branch: string | null };
+    expect(status.branch).toBe('feature/x');
+  });
+
+  it('a plain folder (no git remote) still gets repoUrl null', async () => {
+    const { roomId, token } = await createLocalRoom();
+    const roomBody = (await (
+      await fetch(`http://127.0.0.1:${port}/api/rooms/${roomId}`, { headers: { 'X-Nexus-Token': token } })
+    ).json()) as { repoUrl: string | null; github: unknown };
+    expect(roomBody.repoUrl).toBeNull();
+    expect(roomBody.github).toBeNull();
   });
 
   it('refuses a second room at the same localPath while the first is still live', async () => {

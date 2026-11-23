@@ -107,4 +107,44 @@ describe('StatusBar', () => {
     renderBar({ events: [created] });
     expect(screen.getByText('nexus/room_a')).toBeInTheDocument();
   });
+
+  const localCreated = (repoUrl: string | null) =>
+    ({
+      type: 'room_created',
+      seq: 1,
+      ts: '2026-01-01T00:00:00.000Z',
+      roomId: 'room_a',
+      cwd: '/work',
+      repoUrl,
+      github: null,
+    }) as unknown as SynCodeEvent;
+
+  it('shows owner/repo and the live branch for a repo detected from a local folder', () => {
+    renderBar({ events: [localCreated('https://github.com/octo/cat')], branch: 'feature/x' });
+    const item = screen.getByText('octo/cat · feature/x');
+    expect(item.parentElement).toHaveAttribute('title', expect.stringMatching(/not available yet/i));
+    expect(screen.queryByText('No repository')).not.toBeInTheDocument();
+  });
+
+  it('shows owner/repo alone when the branch is unknown (detached HEAD)', () => {
+    renderBar({ events: [localCreated('https://github.com/octo/cat')], branch: null });
+    expect(screen.getByText('octo/cat')).toBeInTheDocument();
+  });
+
+  it('still says No repository for a local room with no detected repo, or a non-GitHub repoUrl', () => {
+    renderBar({ events: [localCreated(null)], branch: 'main' });
+    expect(screen.getByText('No repository')).toBeInTheDocument();
+    renderBar({ events: [localCreated('https://gitlab.com/octo/cat')] });
+    expect(screen.getAllByText('No repository')).toHaveLength(2);
+  });
+
+  it('the publish binding wins over a detected repo and ignores the live branch', () => {
+    const bound = {
+      ...localCreated('https://github.com/octo/cat'),
+      github: { owner: 'acme', repo: 'widgets', defaultBranch: 'main' },
+    } as unknown as SynCodeEvent;
+    renderBar({ events: [bound], branch: 'feature/x' });
+    expect(screen.getByText('nexus/room_a')).toBeInTheDocument();
+    expect(screen.queryByText(/feature\/x/)).not.toBeInTheDocument();
+  });
 });

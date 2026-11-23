@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createWorkspaceApi } from '../workspaceApi.js';
+import { createWorkspaceApi, fetchGitBranch } from '../workspaceApi.js';
 import { WorkspaceError } from '../types.js';
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -161,6 +161,24 @@ describe('workspaceApi unwraps 7a envelopes', () => {
       path: 'src/a.ts',
       diff: '@@ -1 +1 @@',
     });
+  });
+
+  it('fetchGitBranch reads `branch` from the git/status envelope; getGitStatus entries are unchanged', async () => {
+    const body = { entries: [{ path: 'a', status: ' M' }], branch: 'main' };
+    fetchImpl.mockResolvedValue(jsonResponse(body));
+    await expect(fetchGitBranch({ roomId: 'r1', token: 'tok', fetchImpl })).resolves.toBe('main');
+    const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('/api/rooms/r1/git/status');
+    expect((init.headers as Record<string, string>)['X-SynCode-Token']).toBe('tok');
+    fetchImpl.mockResolvedValue(jsonResponse(body));
+    await expect(api().getGitStatus()).resolves.toEqual([{ path: 'a', status: ' M' }]);
+  });
+
+  it('fetchGitBranch is null for a detached HEAD, an old server without the field, or a non-string', async () => {
+    for (const body of [{ entries: [], branch: null }, { entries: [] }, { entries: [], branch: 7 }]) {
+      fetchImpl.mockResolvedValue(jsonResponse(body));
+      await expect(fetchGitBranch({ roomId: 'r1', token: 'tok', fetchImpl })).resolves.toBeNull();
+    }
   });
 
   it('getTree yields an array, never an envelope, when the room is empty', async () => {

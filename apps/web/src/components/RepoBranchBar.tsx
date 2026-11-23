@@ -1,6 +1,6 @@
 import { GitBranch, GitPullRequest } from 'lucide-react';
 import type { SynCodeEvent } from '@syncode/protocol/events';
-import { deriveGithubBinding } from '../githubBinding.js';
+import { DETECTED_REPO_TITLE, deriveDetectedRepo, deriveGithubBinding } from '../githubBinding.js';
 
 /**
  * Shows which repository and branch the room's agent would publish to.
@@ -13,11 +13,35 @@ import { deriveGithubBinding } from '../githubBinding.js';
 export function RepoBranchBar({
   events,
   roomId,
+  branch: liveBranch = null,
 }: {
   events: SynCodeEvent[];
   roomId: string;
+  /** Live branch of a local folder's checkout (git status); only used for a detected repo. */
+  branch?: string | null;
 }): JSX.Element {
   const github = deriveGithubBinding(events);
+  const detected = github === null ? deriveDetectedRepo(events) : null;
+
+  if (detected !== null) {
+    return (
+      <div
+        className="flex min-h-11 items-center gap-2 rounded border border-border px-2 text-xs text-fg-muted"
+        title={DETECTED_REPO_TITLE}
+      >
+        <span className="flex items-center gap-1.5">
+          <GitPullRequest size={14} aria-hidden="true" />
+          <span className="text-fg">{`${detected.owner}/${detected.repo}`}</span>
+        </span>
+        {liveBranch !== null && (
+          <span className="flex items-center gap-1 font-mono">
+            <GitBranch size={14} aria-hidden="true" />
+            <span>{liveBranch}</span>
+          </span>
+        )}
+      </div>
+    );
+  }
 
   if (github === null) {
     return (

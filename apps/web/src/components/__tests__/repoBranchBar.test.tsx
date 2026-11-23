@@ -41,6 +41,42 @@ describe('RepoBranchBar', () => {
     expect(screen.queryByText('nexus/room_1')).not.toBeInTheDocument();
   });
 
+  const LOCAL = (repoUrl: string | null): SynCodeEvent => ({
+    ...UNBOUND,
+    repoUrl,
+  });
+
+  it('shows owner/repo and the live branch for a repo detected from a local folder', () => {
+    const { container } = render(
+      <RepoBranchBar events={[LOCAL('https://github.com/octo/cat')]} roomId="room_1" branch="feature/x" />,
+    );
+    expect(screen.getByText('octo/cat')).toBeInTheDocument();
+    expect(screen.getByText('feature/x')).toBeInTheDocument();
+    expect(screen.queryByText('nexus/room_1')).not.toBeInTheDocument();
+    expect(container.firstElementChild).toHaveAttribute(
+      'title',
+      expect.stringMatching(/detected from this folder.*not available yet/i),
+    );
+  });
+
+  it('omits the branch when it is unknown', () => {
+    render(<RepoBranchBar events={[LOCAL('https://github.com/octo/cat')]} roomId="room_1" />);
+    expect(screen.getByText('octo/cat')).toBeInTheDocument();
+  });
+
+  it('says "No repository" for a local room with no detected GitHub repo', () => {
+    render(<RepoBranchBar events={[LOCAL(null)]} roomId="room_1" branch="main" />);
+    expect(screen.getByText('No repository')).toBeInTheDocument();
+    expect(screen.queryByText('main')).not.toBeInTheDocument();
+  });
+
+  it('leaves the publish-binding display unchanged even with a repoUrl and a branch passed', () => {
+    render(<RepoBranchBar events={[BOUND]} roomId="room_1" branch="feature/x" />);
+    expect(screen.getByText('hnaracodes/MCPHaven')).toBeInTheDocument();
+    expect(screen.getByText('nexus/room_1')).toBeInTheDocument();
+    expect(screen.queryByText('feature/x')).not.toBeInTheDocument();
+  });
+
   it('renders the no-repository state before any room_created event has arrived', () => {
     render(<RepoBranchBar events={[]} roomId="room_1" />);
     expect(screen.getByText('No repository')).toBeInTheDocument();

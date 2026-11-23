@@ -52,6 +52,17 @@ async function request<T>(config: WorkspaceApiConfig, path: string): Promise<T> 
 
 
 /**
+ * The current branch, from the same `git/status` route as `getGitStatus`
+ * (`{entries, branch}`); null when detached, unknown, or an older server that
+ * omits the field. A standalone function, not a `WorkspaceApi` method, so the
+ * many `WorkspaceApi` test doubles need no new member.
+ */
+export async function fetchGitBranch(config: WorkspaceApiConfig): Promise<string | null> {
+  const body = await request<{ branch?: unknown }>(config, '/git/status');
+  return typeof body.branch === 'string' && body.branch !== '' ? body.branch : null;
+}
+
+/**
  * Thin `fetch` wrappers over 7a's five routes.
  *
  * Every one of 7a's list routes wraps its payload in a named envelope

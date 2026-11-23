@@ -17,7 +17,7 @@ import { MalformedLink } from './pages/MalformedLink.js';
 import { AgentsView } from './canvas/AgentsView.js';
 import type { FleetApprovalRequest } from './components/ApprovalQueue.js';
 import { PaneErrorBoundary } from './components/PaneErrorBoundary.js';
-import { createWorkspaceApi } from './workspace/workspaceApi.js';
+import { createWorkspaceApi, fetchGitBranch } from './workspace/workspaceApi.js';
 import type { DocSession } from './workspace/docSession.js';
 import { useWorkspace } from './workspace/useWorkspace.js';
 import { WorkspaceError } from './workspace/types.js';
@@ -34,7 +34,7 @@ import { RoomHeader } from './components/RoomHeader.js';
 import { AutoModeBanner } from './components/AutoModeBanner.js';
 import { deriveAutoMode } from './derive/autoMode.js';
 import { TerminalPanel } from './terminal/TerminalPanel.js';
-import { deriveGithubBinding } from './githubBinding.js';
+import { deriveDetectedRepo, deriveGithubBinding } from './githubBinding.js';
 import { shareableRoomLink } from './shareLink.js';
 import type { ShareableRoomLink } from './shareLink.js';
 import { deriveAgentStatus } from './agentStatus.js';
@@ -475,6 +475,34 @@ function RoomShell({
     () => createWorkspaceApi({ roomId: params.roomId, token: params.token }),
     [params.roomId, params.token],
   );
+
+  // Live branch of a local folder's git checkout, shown beside a repo detected
+  // from its remote (no publish binding). Polled because the branch can change
+  // under the room (the shared terminal, a checkout); skipped entirely unless
+  // the room actually has a detected repo.
+  const hasDetectedRepo =
+    deriveGithubBinding(view.events) === null && deriveDetectedRepo(view.events) !== null;
+  const [gitBranch, setGitBranch] = useState<string | null>(null);
+  useEffect(() => {
+    if (!hasDetectedRepo) return;
+    let cancelled = false;
+    const load = (): void => {
+      if (document.visibilityState === 'hidden') return;
+      fetchGitBranch({ roomId: params.roomId, token: params.token })
+        .then((branch) => {
+          if (!cancelled) setGitBranch(branch);
+        })
+        .catch(() => {
+          // Unknown branch: the bar shows owner/repo alone.
+        });
+    };
+    load();
+    const timer = setInterval(load, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [hasDetectedRepo, params.roomId, params.token]);
 
   // Persist this room in the local switcher's history once the server has
   // confirmed our identity — never before, so an unreachable or rejected
@@ -999,6 +1027,7 @@ function RoomShell({
                       }
                       approvalCount={approvalCount}
                       onReviewApprovals={() => openAux('approvals')}
+                      gitBranch={gitBranch}
                     />
                   }
                   fleetAgents={view.fleet}
@@ -1054,6 +1083,7 @@ function RoomShell({
           approvalCount={approvalCount}
           onOpenAgents={openAgentsTab}
           onOpenApprovals={() => openAux('approvals')}
+          branch={gitBranch}
         />
       </PaneErrorBoundary>
       {/* --- END phase-18b VS Code shell --- */}

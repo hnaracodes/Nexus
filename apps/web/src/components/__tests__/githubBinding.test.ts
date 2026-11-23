@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GithubRepoRef, SynCodeEvent } from '@syncode/protocol/events';
-import { deriveGithubBinding } from '../../githubBinding.js';
+import { deriveDetectedRepo, deriveGithubBinding } from '../../githubBinding.js';
 
 const ROOM = 'room_fixture';
 
@@ -56,5 +56,38 @@ describe('deriveGithubBinding', () => {
   it('believes the first room_created, not a later contradictory one', () => {
     const impostor: GithubRepoRef = { ...BINDING, owner: 'attacker', repo: 'evil' };
     expect(deriveGithubBinding([created(1, BINDING), created(9, impostor)])).toEqual(BINDING);
+  });
+});
+
+describe('deriveDetectedRepo', () => {
+  const withUrl = (repoUrl: string | null, seq = 1): SynCodeEvent => ({
+    ...(created(seq, null) as Extract<SynCodeEvent, { type: 'room_created' }>),
+    repoUrl,
+  });
+
+  it('reads owner/repo from a clean github.com repoUrl', () => {
+    expect(deriveDetectedRepo([withUrl('https://github.com/octo/cat')])).toEqual({
+      owner: 'octo',
+      repo: 'cat',
+    });
+  });
+
+  it('is null for no repoUrl, a non-GitHub host, a lookalike host, or an embedded credential', () => {
+    for (const url of [
+      null,
+      'https://gitlab.com/octo/cat',
+      'https://github.com.evil.com/octo/cat',
+      'https://tok@github.com/octo/cat',
+      'git@github.com:octo/cat.git',
+    ]) {
+      expect(deriveDetectedRepo([withUrl(url)]), String(url)).toBeNull();
+    }
+    expect(deriveDetectedRepo([])).toBeNull();
+  });
+
+  it('believes the first room_created, not a later one', () => {
+    expect(
+      deriveDetectedRepo([withUrl('https://github.com/octo/cat'), withUrl('https://github.com/evil/x', 9)]),
+    ).toEqual({ owner: 'octo', repo: 'cat' });
   });
 });

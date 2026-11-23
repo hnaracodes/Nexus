@@ -95,6 +95,7 @@ import {
 // go. Nothing here is used outside the two marker regions.
 import type { Room } from './rooms.js';
 import { getGitDiff, getGitStatus } from './gitStatus.js';
+import { detectGithubRepo } from './repoDetect.js';
 import { WorkspacePathError, listTree, readWorkspaceFile } from './workspace.js';
 import { readEnv } from './env.js';
 
@@ -503,7 +504,7 @@ export function createServer(
         // and claiming late here would only be a needless extra place for a
         // future edit to get the order wrong.
         claimLocalPath(cwd);
-        const room = createRoom({ id: roomId, apiKey: keyCheck.apiKey, cwd, repoUrl: null, github: null });
+        const room = createRoom({ id: roomId, apiKey: keyCheck.apiKey, cwd, repoUrl: detectGithubRepo(cwd)?.url ?? null, github: null });
         writeRoomMeta({
           roomId: room.id,
           token: room.token,

@@ -18,6 +18,7 @@
 
 import type { GitRunner } from './publish.js';
 import { defaultGit, runGit } from './publish.js';
+import { readGitBranch } from './repoDetect.js';
 import type { Room } from './rooms.js';
 
 export interface GitStatusEntry {
@@ -31,6 +32,8 @@ export interface GitStatusEntry {
 
 export interface GitStatusResult {
   entries: GitStatusEntry[];
+  /** Current branch, read from `.git/HEAD` (no spawn); null when detached or not a repo. */
+  branch: string | null;
 }
 
 export interface GitStatusDeps {
@@ -85,13 +88,14 @@ function hasGitDir(cwd: string, git: GitRunner): Promise<boolean> {
 
 export async function getGitStatus(room: Room, deps: GitStatusDeps = {}): Promise<GitStatusResult> {
   const git = deps.git ?? defaultGit;
-  if (!(await hasGitDir(room.cwd, git))) return { entries: [] };
+  const branch = readGitBranch(room.cwd);
+  if (!(await hasGitDir(room.cwd, git))) return { entries: [], branch };
   const stdout = await runGit(
     git,
     ['-C', room.cwd, 'status', '--porcelain=v1', '-z'],
     'reading status',
   );
-  return { entries: parsePorcelainStatus(asText(stdout)) };
+  return { entries: parsePorcelainStatus(asText(stdout)), branch };
 }
 
 /**

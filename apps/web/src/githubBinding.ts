@@ -21,3 +21,26 @@ export function deriveGithubBinding(events: SynCodeEvent[]): GithubRepoRef | nul
   );
   return created?.github ?? null;
 }
+
+/**
+ * The GitHub repo detected from a local folder's git remote, from the FIRST
+ * `room_created.repoUrl`. Only a clean `https://github.com/o/r` URL counts
+ * (the server rebuilds it; it never carries credentials). This is NOT a
+ * publish binding: a local room has `github: null` and cannot publish yet.
+ */
+export function deriveDetectedRepo(
+  events: SynCodeEvent[],
+): { owner: string; repo: string } | null {
+  const created = events.find(
+    (event): event is Extract<SynCodeEvent, { type: 'room_created' }> =>
+      event.type === 'room_created',
+  );
+  const url = created?.repoUrl;
+  if (typeof url !== 'string') return null;
+  const match = /^https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)$/.exec(url);
+  if (match === null) return null;
+  return { owner: match[1] as string, repo: match[2] as string };
+}
+
+export const DETECTED_REPO_TITLE =
+  "Detected from this folder's git remote (origin). Publishing from a local room is not available yet.";
