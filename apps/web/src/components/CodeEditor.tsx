@@ -8,6 +8,8 @@ import { loadLanguage } from '../workspace/cmLanguage.js';
 import { nexusEditorTheme, nexusHighlightStyle } from '../workspace/cmTheme.js';
 import { collabExtension } from '../workspace/cmCollab.js';
 import type { DocSession } from '../workspace/docSession.js';
+import { agentGhostExtension, setGhosts } from '../workspace/agentGhost.js';
+import type { EditorGhost } from '../workspace/agentGhost.js';
 
 export interface CodeEditorProps {
   path: string | null;
@@ -40,6 +42,12 @@ export interface CodeEditorProps {
   /** Reports the full document text after every change — local edit or remote
    *  CRDT merge. Used to keep the Markdown preview live. */
   onDocChange?: (text: string) => void;
+  /**
+   * Agent edit proposals to draw over this file as "ghosts" that type
+   * themselves out (phase 21). Decoration only: a ghost is never document
+   * text. The ghost extension is always installed; this prop just feeds it.
+   */
+  ghosts?: EditorGhost[];
 }
 
 /**
@@ -71,6 +79,7 @@ export function CodeEditor({
   hideHeader = false,
   onCursorChange,
   onDocChange,
+  ghosts,
 }: CodeEditorProps): JSX.Element {
   if (path === null) {
     return (
@@ -139,6 +148,7 @@ export function CodeEditor({
             selfId={selfId}
             onCursorChange={onCursorChange}
             onDocChange={onDocChange}
+            ghosts={ghosts}
           />
         )}
       </div>
@@ -168,6 +178,7 @@ function CodeMirrorSurface({
   selfId,
   onCursorChange,
   onDocChange,
+  ghosts,
 }: {
   path: string;
   content: string;
@@ -175,6 +186,7 @@ function CodeMirrorSurface({
   selfId?: string;
   onCursorChange?: ((cursor: { line: number; col: number }) => void) | undefined;
   onDocChange?: ((text: string) => void) | undefined;
+  ghosts?: EditorGhost[] | undefined;
 }): JSX.Element {
   const host = useRef<HTMLDivElement | null>(null);
   const view = useRef<EditorView | null>(null);
@@ -223,6 +235,7 @@ function CodeMirrorSurface({
           EditorView.editable.of(writable),
           language.current.of([]),
           nexusEditorTheme,
+          agentGhostExtension(),
           ...(collab.current.docSession !== undefined
             ? [collabExtension(collab.current.docSession, path, collab.current.selfId ?? '')]
             : []),
@@ -237,6 +250,16 @@ function CodeMirrorSurface({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Agent proposals arrive as an effect, never as a document change, so a
+  // ghost cannot be saved, synced or mistaken for the file. Declared after the
+  // creation effect, so on mount the view exists by the time this first runs.
+  // The field ignores a re-send of identical ghosts.
+  useEffect(() => {
+    const instance = view.current;
+    if (instance === null) return;
+    instance.dispatch({ effects: setGhosts.of(ghosts ?? []) });
+  }, [ghosts]);
 
   // Content changes — including switching to a different file — replace the
   // document in place rather than rebuilding the view. Collaborative mode
