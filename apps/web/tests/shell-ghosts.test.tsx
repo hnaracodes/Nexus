@@ -87,4 +87,44 @@ describe('approval cards and the edit being watched', () => {
     const tabs = screen.getByRole('tablist', { name: 'Open editors' });
     expect(within(tabs).getByRole('tab', { name: /app\.ts/, selected: true })).toBeInTheDocument();
   });
+
+  it('a streamed edit types into the open file as a ghost, without changing the file', async () => {
+    boot();
+    deliver({
+      kind: 'edit_preview',
+      preview: {
+        toolUseId: 'toolu_live', agentId: 'primary', toolName: 'Edit', path: `${CWD}/src/app.ts`, mode: 'replace',
+        hunks: [{ old: 'const a = 1;\n', new: '', oldDone: true, newDone: false }], replaceAll: false, streaming: true, truncated: false,
+      },
+    });
+    deliver({ kind: 'edit_preview_text', toolUseId: 'toolu_live', hunk: 0, field: 'new', text: 'const a = 2;\n' });
+    // Following opened the file the agent is typing into.
+    const tabs = screen.getByRole('tablist', { name: 'Open editors' });
+    expect(within(tabs).getByRole('tab', { name: /app\.ts/, selected: true })).toBeInTheDocument();
+    await screen.findByText(/is typing/);
+    expect(document.querySelector('.cm-agent-ghost-old')).not.toBeNull();
+    expect(document.querySelector('.cm-content')?.textContent).toContain('const a = 1;');
+  });
+
+  it('a new file being written opens as a proposal: empty, read-only, with the text typing in', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        if (url.includes('/workspace/file')) return new Response(JSON.stringify({ error: 'not_found' }), { status: 404 });
+        return new Response(JSON.stringify({ entries: [] }), { status: 200 });
+      }),
+    );
+    boot();
+    deliver({
+      kind: 'edit_preview',
+      preview: {
+        toolUseId: 'toolu_new', agentId: 'primary', toolName: 'Write', path: `${CWD}/src/new.ts`, mode: 'write',
+        hunks: [{ old: '', new: 'export const x = 1;\n', oldDone: false, newDone: false }], replaceAll: false, streaming: true, truncated: false,
+      },
+    });
+    await screen.findByText(/Proposed new file/);
+    expect(document.querySelector('.cm-agent-ghost-new')).not.toBeNull();
+  });
 });
+

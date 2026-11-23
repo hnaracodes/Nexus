@@ -119,6 +119,25 @@ export function CodeEditor({
             <Loader2 size={16} className="animate-spin" aria-hidden="true" />
             Loading…
           </div>
+        ) : cached.status === 'error' && ghosts?.some((ghost) => ghost.mode === 'write') === true ? (
+          // Phase 21: the agent is writing a file that does not exist yet. Show
+          // it as a proposal — an empty, read-only document with the text typing
+          // in — never as an error. Approval creates the file; the normal refresh
+          // then shows the real one.
+          <div className="flex h-full min-h-0 flex-col">
+            <p className="shrink-0 border-b border-border bg-surface px-3 py-1 text-xs text-fg-muted">
+              Proposed new file — it is created only if the room approves.
+            </p>
+            <div className="min-h-0 flex-1">
+              <CodeMirrorSurface
+                key={`proposal:${path}`}
+                path={path}
+                content=""
+                selfId={selfId}
+                ghosts={ghosts}
+              />
+            </div>
+          </div>
         ) : cached.status === 'error' ? (
           <div className="flex items-center gap-2 p-4 text-sm text-danger">
             <AlertTriangle size={16} aria-hidden="true" />

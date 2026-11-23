@@ -13,6 +13,8 @@ import { PRIMARY_AGENT_ID, agentIdOf } from '@syncode/protocol/events';
 import type { AgentId, SynCodeEvent } from '@syncode/protocol/events';
 import { previewFromToolStart } from '@syncode/protocol/livepreview';
 import type { EditPreview } from '@syncode/protocol/livepreview';
+import type { EditorGhost } from '../workspace/agentGhost.js';
+import { avatarFor } from '../identity.js';
 
 export type GhostPhase = 'typing' | 'waiting' | 'applying' | 'landed' | 'denied';
 
@@ -157,4 +159,32 @@ export function deriveGhosts(
     build(toolUseId, preview, preview.streaming ? 'typing' : 'applying', null, null);
   }
   return ghosts;
+}
+
+/**
+ * The ghosts to draw in the editor showing `editorPath` (relative or absolute —
+ * tabs opened by Following and by the file tree differ), in the editor's own
+ * shape. Agents get the same deterministic colour people's carets get.
+ * `follow`: keep the agent's typing in view, only while Following is on.
+ */
+export function editorGhostsFor(
+  ghosts: readonly Ghost[],
+  editorPath: string | null,
+  cwd: string | null,
+  following: boolean,
+): EditorGhost[] {
+  if (editorPath === null) return [];
+  const rel = workspaceRelative(editorPath, cwd) ?? editorPath;
+  return ghosts
+    .filter((ghost) => ghost.path === rel)
+    .map((ghost) => ({
+      id: ghost.toolUseId,
+      agentName: ghost.agentName,
+      hue: avatarFor(ghost.agentId, ghost.agentName).hue,
+      phase: ghost.phase,
+      mode: ghost.preview.mode,
+      hunks: ghost.preview.hunks.map((h) => ({ old: h.old, new: h.new, oldDone: h.oldDone })),
+      replaceAll: ghost.preview.replaceAll,
+      follow: following && ghost.phase === 'typing',
+    }));
 }

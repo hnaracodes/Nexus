@@ -11,6 +11,7 @@ import { ImagePreview } from './ImagePreview.js';
 import { MarkdownPreview } from './MarkdownPreview.js';
 import { AGENTS_TAB_ID, TabStrip } from './TabStrip.js';
 import type { OpenTab } from './TabStrip.js';
+import type { EditorGhost } from '../workspace/agentGhost.js';
 
 export interface EditorAreaProps {
   tabs: OpenTab[];
@@ -30,6 +31,8 @@ export interface EditorAreaProps {
   onTogglePreview: () => void;
 
   onCursorChange: (path: string, cursor: { line: number; col: number }) => void;
+  /** Phase 21: agent edit proposals to draw over the active file. */
+  ghosts?: EditorGhost[];
 
   /**
    * The Agents tab's content — the shell mounts `<AgentsView/>` (the phase-18
@@ -134,6 +137,7 @@ export function EditorArea(props: EditorAreaProps): JSX.Element {
                   {...(kind === 'markdown' && activePath !== null
                     ? { onDocChange: (text: string) => setLive({ path: activePath, text }) }
                     : {})}
+                  {...(props.ghosts === undefined ? {} : { ghosts: props.ghosts })}
                 />
               </div>
               {showPreview && (

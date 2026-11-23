@@ -23,7 +23,7 @@ import { useWorkspace } from './workspace/useWorkspace.js';
 import { WorkspaceError } from './workspace/types.js';
 import type { GitStatusEntry } from './workspace/types.js';
 import { deriveCurrentFile, deriveLatestEditSeqByPath, deriveTouchedFiles } from './derive/workspaceFiles.js';
-import { DENIED_MS, deriveGhosts, roomCwd, typingGhostPath, workspaceRelative } from './derive/ghosts.js';
+import { DENIED_MS, deriveGhosts, editorGhostsFor, roomCwd, typingGhostPath, workspaceRelative } from './derive/ghosts.js';
 import { withExternalChanges } from './derive/externalChanges.js';
 // phase-7c import anchor
 import { JoinGate, readStoredName, storeName } from './components/JoinGate.js';
@@ -956,6 +956,7 @@ function RoomShell({
               previewOpen={activeFilePath !== null && previewIds.has(activeFilePath)}
               onTogglePreview={togglePreview}
               onCursorChange={(path, c) => setCursor({ path, ...c })}
+              ghosts={editorGhostsFor(ghosts, activeFilePath, cwd, autoFollow)}
               agentsView={
                 <>
                   {/* --- BEGIN phase-18 agents-view slot: the shell owns WHERE, canvas/ owns WHAT. --- */}
