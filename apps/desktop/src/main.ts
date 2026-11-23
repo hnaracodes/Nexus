@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { dirname, join as joinPath } from 'node:path';
 import type { Server } from 'node:http';
-import { BrowserWindow, Menu, app, dialog, ipcMain, shell } from 'electron';
+import { BrowserWindow, Menu, app, clipboard, dialog, ipcMain, shell } from 'electron';
 import type { MenuItem } from 'electron';
 import { resolveListenPort, serverOrigin } from './serverHost.js';
 import { isAllowedNavigation } from './navigationGuard.js';
@@ -11,10 +11,14 @@ import { findRoomForFolder } from './existingRoom.js';
 import {
   folderConsentMessage,
   folderDisplayName,
+  lanRoomLinks,
   lanShareConfirmMessage,
   localNetworkAddresses,
+  relayUrlFromEnv,
   roomReadyMessage,
+  webShareConfirmMessage,
 } from './folderRoom.js';
+import type { RelayListener, RelayShare, ShareLinks } from '@syncode/server';
 import { describeHostConflict } from './hostGuard.js';
 import { loadPtyFactory } from './pty.js';
 
@@ -70,6 +74,18 @@ let pendingFolderPath: string | undefined;
 let hostedRoom: { id: string; token: string; folderName: string; url: string } | undefined;
 let sharedOnLan = false;
 let shareMenuItem: MenuItem | undefined;
+// --- BEGIN phase-20 web share state ---
+/** The in-process server's hook for telling the host's window its links. */
+let setShareLinks: ((roomId: string, links: ShareLinks) => void) | undefined;
+/** Full LAN room links while shared on the LAN (empty otherwise). */
+let lanLinks: string[] = [];
+/** The live web share, while "Share on the Web" is on. */
+let webShare: RelayShare | undefined;
+/** The private socket relayed guests arrive on; opened on first web share. */
+let relayListener: RelayListener | undefined;
+let shareWebMenuItem: MenuItem | undefined;
+let stopWebMenuItem: MenuItem | undefined;
+// --- END phase-20 web share state ---
 /** The most recently opened room window, so the menu's click handler has a
  *  `BrowserWindow` to parent its dialogs to. Not read from the menu click
  *  callback's own window argument: Electron's `MenuItemConstructorOptions`
@@ -229,7 +245,9 @@ async function startBackend(): Promise<{ origin: string; port: number }> {
   // factory, so terminals exist in rooms this app hosts and nowhere else.
   // Undefined when node-pty is unavailable here: no terminals, no crash.
   const terminals = await loadPtyFactory();
-  const { server } = createServer(terminals === undefined ? {} : { terminals });
+  const started = createServer(terminals === undefined ? {} : { terminals });
+  const { server } = started;
+  setShareLinks = started.setShareLinks;
   httpServer = server;
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
@@ -503,6 +521,7 @@ function registerJoinHandlers(getJoinWindow: () => BrowserWindow | null): void {
     // than a fresh one (see the field's own doc comment above).
     hostedRoom = { id: room.roomId, token: room.token, folderName: folderDisplayName(localPath), url };
     if (shareMenuItem !== undefined) shareMenuItem.enabled = true;
+    if (shareWebMenuItem !== undefined) shareWebMenuItem.enabled = true;
 
     // Shown BEFORE the room window opens — this IS "after the room exists,
     // show the joinable URL" (CLAUDE.md), and it has to be a native dialog
@@ -541,11 +560,7 @@ async function shareOnLan(window: BrowserWindow): Promise<void> {
   const addresses = localNetworkAddresses();
 
   if (sharedOnLan) {
-    await dialog.showMessageBox(window, {
-      type: 'info',
-      message: 'Already sharing on this network',
-      detail: lanShareConfirmMessage(addresses, port),
-    });
+    await showLinkDialog(window, 'Already sharing on this network', lanLinks);
     return;
   }
 
@@ -569,15 +584,117 @@ async function shareOnLan(window: BrowserWindow): Promise<void> {
     server.listen(port, '0.0.0.0', () => resolve());
   });
   sharedOnLan = true;
-
-  await dialog.showMessageBox(window, {
-    type: 'info',
-    message: 'Sharing on your local network',
-    detail: `This room is reachable from your network at:\n\n${addresses
-      .map((address) => `http://${address}:${port}`)
-      .join('\n')}`,
-  });
+  // Full room links: the bare `http://<ip>:<port>` this dialog used to show
+  // opens the landing page, not the room.
+  lanLinks = lanRoomLinks(addresses, port, hostedRoom.id, hostedRoom.token);
+  publishShareLinks();
+  await showLinkDialog(window, 'Sharing on your local network', lanLinks);
 }
+
+// --- BEGIN phase-20 web share ---
+/** Tell the host's own window which links reach the room (server → host sockets only). */
+function publishShareLinks(): void {
+  if (hostedRoom === undefined || setShareLinks === undefined) return;
+  setShareLinks(hostedRoom.id, { web: webShare?.link ?? null, lan: lanLinks });
+}
+
+function updateWebShareMenu(): void {
+  if (shareWebMenuItem !== undefined) shareWebMenuItem.enabled = hostedRoom !== undefined && webShare === undefined;
+  if (stopWebMenuItem !== undefined) stopWebMenuItem.enabled = webShare !== undefined;
+}
+
+/** Shows link(s) with a Copy button, because a link in a dialog is useless if you cannot copy it. */
+async function showLinkDialog(window: BrowserWindow, message: string, links: string[]): Promise<void> {
+  const { response } = await dialog.showMessageBox(window, {
+    type: 'info',
+    buttons: ['Copy Link', 'Done'],
+    defaultId: 0,
+    cancelId: 1,
+    message,
+    detail: `Send this link to the people you want in the room:\n\n${links.join('\n')}`,
+  });
+  if (response === 0 && links[0] !== undefined) clipboard.writeText(links[0]);
+}
+
+/**
+ * "Share on the Web" — the room becomes reachable from any network through the
+ * relay (docs/plans/phase-20-web-share.md). Relayed guests reach this server
+ * over a private socket where they can never be the host; see the server's
+ * relay/hostClient.ts for why that must stay a socket and never loopback TCP.
+ */
+async function shareOnWeb(window: BrowserWindow): Promise<void> {
+  if (httpServer === undefined || hostedRoom === undefined) return;
+  if (webShare !== undefined) {
+    await showLinkDialog(window, 'Already sharing on the web', [webShare.link]);
+    return;
+  }
+  const relayUrl = relayUrlFromEnv(process.env);
+  const { response } = await dialog.showMessageBox(window, {
+    type: 'warning',
+    buttons: ['Cancel', 'Share on the Web'],
+    defaultId: 0,
+    cancelId: 0,
+    message: 'Share this room on the web?',
+    detail: webShareConfirmMessage(relayUrl),
+  });
+  if (response !== 1) return;
+
+  const { listenForRelay, startRelayShare } = await import('@syncode/server');
+  relayListener ??= await listenForRelay(httpServer);
+  const room = hostedRoom;
+  const listener = relayListener;
+  let settle: (outcome: 'live' | 'refused') => void = () => undefined;
+  const settled = new Promise<'live' | 'refused'>((resolve) => {
+    settle = resolve;
+  });
+  const share = startRelayShare({
+    relayUrl,
+    roomId: room.id,
+    token: room.token,
+    socketPath: listener.socketPath,
+    onStatus: (status) => {
+      if (status.state === 'live') settle('live');
+      else if (status.state === 'refused') settle('refused');
+    },
+  });
+  webShare = share;
+  let slowTimer: NodeJS.Timeout | undefined;
+  const outcome = await Promise.race([
+    settled,
+    new Promise<'slow'>((resolve) => {
+      slowTimer = setTimeout(() => resolve('slow'), 15_000);
+    }),
+  ]);
+  clearTimeout(slowTimer);
+
+  if (outcome === 'refused') {
+    const status = share.status();
+    webShare = undefined;
+    await share.stop();
+    updateWebShareMenu();
+    publishShareLinks();
+    await dialog.showMessageBox(window, {
+      type: 'error',
+      message: 'The relay refused to share this room',
+      detail: `Reason: ${status.state === 'refused' ? status.reason : 'unknown'}.`,
+    });
+    return;
+  }
+  updateWebShareMenu();
+  publishShareLinks();
+  // 'slow': the share keeps retrying in the background; the link will work
+  // once the relay answers, so it is still worth handing out now.
+  await showLinkDialog(window, outcome === 'live' ? 'Sharing on the web' : 'Connecting to the relay…', [share.link]);
+}
+
+async function stopSharingOnWeb(): Promise<void> {
+  const share = webShare;
+  webShare = undefined;
+  updateWebShareMenu();
+  publishShareLinks();
+  await share?.stop();
+}
+// --- END phase-20 web share ---
 
 /**
  * A minimal application menu, built once. macOS needs its own app/edit menus
@@ -601,12 +718,28 @@ function buildMenu(): void {
             if (currentRoomWindow !== undefined) void shareOnLan(currentRoomWindow);
           },
         },
+        {
+          id: 'share-web',
+          label: 'Share on the Web…',
+          enabled: false,
+          click: () => {
+            if (currentRoomWindow !== undefined) void shareOnWeb(currentRoomWindow);
+          },
+        },
+        {
+          id: 'stop-web',
+          label: 'Stop Sharing on the Web',
+          enabled: false,
+          click: () => void stopSharingOnWeb(),
+        },
       ],
     },
   ];
   const menu = Menu.buildFromTemplate(template);
   Menu.setApplicationMenu(menu);
   shareMenuItem = menu.getMenuItemById('share-lan') ?? undefined;
+  shareWebMenuItem = menu.getMenuItemById('share-web') ?? undefined;
+  stopWebMenuItem = menu.getMenuItemById('stop-web') ?? undefined;
 }
 
 async function main(): Promise<void> {
@@ -669,6 +802,9 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  // Best effort: tell the relay the link is gone so guests stop retrying.
+  void webShare?.stop();
+  void relayListener?.close();
   httpServer?.close();
 });
 

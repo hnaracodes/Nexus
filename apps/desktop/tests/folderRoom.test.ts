@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   folderConsentMessage,
   folderDisplayName,
+  lanRoomLinks,
   lanShareConfirmMessage,
+  relayUrlFromEnv,
+  roomJoinUrl,
+  webShareConfirmMessage,
   localNetworkAddresses,
   roomReadyMessage,
 } from '../src/folderRoom.js';
@@ -80,5 +84,51 @@ describe('localNetworkAddresses', () => {
     for (const address of addresses) {
       expect(address).toMatch(/^\d{1,3}(\.\d{1,3}){3}$/);
     }
+  });
+});
+
+
+describe('phase 20: links other people can actually open', () => {
+  it('roomJoinUrl carries only room and token, encoded', () => {
+    expect(roomJoinUrl('http://192.168.1.14:5000', 'room_a', 't/k+n')).toBe(
+      'http://192.168.1.14:5000/?room=room_a&token=t%2Fk%2Bn',
+    );
+    expect(roomJoinUrl('http://192.168.1.14:5000', 'room_a', 'tok')).not.toContain('name=');
+  });
+
+  it('lanRoomLinks gives one full, joinable link per address (the LAN dialog used to show bare origins)', () => {
+    expect(lanRoomLinks(['192.168.1.14', '10.0.0.5'], 5000, 'room_a', 'tok')).toEqual([
+      'http://192.168.1.14:5000/?room=room_a&token=tok',
+      'http://10.0.0.5:5000/?room=room_a&token=tok',
+    ]);
+  });
+});
+
+describe('phase 20: relayUrlFromEnv', () => {
+  it('defaults to the hosted relay', () => {
+    expect(relayUrlFromEnv({})).toBe('https://nexus-mvp.fly.dev');
+  });
+  it('honours SYNCODE_RELAY_URL, then the legacy NEXUS_RELAY_URL', () => {
+    expect(relayUrlFromEnv({ SYNCODE_RELAY_URL: 'https://relay.example' })).toBe('https://relay.example');
+    expect(relayUrlFromEnv({ NEXUS_RELAY_URL: 'https://old.example' })).toBe('https://old.example');
+  });
+  it('allows plain http only to this machine (local testing), never to the network', () => {
+    expect(relayUrlFromEnv({ SYNCODE_RELAY_URL: 'http://127.0.0.1:8099' })).toBe('http://127.0.0.1:8099');
+    expect(relayUrlFromEnv({ SYNCODE_RELAY_URL: 'http://localhost:8099' })).toBe('http://localhost:8099');
+    expect(relayUrlFromEnv({ SYNCODE_RELAY_URL: 'http://relay.example' })).toBe('https://nexus-mvp.fly.dev');
+    expect(relayUrlFromEnv({ SYNCODE_RELAY_URL: 'not a url' })).toBe('https://nexus-mvp.fly.dev');
+  });
+});
+
+describe('phase 20: webShareConfirmMessage', () => {
+  const message = webShareConfirmMessage('https://nexus-mvp.fly.dev');
+  it('says plainly what anyone with the link gets, including a shell on this computer', () => {
+    expect(message).toMatch(/anyone with the link/i);
+    expect(message).toMatch(/terminal/i);
+    expect(message).toMatch(/this computer/i);
+  });
+  it('names the relay and says it is not end-to-end encrypted', () => {
+    expect(message).toContain('nexus-mvp.fly.dev');
+    expect(message).toMatch(/not end-to-end/i);
   });
 });

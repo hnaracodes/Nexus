@@ -91,3 +91,56 @@ export function lanShareConfirmMessage(addresses: string[], port: number): strin
     `travel unencrypted on this network. Only continue on a network you trust.`
   );
 }
+
+/**
+ * Phase 20. A link someone ELSE can open: only `room` and `token` — never the
+ * host's `name`, which would make the recipient join under the host's name.
+ */
+export function roomJoinUrl(origin: string, roomId: string, token: string): string {
+  return `${origin}/?room=${encodeURIComponent(roomId)}&token=${encodeURIComponent(token)}`;
+}
+
+/**
+ * One full, joinable link per LAN address. The LAN dialog used to show bare
+ * `http://<ip>:<port>` origins, which open the landing page, not the room.
+ */
+export function lanRoomLinks(addresses: string[], port: number, roomId: string, token: string): string[] {
+  return addresses.map((address) => roomJoinUrl(`http://${address}:${port}`, roomId, token));
+}
+
+export const DEFAULT_RELAY_URL = 'https://nexus-mvp.fly.dev';
+
+/**
+ * Where "Share on the Web" connects. `SYNCODE_RELAY_URL` (then the legacy
+ * `NEXUS_RELAY_URL`) overrides the hosted relay. Plain http is accepted only
+ * for this machine — a local relay while developing — because the room token
+ * crosses that connection on every guest request.
+ */
+export function relayUrlFromEnv(env: Record<string, string | undefined>): string {
+  const raw = env['SYNCODE_RELAY_URL'] ?? env['NEXUS_RELAY_URL'];
+  if (raw === undefined || raw === '') return DEFAULT_RELAY_URL;
+  try {
+    const url = new URL(raw);
+    if (url.protocol === 'https:') return url.origin;
+    const loopback = url.hostname === '127.0.0.1' || url.hostname === 'localhost' || url.hostname === '[::1]';
+    if (url.protocol === 'http:' && loopback) return url.origin;
+  } catch {
+    // fall through to the default
+  }
+  return DEFAULT_RELAY_URL;
+}
+
+/** The consent text before a room goes onto the internet. Says the hard parts plainly. */
+export function webShareConfirmMessage(relayUrl: string): string {
+  const host = new URL(relayUrl).host;
+  return (
+    `Anyone with the link will be able to open this room from anywhere on the ` +
+    `internet, see every file, ask the agent to run commands, and open a ` +
+    `terminal that runs commands on this computer as you — the same access ` +
+    `you have, with no per-person permission. You can switch the terminal off ` +
+    `in the room, and stop sharing from the Room menu at any time.\n\n` +
+    `The connection goes through SynCode's relay at ${host}. It is encrypted ` +
+    `in transit, but it is not end-to-end: the relay can see the room's ` +
+    `traffic. Only send the link to people you trust.`
+  );
+}
