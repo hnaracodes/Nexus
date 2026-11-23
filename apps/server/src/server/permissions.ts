@@ -85,7 +85,7 @@ export interface PermissionGate {
    * interrupted or torn down while a request is outstanding, an unaborted
    * gate leaks a pending promise and a live timer per abandoned request.
    */
-  request(toolName: string, input: unknown, signal?: AbortSignal): Promise<Decision>;
+  request(toolName: string, input: unknown, signal?: AbortSignal, toolUseId?: string): Promise<Decision>;
   /** Returns false if the id is unknown or already settled. */
   resolve(requestId: string, decision: Decision): boolean;
   pendingIds(): string[];
@@ -138,7 +138,7 @@ export function createPermissionGate(
   }
 
   return {
-    request(toolName: string, input: unknown, signal?: AbortSignal): Promise<Decision> {
+    request(toolName: string, input: unknown, signal?: AbortSignal, toolUseId?: string): Promise<Decision> {
       const requestId = `req_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
 
       if (isApproved(toolName)) {
@@ -249,7 +249,16 @@ export function createPermissionGate(
 
           // Every participant sees this, not just the driver. Governance is
           // deliberately decoupled from the driver token.
-          emit({ type: 'permission_requested', requestId, toolName, input, expiresAt });
+          // Phase 21: `toolUseId` ties this card to the edit the room watched
+          // being typed. Omitted, not null, when the gate was given none.
+          emit({
+            type: 'permission_requested',
+            requestId,
+            toolName,
+            input,
+            expiresAt,
+            ...(toolUseId === undefined ? {} : { toolUseId }),
+          });
         });
       });
     },

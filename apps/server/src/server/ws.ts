@@ -3,6 +3,8 @@ import type { WebSocket } from 'ws';
 import type { AgentId, AgentProvider, SynCodeEvent, UnsequencedEvent } from '@syncode/protocol/events';
 import { PRIMARY_AGENT_ID, agentIdOf } from '@syncode/protocol/events';
 import type { DocPresenceEntry, ServerFrame } from '@syncode/protocol/wire';
+import { applyLiveFrame } from '@syncode/protocol/livepreview';
+import type { EditPreview } from '@syncode/protocol/livepreview';
 import { createSink } from '../log/index.js';
 import { projectAgents } from '../log/replay.js';
 import { redactEvent } from '../log/redact.js';
@@ -168,6 +170,12 @@ export interface RoomRuntime {
   commitAs(agentId: AgentId, event: UnsequencedEvent): SynCodeEvent;
   /** The room's shared approval queue (phase 12). */
   approvals: ApprovalQueue;
+  /**
+   * Phase 21: agent edits being typed right now, across every agent — what a
+   * socket joining mid-stream is handed as snapshots. Transient, never logged;
+   * an entry leaves when its preview ends (complete or abandoned).
+   */
+  livePreviews(): EditPreview[];
   /** Broadcast the transient `fleet` frame — liveness, never membership. */
   broadcastFleet(): void;
   /**
@@ -304,10 +312,12 @@ export function attachRoom(
     },
   );
 
+  let livePreviews: Record<string, EditPreview> = {};
   const runtime: RoomRuntime = {
     room,
     sink,
     approvals,
+    livePreviews: () => Object.values(livePreviews),
     agents,
     get agent(): AgentHandle {
       const primary = agents.get(PRIMARY_AGENT_ID);
@@ -342,6 +352,25 @@ export function attachRoom(
         emit: (event) => runtime.commitAs(agentId, event),
         deps: {
           readEvents: () => sink.read(),
+          /**
+           * Phase 21: this agent's live stream, broadcast to the room. The
+           * agent id is stamped HERE, server-side, never taken from the
+           * runtime's own frames. Kept in `livePreviews` until each ends, so
+           * a socket joining mid-stream sees what is being typed.
+           */
+          live: (frame) => {
+            if (frame.kind === 'assistant_delta') {
+              runtime.broadcast({ ...frame, agentId });
+              return;
+            }
+            const stamped = frame.kind === 'edit_preview' ? { ...frame, preview: { ...frame.preview, agentId } } : frame;
+            livePreviews = applyLiveFrame(livePreviews, stamped);
+            if (stamped.kind === 'edit_preview_end') {
+              const { [stamped.toolUseId]: _ended, ...rest } = livePreviews;
+              livePreviews = rest;
+            }
+            runtime.broadcast(stamped);
+          },
           // Bound per agent so the queue can attribute a waiting request to
           // the agent that is blocked on it — `agentId` is captured here, not
           // read off the request, because the gate has no idea which agent it

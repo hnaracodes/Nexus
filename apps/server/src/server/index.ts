@@ -1208,6 +1208,8 @@ export function createServer(
       // handed to a joiner explicitly.
       const joinTerminals = terminalsFor(room);
       if (joinTerminals !== undefined) sendTerminals(room, joinTerminals, ws);
+      // Phase 21: edits being typed right now, as they stand.
+      for (const preview of runtime.livePreviews()) ws.send(JSON.stringify({ kind: 'edit_preview', preview }));
       // Phase 20: the host's window needs the shareable links (it is loaded
       // from 127.0.0.1); `sendShareLinks` skips non-host sockets.
       if (shareLinks.has(room.id)) sendShareLinks(room, ws);

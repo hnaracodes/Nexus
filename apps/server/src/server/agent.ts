@@ -1,6 +1,7 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { CanUseTool, HookJSONOutput, PermissionResult } from '@anthropic-ai/claude-agent-sdk';
 import type { SynCodeEvent, UnsequencedEvent } from '@syncode/protocol/events';
+import { PRIMARY_AGENT_ID } from '@syncode/protocol/events';
 import type { Room } from './rooms.js';
 import { createGithubMcpServer } from './publishTool.js';
 import { AsyncQueue } from './queue.js';
@@ -14,6 +15,8 @@ import { agentExecutablePath, electronRunAsNodeEnv } from './agentExecutable.js'
 import type { Batch, PendingPrompt, Roster } from './turnGate.js';
 import { toUserMessage } from './errors.js';
 import { repoInstructionsSection } from './repoInstructions.js';
+import { createLiveStream } from './live/liveStream.js';
+import type { LiveSink } from './live/liveStream.js';
 
 export type EmitFn = (event: UnsequencedEvent) => void;
 
@@ -42,6 +45,13 @@ export interface AgentDeps {
    * Supplied by `attachRoom`, which is the only place that holds the sink.
    */
   readEvents?: () => SynCodeEvent[];
+  /**
+   * Phase 21: where this agent's live stream goes — chat text as it is
+   * written and Edit/MultiEdit/Write calls as they are typed (transient,
+   * never logged; see live/liveStream.ts). Bound per agent by ws.ts. Absent
+   * (tests, older callers) means no partial messages are requested at all.
+   */
+  live?: LiveSink;
   /**
    * The room's approval-queue seam (phase 12, D3). When supplied, this agent's
    * gate does not start a request's timeout clock until the room's queue says
@@ -212,12 +222,17 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
     // Recorded here rather than in the hook, so a call gated through EITHER seam
     // counts as gated and the bypass detector below stays truthful.
     gatedToolUses.add(toolUseId);
-    const pending = gate.request(toolName, input, signal);
+    const pending = gate.request(toolName, input, signal, toolUseId);
     decisions.set(toolUseId, pending);
     return pending;
   }
 
   const turns = createTurnGate();
+  // Phase 21: the model's stream, turned into previews the room watches live.
+  // This module does not know its own agent id; the `live` sink ws.ts binds per
+  // agent stamps the real one on every frame (server-side attribution, like
+  // commitAs), so the id given here is only a placeholder that never escapes.
+  const live = deps.live === undefined ? null : createLiveStream({ agentId: PRIMARY_AGENT_ID, sink: deps.live });
 
   // Null for a room with no GitHub binding, so a plain room simply has no
   // publish tool rather than one that fails the moment it is called.
@@ -275,6 +290,10 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
     prompt: prompts,
     options: {
       cwd: room.cwd,
+      // Phase 21: stream_event messages carry the model's output as it is
+      // generated — chat text and tool-call arguments — for live previews.
+      // Requested only when someone is listening.
+      ...(live === null ? {} : { includePartialMessages: true }),
       // The Claude Code preset plus our room rules, so the model gets Claude
       // Code's own tool guidance and not only the tools. (The old bare-string /
       // omitted form REPLACED the preset entirely: sdk.mjs query() maps an
@@ -455,6 +474,7 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
   void (async () => {
     try {
       for await (const message of session) {
+        live?.onSdkMessage(message);
         const events = translate(message);
         for (const event of events) {
           if (event.type === 'tool_start') seenToolUses.set(event.toolUseId, event.toolName);
@@ -482,6 +502,8 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
           });
         }
         if (events.some((event) => event.type === 'agent_idle')) {
+          // A turn's end: anything still being typed was never finished.
+          live?.abandonAll();
           clearWatchdog();
           // The turn boundary. Anything typed while that turn ran goes now,
           // as one batch, and re-arms the watchdog via deliver().
@@ -502,6 +524,9 @@ export function startAgent(room: Room, emit: EmitFn, deps: AgentDeps = {}): Agen
     },
     async interrupt(by: Interrupter): Promise<void> {
       clearWatchdog();
+      // Stop means the edit being typed will not happen: take it off screens now
+      // rather than waiting for the SDK's `result`.
+      live?.abandonAll();
       // Drain BEFORE awaiting: session.interrupt() makes the SDK emit `result`,
       // which yields agent_idle, which would otherwise flush the very buffer we
       // are trying to cancel. Confirmed from sdk.mjs:8341 — interrupt() is a
