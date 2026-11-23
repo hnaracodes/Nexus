@@ -112,7 +112,8 @@ export function previewFromToolStart(event: {
   toolName: string;
   input: unknown;
   agentId?: AgentId;
-  parentToolUseId?: string;
+  /** `null` and absent both mean top level, as on a logged `tool_start`. */
+  parentToolUseId?: string | null;
 }): EditPreview | null {
   if (!PREVIEW_TOOLS.has(event.toolName) || !isRecord(event.input)) return null;
   const input = event.input;
@@ -153,6 +154,6 @@ export function previewFromToolStart(event: {
     replaceAll: input['replace_all'] === true,
     streaming: false,
     truncated: false,
-    ...(event.parentToolUseId === undefined ? {} : { parentToolUseId: event.parentToolUseId }),
+    ...(typeof event.parentToolUseId === 'string' ? { parentToolUseId: event.parentToolUseId } : {}),
   };
 }

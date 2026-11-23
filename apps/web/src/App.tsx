@@ -23,6 +23,7 @@ import { useWorkspace } from './workspace/useWorkspace.js';
 import { WorkspaceError } from './workspace/types.js';
 import type { GitStatusEntry } from './workspace/types.js';
 import { deriveCurrentFile, deriveLatestEditSeqByPath, deriveTouchedFiles } from './derive/workspaceFiles.js';
+import { DENIED_MS, deriveGhosts, roomCwd, typingGhostPath, workspaceRelative } from './derive/ghosts.js';
 import { withExternalChanges } from './derive/externalChanges.js';
 // phase-7c import anchor
 import { JoinGate, readStoredName, storeName } from './components/JoinGate.js';
@@ -535,7 +536,37 @@ function RoomShell({
   // now live in separate regions, so the state that glued them together
   // lives here instead.
   const touchedFiles = useMemo(() => deriveTouchedFiles(view.events), [view.events]);
-  const currentFile = useMemo(() => deriveCurrentFile(view.events), [view.events]);
+  // --- BEGIN phase-21 ghosts ---
+  // Agent edits as proposals: typing (live), waiting for approval, applying,
+  // then a brief landed/denied state. `ghostNow` only ticks while one of those
+  // brief states is on screen, so an idle room re-renders nothing.
+  const cwd = useMemo(() => roomCwd(view.events), [view.events]);
+  const [ghostNow, setGhostNow] = useState(() => Date.now());
+  const ghosts = useMemo(
+    () => deriveGhosts(view.events, view.livePreviews, ghostNow),
+    [view.events, view.livePreviews, ghostNow],
+  );
+  const settling = ghosts.some((ghost) => ghost.phase === 'landed' || ghost.phase === 'denied');
+  useEffect(() => {
+    if (!settling) return;
+    setGhostNow(Date.now());
+    const timer = setInterval(() => setGhostNow(Date.now()), 250);
+    const stop = setTimeout(() => clearInterval(timer), DENIED_MS + 500);
+    return () => {
+      clearInterval(timer);
+      clearTimeout(stop);
+    };
+  }, [settling]);
+  // Following jumps to the file the moment the agent starts typing into it;
+  // otherwise it follows the agent's tools as before. Relative, so it is the
+  // same tab the file tree opens rather than a second one for the same file.
+  const agentFile = useMemo(() => deriveCurrentFile(view.events), [view.events]);
+  const currentFile = useMemo(() => {
+    const typing = typingGhostPath(ghosts);
+    if (typing !== null) return typing;
+    return agentFile === null ? null : (workspaceRelative(agentFile, cwd) ?? agentFile);
+  }, [ghosts, agentFile, cwd]);
+  // --- END phase-21 ghosts ---
   const loggedEditSeq = useMemo(() => deriveLatestEditSeqByPath(view.events), [view.events]);
   const editSeqByPath = useMemo(
     () => withExternalChanges(loggedEditSeq, view.externalChanges),
