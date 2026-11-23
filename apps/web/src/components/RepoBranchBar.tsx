@@ -26,17 +26,17 @@ export function RepoBranchBar({
   if (detected !== null) {
     return (
       <div
-        className="flex min-h-11 items-center gap-2 rounded border border-border px-2 text-xs text-fg-muted"
-        title={DETECTED_REPO_TITLE}
+        className="flex h-6 min-w-0 shrink items-center gap-1 rounded px-1.5 text-xs text-fg-muted"
+        title={liveBranch === null ? DETECTED_REPO_TITLE : `${detected.owner}/${detected.repo} · ${liveBranch}\n${DETECTED_REPO_TITLE}`}
       >
-        <span className="flex items-center gap-1.5">
-          <GitPullRequest size={14} aria-hidden="true" />
-          <span className="text-fg">{`${detected.owner}/${detected.repo}`}</span>
+        <span className="flex min-w-0 items-center gap-1">
+          <GitPullRequest size={12} aria-hidden="true" className="shrink-0" />
+          <span className="truncate whitespace-nowrap text-fg">{`${detected.owner}/${detected.repo}`}</span>
         </span>
         {liveBranch !== null && (
-          <span className="flex items-center gap-1 font-mono">
-            <GitBranch size={14} aria-hidden="true" />
-            <span>{liveBranch}</span>
+          <span className="hidden min-w-0 items-center gap-1 font-mono sm:flex">
+            <GitBranch size={12} aria-hidden="true" className="shrink-0" />
+            <span className="truncate whitespace-nowrap">{liveBranch}</span>
           </span>
         )}
       </div>
