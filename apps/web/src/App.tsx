@@ -644,10 +644,19 @@ function RoomShell({
     }
   }, [hasFleet, fleetApprovals, pendingApprovals]);
 
+  /**
+   * Who the chat is talking to. The agent picker chooses whose transcript is
+   * shown, and what you type or stop must go to that same agent — before this,
+   * picking "Beta" changed only the transcript while prompts and Stop still
+   * went to the primary agent. The primary agent keeps the bare frame (no
+   * `agentId`), byte-identical to a pre-fleet room.
+   */
+  const chatTarget: { agentId?: AgentId } = focusedAgentId === null ? {} : { agentId: focusedAgentId };
+
   function submitPrompt(): void {
     const trimmed = promptText.trim();
     if (trimmed === '') return;
-    connection?.send({ kind: 'prompt', text: trimmed });
+    connection?.send({ kind: 'prompt', text: trimmed, ...chatTarget });
     setPromptText('');
   }
 
@@ -657,7 +666,7 @@ function RoomShell({
 
   function handleInterruptHotkey(): void {
     if (interruptArmed) {
-      connection?.send({ kind: 'interrupt' });
+      connection?.send({ kind: 'interrupt', ...chatTarget });
       setInterruptArmed(false);
       if (armTimerRef.current !== null) clearTimeout(armTimerRef.current);
       return;
@@ -964,12 +973,12 @@ function RoomShell({
                       promptValue={promptText}
                       onPromptChange={setPromptText}
                       onSubmitPrompt={(text) => {
-                        connection?.send({ kind: 'prompt', text });
+                        connection?.send({ kind: 'prompt', text, ...chatTarget });
                         setPromptText('');
                       }}
-                      onStop={() => connection?.send({ kind: 'interrupt' })}
+                      onStop={() => connection?.send({ kind: 'interrupt', ...chatTarget })}
                       onSetModel={(model) => connection?.send({ kind: 'set_model', model })}
-                      onResendPrompt={(text) => connection?.send({ kind: 'prompt', text })}
+                      onResendPrompt={(text) => connection?.send({ kind: 'prompt', text, ...chatTarget })}
                       onGrantControl={(participantId) =>
                         connection?.send({ kind: 'grant_control', toParticipantId: participantId })
                       }

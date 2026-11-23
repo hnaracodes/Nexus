@@ -1,3 +1,4 @@
+import { PRIMARY_AGENT_ID } from '@syncode/protocol/events';
 import type { AgentId, SynCodeEvent } from '@syncode/protocol/events';
 import type { FleetEntry } from '@syncode/protocol/wire';
 import { deriveLatestPublishedPr } from '../publishedPr.js';
@@ -97,8 +98,20 @@ export function AgentChatView(props: AgentChatViewProps): JSX.Element {
         favour. Adding a driver check here would undo the feature.
       */}
       {/* --- BEGIN phase-3b stop-button slot --- */}
-      <InterruptNotice events={props.events} />
-      <PendingPrompts events={props.events} onResend={props.onResendPrompt} />
+      <InterruptNotice events={props.events} focusedAgentId={props.focusedAgentId ?? PRIMARY_AGENT_ID} />
+      <PendingPrompts
+        events={props.events}
+        onResend={props.onResendPrompt}
+        onEdit={props.onPromptChange}
+        {...(props.selfId === null ? {} : { selfId: props.selfId })}
+        onSendNow={(texts) => {
+          // Stop first: the server discards the queued batch before it
+          // interrupts, so the resend lands as a fresh prompt for the next
+          // turn instead of being thrown away with the old batch.
+          props.onStop();
+          for (const text of texts) props.onResendPrompt(text);
+        }}
+      />
       <PromptDock
         roomId={props.roomId}
         token={props.token}

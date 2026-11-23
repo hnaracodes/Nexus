@@ -12,16 +12,20 @@ export function deriveActiveInterrupt(
   events: SynCodeEvent[],
   focusedAgentId?: AgentId | null,
 ): Interrupted | null {
-  let active: Interrupted | null = null;
+  // Tracked per agent: a stop on one agent is only cleared by THAT agent's
+  // next delivered batch, never by another agent moving on.
+  const active = new Map<AgentId, Interrupted>();
   for (const event of events) {
     if (event.type === 'interrupted') {
       if (focusedAgentId && agentIdOf(event) !== focusedAgentId) continue;
-      active = event;
-    } else if (event.type === 'prompt_batch_delivered' && active !== null) {
-      if (agentIdOf(event) === agentIdOf(active)) active = null;
+      active.set(agentIdOf(event), event);
+    } else if (event.type === 'prompt_batch_delivered') {
+      active.delete(agentIdOf(event));
     }
   }
-  return active;
+  let latest: Interrupted | null = null;
+  for (const stop of active.values()) if (latest === null || stop.seq > latest.seq) latest = stop;
+  return latest;
 }
 
 /**

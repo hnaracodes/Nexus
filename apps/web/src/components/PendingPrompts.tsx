@@ -195,7 +195,13 @@ export function PendingPrompts({
                 type="button"
                 aria-label={`Stop & send now: ${prompt.text}`}
                 className={BTN_WARN}
-                onClick={() => onSendNow([prompt.text])}
+                onClick={() => {
+                  // The stop will log this seq as discarded; retire the row
+                  // now so the same text never also shows as a red "dropped"
+                  // row offering a third copy.
+                  dismiss([prompt.seq]);
+                  onSendNow([prompt.text]);
+                }}
               >
                 Stop &amp; send now
               </button>

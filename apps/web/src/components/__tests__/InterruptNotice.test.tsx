@@ -14,6 +14,14 @@ describe('InterruptNotice', () => {
     expect(screen.queryByRole('status')).toBeNull();
   });
 
+  it('unfocused: a later stop on another agent clearing does not hide an earlier stop', () => {
+    // A stopped (no delivery since), then B stopped and B moved on: A is
+    // still stopped, so its notice must still show.
+    const events = [interrupted(1, 'Ada', 'a1'), interrupted(2, 'Bob', 'a2'), delivered(3, [], 'a2')];
+    render(<InterruptNotice events={events} />);
+    expect(screen.getByRole('status').textContent).toContain('Ada stopped the agent.');
+  });
+
   it('a delivered batch BEFORE the stop does not clear it', () => {
     render(<InterruptNotice events={[delivered(1, []), interrupted(2, 'Ada')]} />);
     expect(screen.getByRole('status')).toBeTruthy();

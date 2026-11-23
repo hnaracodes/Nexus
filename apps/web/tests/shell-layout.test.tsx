@@ -140,6 +140,53 @@ describe('shell — layout', () => {
     expect(FakeSocket.last?.sent).toContain('{"kind":"interrupt"}');
   });
 
+  it('Cmd/Ctrl+Enter sends exactly ONE prompt (textarea and app hotkey must not both fire)', () => {
+    boot();
+    const box = document.querySelector('form textarea') as HTMLTextAreaElement;
+    fireEvent.change(box, { target: { value: 'once' } });
+    fireEvent.keyDown(box, { key: 'Enter', ctrlKey: true });
+    const prompts = (FakeSocket.last?.sent ?? []).filter((f) => JSON.parse(f).kind === 'prompt');
+    expect(prompts).toEqual([JSON.stringify({ kind: 'prompt', text: 'once' })]);
+  });
+
+  describe('chat goes to the agent you picked', () => {
+    const fleet = () =>
+      deliver({
+        kind: 'fleet',
+        agents: [
+          { agentId: 'primary', displayName: 'Agent', provider: 'anthropic', model: null, status: 'working', pendingApprovals: 0, queuedPrompts: 0 },
+          { agentId: 'agent_beta', displayName: 'Beta', provider: 'anthropic', model: null, status: 'working', pendingApprovals: 0, queuedPrompts: 0 },
+        ],
+      });
+    const sent = () => (FakeSocket.last?.sent ?? []).map((f) => JSON.parse(f) as Record<string, unknown>);
+    const send = (text: string) => {
+      const box = document.querySelector('form textarea') as HTMLTextAreaElement;
+      fireEvent.change(box, { target: { value: text } });
+      fireEvent.keyDown(box, { key: 'Enter' });
+    };
+
+    it('with Beta picked, Send and Stop target Beta', () => {
+      boot();
+      fleet();
+      fireEvent.change(screen.getByLabelText('Agent whose conversation is shown'), {
+        target: { value: 'agent_beta' },
+      });
+      send('to beta');
+      fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
+      expect(sent()).toContainEqual({ kind: 'prompt', text: 'to beta', agentId: 'agent_beta' });
+      expect(sent()).toContainEqual({ kind: 'interrupt', agentId: 'agent_beta' });
+    });
+
+    it('with the primary agent picked, frames carry no agentId (unchanged wire)', () => {
+      boot();
+      fleet();
+      send('to primary');
+      fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
+      expect(sent()).toContainEqual({ kind: 'prompt', text: 'to primary' });
+      expect(sent()).toContainEqual({ kind: 'interrupt' });
+    });
+  });
+
   it('driver request/release still works from the title bar', () => {
     boot();
     fireEvent.click(screen.getByRole('button', { name: /request control/i }));

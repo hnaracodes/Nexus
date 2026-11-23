@@ -24,6 +24,31 @@ describe('PendingPrompts queued rows', () => {
     expect(onSendNow).toHaveBeenCalledWith(['mine']);
   });
 
+  it('offers nothing when selfId is unknown, even with onSendNow', () => {
+    render(<PendingPrompts events={events} onResend={() => {}} onSendNow={() => {}} />);
+    expect(screen.queryByRole('button', { name: /Stop & send now/ })).toBeNull();
+  });
+
+  it('Stop & send now retires the original row so the text never shows twice', () => {
+    const onSendNow = vi.fn();
+    const { rerender } = render(
+      <PendingPrompts events={events} onResend={() => {}} selfId="p_me" onSendNow={onSendNow} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Stop & send now/ }));
+    // The server then logs the stop's discard of the original seq: it must not
+    // come back as a red "dropped" row offering a third copy.
+    rerender(
+      <PendingPrompts
+        events={[...events, discarded(3, [1, 2], 'Me')]}
+        onResend={() => {}}
+        selfId="p_me"
+        onSendNow={onSendNow}
+      />,
+    );
+    expect(screen.queryByText('mine')).toBeNull();
+    expect(screen.getByText('theirs')).toBeTruthy();
+  });
+
   it('offers nothing without onSendNow', () => {
     render(<PendingPrompts events={events} onResend={() => {}} selfId="p_me" />);
     expect(screen.queryByRole('button', { name: /Stop & send now/ })).toBeNull();

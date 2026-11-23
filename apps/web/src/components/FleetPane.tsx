@@ -91,8 +91,8 @@ export function FleetPane({ agents, focusedAgentId, onFocus, onSpawn, onStop, on
    */
   return (
     <div className="flex h-full w-full min-w-0 min-h-0 flex-col bg-surface">
-      <div className="flex items-center justify-between border-b border-border px-3 py-2">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-fg-muted">Fleet</h2>
+      {/* No "Fleet" title here: the agent bar's own header tab already says it. */}
+      <div className="flex items-center justify-end border-b border-border px-3 py-2">
         {!spawning && (
           <Button variant="secondary" size="sm" onClick={() => setSpawning(true)}>
             <Plus size={14} aria-hidden="true" />

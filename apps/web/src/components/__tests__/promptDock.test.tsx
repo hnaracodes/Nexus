@@ -100,6 +100,9 @@ describe('PromptDock', () => {
     expect(onSubmitPrompt).not.toHaveBeenCalled();
     fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
     expect(onSubmitPrompt).not.toHaveBeenCalled();
+    // Safari: the candidate-confirming Enter arrives after compositionend.
+    fireEvent.keyDown(input, { key: 'Enter', keyCode: 229 });
+    expect(onSubmitPrompt).not.toHaveBeenCalled();
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(onSubmitPrompt).toHaveBeenCalledWith('hi');
   });

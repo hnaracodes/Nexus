@@ -66,8 +66,10 @@ export function PromptInput({
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): void {
     if (event.key !== 'Enter' || event.shiftKey || event.ctrlKey || event.metaKey) return;
-    // Enter that confirms an IME candidate must never send.
-    if (event.nativeEvent.isComposing) return;
+    // Enter that confirms an IME candidate must never send. Safari reports
+    // that Enter AFTER compositionend, with isComposing=false but the legacy
+    // keyCode 229 ("IME is processing"), so both are checked.
+    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
     event.preventDefault();
     if (!disabled) submit();
   }

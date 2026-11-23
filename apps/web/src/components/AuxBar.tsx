@@ -105,7 +105,7 @@ export function AuxBar(props: AuxBarProps): JSX.Element {
       aria-label={`${AUX_TITLES[view]} panel`}
     >
       <div className="flex h-[35px] shrink-0 items-stretch px-4">
-        <div role="tablist" aria-label="Agent bar views" className="flex h-full min-w-0 items-stretch gap-4">
+        <div role="tablist" aria-label="Agent bar views" className="flex h-full min-w-0 items-stretch gap-4 overflow-x-auto [scrollbar-width:none]">
           {tabs.map(({ id, badge }) => {
             const isActive = id === view;
             return (
